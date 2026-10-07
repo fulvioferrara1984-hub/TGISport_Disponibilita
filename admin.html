@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Supervisori · Disponibilità TGI Sport</title>
+  <link rel="icon" type="image/png" href="app/favicon.png">
+  <link rel="apple-touch-icon" href="app/favicon-180.png">
+  <link rel="stylesheet" href="app/stile.css">
+</head>
+<body>
+  <header class="testata con-schede">
+    <div class="marchio">
+      <img class="marchio-logo" src="Logo/TGI-Sport_black.png" alt="TGI Sport" onerror="this.remove()">
+      <span class="marchio-nome">Disponibilità · Supervisori</span>
+    </div>
+    <nav class="schede" role="tablist" aria-label="Sezioni" id="schede" hidden>
+      <button type="button" role="tab" data-vista="griglia" aria-selected="true">Disponibilità</button>
+      <button type="button" role="tab" data-vista="aggiornamenti" aria-selected="false">Aggiornamenti <span class="badge" id="badge"></span></button>
+      <button type="button" role="tab" data-vista="operatori" aria-selected="false">Operatori</button>
+      <button type="button" role="tab" data-vista="impostazioni" aria-selected="false">Impostazioni</button>
+    </nav>
+    <span class="spazio"></span>
+    <button type="button" class="esci" id="btn-esci" hidden>Esci</button>
+  </header>
+
+  <!-- Accesso con la password dei supervisori -->
+  <div class="accesso" id="accesso" hidden>
+    <form class="accesso-scheda" id="accesso-form" autocomplete="on">
+      <img class="accesso-logo" src="Logo/TGI-Sport_black.png" alt="TGI Sport" onerror="this.remove()">
+      <h1>Dashboard supervisori</h1>
+      <p>Inserisci la password dei supervisori per vedere le disponibilità del team.</p>
+      <input type="text" name="username" value="supervisori" autocomplete="username" hidden>
+      <label class="campo"><span>Password</span><input type="password" id="accesso-password" autocomplete="current-password" required></label>
+      <label class="spunta"><input type="checkbox" id="accesso-ricorda" checked><span>Ricorda su questo computer</span></label>
+      <div class="errore" id="accesso-errore" role="alert" hidden></div>
+      <button type="submit" class="primario" id="accesso-entra">Entra</button>
+      <p class="nota" id="accesso-demo" hidden>Demo: la password è <code>demo</code>.</p>
+    </form>
+  </div>
+
+  <main class="contenuto" id="pagina" hidden>
+
+    <!-- ===================== DISPONIBILITÀ ===================== -->
+    <section id="vista-griglia">
+      <div class="titolo-pagina">
+        <div>
+          <h1>Disponibilità del team</h1>
+          <p>Clicca su un giorno per vedere chi è disponibile e preparare la convocazione.</p>
+        </div>
+        <div class="legenda">
+          <span class="st-D"><span class="pallino"></span>Disponibile</span>
+          <span class="st-P"><span class="pallino"></span>Parziale</span>
+          <span class="st-A"><span class="pallino"></span>Non disponibile</span>
+          <span><span class="pallino"></span>Non indicato</span>
+        </div>
+      </div>
+      <div class="dashboard" id="dashboard">
+        <section class="scheda">
+          <div class="scheda-testa">
+            <div class="navigatore">
+              <button type="button" class="icona" id="sett-prec" aria-label="Settimana precedente">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="settimana" aria-live="polite"><span id="sett-etichetta"></span><small id="sett-riepilogo"></small></div>
+              <button type="button" class="icona" id="sett-succ" aria-label="Settimana successiva">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button type="button" class="bottone" id="sett-oggi">Oggi</button>
+            </div>
+            <span class="spazio"></span>
+            <div class="strumenti">
+              <select id="filtro-mansione" aria-label="Filtra per mansione"><option value="">Tutte le mansioni</option></select>
+              <input type="search" id="filtro-testo" placeholder="Cerca operatore" aria-label="Cerca operatore">
+              <button type="button" class="icona" id="btn-aggiorna" title="Aggiorna" aria-label="Aggiorna">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button type="button" class="bottone" id="btn-csv">Esporta CSV</button>
+            </div>
+          </div>
+          <div class="griglia-box" id="griglia"><div class="caricamento"><span></span></div></div>
+        </section>
+
+        <aside class="scheda pannello-conv" id="pannello-conv" hidden>
+          <div class="scheda-testa">
+            <div>
+              <h2>Convocazione</h2>
+              <div id="conv-giorno" style="font-weight: 650; font-size: 15px; margin-top: 3px;"></div>
+            </div>
+            <span class="spazio"></span>
+            <button type="button" class="icona" id="conv-chiudi" aria-label="Chiudi">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div class="scheda-corpo" id="conv-corpo"></div>
+          <div class="azioni-conv">
+            <button type="button" class="primario" id="conv-email">Scrivi email ai selezionati</button>
+            <button type="button" class="bottone" id="conv-copia-email">Copia email</button>
+            <button type="button" class="bottone" id="conv-copia-tel">Copia telefoni</button>
+            <button type="button" class="bottone" id="conv-copia-elenco" style="grid-column: 1 / -1;">Copia elenco con note</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ===================== AGGIORNAMENTI ===================== -->
+    <section id="vista-aggiornamenti" hidden>
+      <div class="titolo-pagina">
+        <div>
+          <h1>Aggiornamenti</h1>
+          <p>Ogni volta che un operatore preme <b>Invia</b> compare qui, con i giorni cambiati.</p>
+        </div>
+        <div class="strumenti">
+          <button type="button" class="bottone" id="btn-notifiche-desktop">Attiva notifiche sul computer</button>
+          <button type="button" class="bottone" id="btn-tutti-letti">Segna tutti come letti</button>
+        </div>
+      </div>
+      <section class="scheda"><ul class="feed" id="feed"></ul></section>
+    </section>
+
+    <!-- ===================== OPERATORI ===================== -->
+    <section id="vista-operatori" hidden>
+      <div class="titolo-pagina">
+        <div>
+          <h1>Operatori</h1>
+          <p>Ogni operatore entra con un codice personale: crealo qui e invialo con il link d'invito.</p>
+        </div>
+        <button type="button" class="primario" id="btn-nuovo-op">+ Nuovo operatore</button>
+      </div>
+      <section class="scheda"><div class="tabella-box" id="tabella-operatori"></div></section>
+    </section>
+
+    <!-- ===================== IMPOSTAZIONI ===================== -->
+    <section id="vista-impostazioni" hidden>
+      <div class="titolo-pagina"><div><h1>Impostazioni</h1></div></div>
+      <div class="impostazioni">
+        <section class="scheda">
+          <div class="scheda-testa"><h2>Notifiche email</h2></div>
+          <form class="scheda-corpo" id="form-email">
+            <label class="campo"><span>Email dei supervisori (separate da virgola)</span>
+              <textarea id="imp-email" rows="3" placeholder="nome.cognome@tgisport.it, …"></textarea></label>
+            <label class="spunta" style="margin: 0 0 14px;"><input type="checkbox" id="imp-email-attive"><span>Invia un'email a ogni invio degli operatori</span></label>
+            <p class="nota" style="margin: 0 0 12px;">Le notifiche compaiono comunque nella scheda <b>Aggiornamenti</b>.</p>
+            <button type="submit" class="primario">Salva</button>
+          </form>
+        </section>
+        <section class="scheda">
+          <div class="scheda-testa"><h2>Password supervisori</h2></div>
+          <form class="scheda-corpo" id="form-password" autocomplete="on">
+            <input type="text" name="username" value="supervisori" autocomplete="username" hidden>
+            <label class="campo"><span>Password attuale</span><input type="password" id="pw-attuale" autocomplete="current-password" required></label>
+            <label class="campo"><span>Nuova password (almeno 8 caratteri)</span><input type="password" id="pw-nuova" autocomplete="new-password" minlength="8" required></label>
+            <label class="campo"><span>Ripeti la nuova password</span><input type="password" id="pw-conferma" autocomplete="new-password" minlength="8" required></label>
+            <p class="nota" style="margin: 0 0 12px;">Gli altri supervisori dovranno rientrare con la nuova password.</p>
+            <button type="submit" class="primario">Cambia password</button>
+          </form>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <!-- Nuovo operatore / modifica -->
+  <dialog id="dlg-operatore">
+    <form method="dialog" id="form-operatore">
+      <h2 id="dlg-operatore-titolo">Nuovo operatore</h2>
+      <label class="campo"><span>Nome e cognome</span><input type="text" id="op-nome" required maxlength="80"></label>
+      <label class="campo"><span>Mansione</span><input type="text" id="op-mansione" list="elenco-mansioni" maxlength="60" placeholder="es. Operatore camera"></label>
+      <datalist id="elenco-mansioni"></datalist>
+      <label class="campo"><span>Email</span><input type="email" id="op-email" maxlength="120"></label>
+      <label class="campo"><span>Telefono</span><input type="tel" id="op-telefono" maxlength="30"></label>
+      <label class="spunta" id="op-attivo-riga"><input type="checkbox" id="op-attivo" checked><span>Attivo (può entrare e compare nella griglia)</span></label>
+      <div class="errore" id="op-errore" hidden></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" value="annulla" data-chiudi>Annulla</button>
+        <button type="submit" class="primario" id="op-salva">Salva</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Codice personale appena creato -->
+  <dialog id="dlg-codice">
+    <form method="dialog">
+      <h2>Codice di <span id="cod-nome"></span></h2>
+      <p class="nota" style="margin: 0 0 10px;">Il codice si vede solo adesso: invialo all'operatore. Se lo perde, generane uno nuovo.</p>
+      <span class="codice-grande" id="cod-codice"></span>
+      <label class="campo"><span>Link d'invito (entra senza digitare il codice)</span></label>
+      <div class="copia-riga"><input type="text" id="cod-link" readonly><button type="button" class="bottone" id="cod-copia-link">Copia</button></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" id="cod-copia-msg">Copia messaggio d'invito</button>
+        <button type="submit" class="primario">Fatto</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app/config.js"></script>
+  <script src="app/demo.js"></script>
+  <script src="app/comune.js"></script>
+  <script src="app/admin.js"></script>
+</body>
+</html>

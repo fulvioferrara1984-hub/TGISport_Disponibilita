@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Disponibilità · TGI Sport</title>
+  <link rel="icon" type="image/png" href="app/favicon.png">
+  <link rel="apple-touch-icon" href="app/favicon-180.png">
+  <link rel="stylesheet" href="app/stile.css">
+</head>
+<body>
+  <header class="testata">
+    <div class="marchio">
+      <img class="marchio-logo" src="Logo/TGI-Sport_black.png" alt="TGI Sport" onerror="this.remove()">
+      <span class="marchio-nome">Disponibilità</span>
+    </div>
+    <span class="spazio"></span>
+    <span class="utente" id="utente" hidden></span>
+    <button type="button" class="esci" id="btn-esci" hidden>Esci</button>
+  </header>
+
+  <!-- Accesso con il codice personale ricevuto dai supervisori -->
+  <div class="accesso" id="accesso" hidden>
+    <form class="accesso-scheda" id="accesso-form" autocomplete="on">
+      <img class="accesso-logo" src="Logo/TGI-Sport_black.png" alt="TGI Sport" onerror="this.remove()">
+      <h1>Le tue disponibilità</h1>
+      <p>Inserisci il codice personale che ti hanno inviato i supervisori.</p>
+      <label class="campo"><span>Codice personale</span><input type="text" id="accesso-codice" placeholder="XXXX-XXXX" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required></label>
+      <label class="spunta"><input type="checkbox" id="accesso-ricorda" checked><span>Ricorda su questo dispositivo</span></label>
+      <div class="errore" id="accesso-errore" role="alert" hidden></div>
+      <button type="submit" class="primario" id="accesso-entra">Entra</button>
+      <p class="nota" id="accesso-demo" hidden>Demo: prova con il codice <code>DEMO-0001</code>.</p>
+    </form>
+  </div>
+
+  <main class="contenuto stretto" id="pagina" hidden>
+    <div class="titolo-pagina">
+      <div>
+        <h1 id="saluto">Le tue disponibilità</h1>
+        <p>Indica per ogni giorno se sei disponibile, poi premi <b>Invia ai supervisori</b>.</p>
+      </div>
+    </div>
+
+    <div class="conferma" id="conferma" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m7.5 12.5 3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div><b>Disponibilità inviate</b><span id="conferma-testo">I supervisori hanno ricevuto la notifica.</span></div>
+    </div>
+
+    <section class="scheda">
+      <div class="scheda-testa">
+        <div class="navigatore">
+          <button type="button" class="icona" id="sett-prec" aria-label="Settimana precedente">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="settimana" aria-live="polite"><span id="sett-etichetta"></span><small id="sett-riepilogo"></small></div>
+          <button type="button" class="icona" id="sett-succ" aria-label="Settimana successiva">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <span class="spazio"></span>
+        <button type="button" class="bottone" id="sett-oggi">Questa settimana</button>
+      </div>
+      <div class="scheda-corpo" style="padding-bottom: 14px; border-bottom: 1px solid var(--linea);">
+        <div class="azioni-rapide">
+          <span>Tutta la settimana:</span>
+          <button type="button" class="bottone st-D" data-tutti="D"><span class="pallino"></span>Disponibile</button>
+          <button type="button" class="bottone st-A" data-tutti="A"><span class="pallino"></span>Non disponibile</button>
+          <button type="button" class="bottone" id="copia-prec">Copia settimana precedente</button>
+        </div>
+      </div>
+      <ul class="giorni" id="giorni"></ul>
+    </section>
+
+    <div class="legenda" style="margin-top: 14px;">
+      <span class="st-D"><span class="pallino"></span>Disponibile: tutto il giorno</span>
+      <span class="st-P"><span class="pallino"></span>Parziale: specifica gli orari nella nota</span>
+      <span class="st-A"><span class="pallino"></span>Non disponibile / assenza</span>
+    </div>
+    <p class="nota" style="margin-top: 10px;">Le modifiche non inviate restano salvate su questo dispositivo. <button type="button" class="link" id="annulla-bozza" hidden>Annulla le modifiche non inviate</button></p>
+  </main>
+
+  <div class="barra-invio" id="barra-invio" hidden>
+    <div class="barra-invio-dentro">
+      <div class="stato-invio" id="stato-invio"></div>
+      <button type="button" class="primario" id="btn-invia">Invia ai supervisori</button>
+    </div>
+  </div>
+
+  <script src="app/config.js"></script>
+  <script src="app/demo.js"></script>
+  <script src="app/comune.js"></script>
+  <script src="app/operatore.js"></script>
+</body>
+</html>

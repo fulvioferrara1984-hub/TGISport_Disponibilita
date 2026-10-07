@@ -1,0 +1,13 @@
+# Il repository è pubblico: si pubblicano SOLO i file del sito e il codice del backend.
+/*
+!/.gitignore
+!/.nojekyll
+!/index.html
+!/admin.html
+!/README.md
+!/app/
+!/Logo/
+!/backend/
+
+# File di sistema macOS
+**/.DS_Store
