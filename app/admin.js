@@ -663,7 +663,13 @@
       return;
     }
     if (!u) {
-      await DO.chiediAccesso(() => DO.dati.accediSupervisore($('accesso-password').value, $('accesso-ricorda').checked));
+      await DO.chiediAccesso(() => {
+        const email = $('accesso-email').value, password = $('accesso-password').value;
+        if (!primoAccesso) return DO.dati.accediSupervisore(email, password, $('accesso-ricorda').checked);
+        if (password !== $('accesso-conferma').value) throw new Error('Le due password non coincidono.');
+        // account creato: si torna su "Entra", il messaggio "controlla la posta" resta visibile
+        return DO.dati.creaSupervisore(email, password).catch((e) => { if (e.info) modoAccesso(false); throw e; });
+      });
     }
     $('pagina').hidden = false;
     $('schede').hidden = false;
@@ -675,6 +681,35 @@
     visti = null;
     ferma = DO.dati.ascolta(aggiorna);
   }
+
+  // Primo accesso: ogni supervisore crea la propria password e conferma l'indirizzo con il link ricevuto.
+  let primoAccesso = false;
+  function modoAccesso(crea) {
+    primoAccesso = crea;
+    $('accesso-titolo').textContent = crea ? 'Primo accesso' : 'Dashboard supervisori';
+    $('accesso-testo').textContent = crea ? 'Scegli la tua password (almeno 8 caratteri): riceverai un\'email per confermare l\'indirizzo.'
+      : 'Entra con la tua email TGI Sport e la tua password.';
+    $('accesso-conferma-riga').hidden = !crea;
+    $('accesso-conferma').required = crea;
+    $('accesso-password').autocomplete = crea ? 'new-password' : 'current-password';
+    $('accesso-entra').textContent = crea ? 'Crea account' : 'Entra';
+    $('accesso-modo').textContent = crea ? 'Hai già un account? Entra' : 'Primo accesso? Crea la tua password';
+    $('accesso-errore').hidden = true;
+    $('accesso-info').hidden = true;
+  }
+  $('accesso-modo').addEventListener('click', () => modoAccesso(!primoAccesso));
+  $('accesso-recupera').addEventListener('click', async () => {
+    $('accesso-errore').hidden = true;
+    $('accesso-info').hidden = true;
+    if (!$('accesso-email').value) { $('accesso-email').focus(); $('accesso-errore').textContent = 'Scrivi prima la tua email.'; $('accesso-errore').hidden = false; return; }
+    try {
+      await DO.dati.recuperaPassword($('accesso-email').value);
+    } catch (e) {
+      const dove = e.info ? $('accesso-info') : $('accesso-errore');
+      dove.textContent = e.message;
+      dove.hidden = false;
+    }
+  });
 
   $('btn-esci').addEventListener('click', async () => {
     if (ferma) ferma();

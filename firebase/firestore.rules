@@ -1,7 +1,8 @@
 rules_version = '2';
 
 // Disponibilità Ops · TGI Sport — chi può leggere e scrivere cosa.
-// Supervisori: l'account con l'email qui sotto (la stessa di SUPERVISORI_EMAIL in app/config.js).
+// Supervisori: gli account con le email qui sotto (le stesse di SUPERVISORI in app/config.js),
+// solo dopo aver confermato l'indirizzo con il link ricevuto per email.
 // Operatori: un account per codice; utenti/{uid} dice a quale operatore appartiene.
 // Cambiare codice o disattivare un operatore toglie l'accesso subito, perché ogni regola lo ricontrolla.
 
@@ -9,7 +10,13 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function supervisore() {
-      return request.auth != null && request.auth.token.email == 'SUPERVISORI_EMAIL';
+      return request.auth != null && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'fferrara@tgisport.com',
+          'spedatella@tgisport.com',
+          'fgennaro@tgisport.com',
+          'ssolera@tgisport.com'
+        ];
     }
     function abbinamento() {
       return /databases/$(database)/documents/utenti/$(request.auth.uid);

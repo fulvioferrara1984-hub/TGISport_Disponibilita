@@ -28,6 +28,7 @@
     // nome diverso per le due pagine: un supervisore può provare il link di un operatore senza uscire dalla dashboard
     app = F.initializeApp(cfg.FIREBASE, ruolo === 'admin' ? 'supervisori' : 'operatori');
     auth = F.getAuth(app);
+    auth.languageCode = 'it';   // le email di Firebase (conferma indirizzo, nuova password) in italiano
     // la dashboard tiene una copia dei dati sul computer (solo con "Ricorda"): si apre subito, poi si aggiorna
     cachePersistente = ruolo === 'admin' && DO.ricordato();
     db = cachePersistente
@@ -104,7 +105,7 @@
     const u = auth.currentUser;
     if (!u) return null;
     if (ruolo === 'admin') {
-      if (u.email === DO.CONFIG.SUPERVISORI_EMAIL) return { admin: true };
+      if (eSupervisore(u.email) && u.emailVerified) return { admin: true };
       await F.signOut(auth);
       return null;
     }
@@ -150,17 +151,57 @@
     return caricaOperatore(false);
   }
 
-  async function accediSupervisore(password, ricorda) {
+  // ---------- supervisori: ognuno con il proprio account ----------
+  const normalizzaEmail = (e) => String(e || '').trim().toLowerCase();
+  const eSupervisore = (e) => (DO.CONFIG.SUPERVISORI || []).map(normalizzaEmail).includes(normalizzaEmail(e));
+  // un messaggio che non è un errore (es. "controlla la posta"): la scheda di accesso lo mostra in blu
+  const informa = (testo) => Object.assign(new Error(testo), { info: true });
+
+  function controllaEmail(email) {
+    if (!eSupervisore(email)) throw new Error('Questa email non è tra quelle dei supervisori.');
+    return normalizzaEmail(email);
+  }
+
+  // Si entra solo dopo aver confermato l'indirizzo: nessuno può spacciarsi per un supervisore
+  // registrandosi con la sua email, perché il link di conferma arriva solo a lui.
+  async function accediSupervisore(email, password, ricorda) {
     await avvia();
-    if (!DO.CONFIG.SUPERVISORI_EMAIL) throw new Error('Manca SUPERVISORI_EMAIL in app/config.js.');
+    email = controllaEmail(email);
     await F.setPersistence(auth, ricorda ? F.browserLocalPersistence : F.browserSessionPersistence);
     try {
-      await F.signInWithEmailAndPassword(auth, DO.CONFIG.SUPERVISORI_EMAIL, password);
+      await F.signInWithEmailAndPassword(auth, email, password);
     } catch (e) {
-      throw traduci(e, 'Password errata.');
+      throw traduci(e, 'Email o password errata.');
     }
+    if (!auth.currentUser.emailVerified) {
+      try { await F.sendEmailVerification(auth.currentUser); } catch (e) { /* già inviata da poco */ }
+      await F.signOut(auth);
+      throw informa('Prima di entrare conferma il tuo indirizzo: ti abbiamo mandato un\'email con il link (guarda anche nello spam), poi entra di nuovo.');
+    }
+    await auth.currentUser.getIdToken(true);
     DO.ricorda(ricorda);
     return { admin: true };
+  }
+
+  async function creaSupervisore(email, password) {
+    await avvia();
+    email = controllaEmail(email);
+    if (String(password).length < 8) throw new Error('La password deve avere almeno 8 caratteri.');
+    try {
+      await F.createUserWithEmailAndPassword(auth, email, password);
+    } catch (e) {
+      if (e.code === 'auth/email-already-in-use') throw new Error('Hai già un account: entra con la tua password, oppure usa "Password dimenticata?".');
+      throw traduci(e);
+    }
+    try { await F.sendEmailVerification(auth.currentUser); } finally { await F.signOut(auth); }
+    throw informa('Account creato. Ti abbiamo mandato un\'email: clicca il link per confermare l\'indirizzo, poi entra con la tua password.');
+  }
+
+  async function recuperaPassword(email) {
+    await avvia();
+    email = controllaEmail(email);
+    try { await F.sendPasswordResetEmail(auth, email); } catch (e) { throw traduci(e); }
+    throw informa('Se l\'account esiste, ti abbiamo mandato un\'email per scegliere una nuova password.');
   }
 
   async function esci() {
@@ -360,7 +401,7 @@
   }
 
   DO.firebase = {
-    configura, utente, accediOperatore, accediSupervisore, esci,
+    configura, utente, accediOperatore, accediSupervisore, creaSupervisore, recuperaPassword, esci,
     mieDisponibilita, inviaDisponibilita,
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,

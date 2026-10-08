@@ -141,7 +141,7 @@
   // ---------- accesso: mostra la scheda e si risolve quando prepara() riesce ----------
   function chiediAccesso(prepara) {
     return new Promise((fatto) => {
-      const box = $('accesso'), form = $('accesso-form'), errore = $('accesso-errore'), bottone = $('accesso-entra');
+      const box = $('accesso'), form = $('accesso-form'), errore = $('accesso-errore'), bottone = $('accesso-entra'), info = $('accesso-info');
       box.hidden = false;
       const primo = form.querySelector('input:not([hidden])');
       requestAnimationFrame(() => primo.focus());
@@ -151,6 +151,7 @@
         const etichetta = bottone.textContent;
         bottone.textContent = 'Verifica…';
         errore.hidden = true;
+        if (info) info.hidden = true;
         try {
           const risposta = await prepara();
           form.removeEventListener('submit', invio);
@@ -158,9 +159,11 @@
           box.hidden = true;
           fatto(risposta);
         } catch (err) {
-          errore.textContent = err.message;
-          errore.hidden = false;
-          primo.select();
+          // alcuni esiti non sono errori ("controlla la posta"): vanno nel riquadro informativo
+          const dove = err.info && info ? info : errore;
+          dove.textContent = err.message;
+          dove.hidden = false;
+          if (!err.info) primo.select();
         } finally {
           bottone.disabled = false;
           bottone.textContent = etichetta;

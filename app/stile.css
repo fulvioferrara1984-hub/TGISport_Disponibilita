@@ -92,6 +92,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .accesso-scheda .spunta { margin: 2px 0 16px; }
 .accesso-scheda .errore { margin: 0 0 14px; }
 .accesso-scheda .nota { margin-top: 16px; }
+.accesso-scheda .informazione { margin: 0 0 14px; padding: 9px 11px; border-radius: 8px; background: var(--accento-tenue); color: var(--accento-scuro); font-size: 12.5px; line-height: 1.45; }
+.accesso-link { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
 #accesso-codice { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; font-size: 16px; }
 
 /* ---------- campi e bottoni ---------- */

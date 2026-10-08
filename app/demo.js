@@ -81,15 +81,16 @@
     return pubblico(op);
   }
 
-  async function accediSupervisore(password, ricorda) {
+  async function accediSupervisore(email, password, ricorda) {
     await pausa(150);
-    if (password !== dati.password) throw new Error('Password errata.');
+    if (password !== dati.password) throw new Error('Email o password errata.');
     DO.scrivi(chiaveSessione(), { admin: true }, ricorda);
     DO.ricorda(ricorda);
     return { admin: true };
   }
 
   async function esci() { DO.scrivi(chiaveSessione(), null); }
+  const soloFirebase = async () => { throw Object.assign(new Error('Nella demo basta la password "demo".'), { info: true }); };
 
   function operatoreValido() {
     carica();
@@ -205,7 +206,7 @@
   }
 
   DO.demo = {
-    configura, utente, accediOperatore, accediSupervisore, esci,
+    configura, utente, accediOperatore, accediSupervisore, creaSupervisore: soloFirebase, recuperaPassword: soloFirebase, esci,
     mieDisponibilita, inviaDisponibilita,
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,

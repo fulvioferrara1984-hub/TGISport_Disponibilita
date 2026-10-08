@@ -14,7 +14,7 @@ Pagine su GitHub Pages ──► Firebase (Firestore + Authentication)   dati e 
 ```
 
 - **Firestore** contiene operatori, disponibilità, invii e richieste. Le **regole di sicurezza** ([`firebase/firestore.rules`](firebase/firestore.rules)) decidono chi vede cosa: un operatore legge e scrive solo i propri dati, i supervisori tutto.
-- **Authentication**: i supervisori entrano con un account email + password; ogni codice operatore è un account a sé (nella console si vedono solo impronte, non i codici).
+- **Authentication**: ogni supervisore ha il proprio account (email TGI Sport + password, indirizzo confermato via email); ogni codice operatore è un account a sé (nella console si vedono solo impronte, non i codici).
 - **Apps Script** ([`backend/Codice.gs`](backend/Codice.gs)) spedisce le email ai supervisori e agli operatori. Nessuno lo aspetta: la pagina risponde subito e l'email parte dopo.
 
 Nel repository pubblico non ci sono dati né password. La configurazione in `app/config.js` non è segreta: la protezione sta nelle regole.
@@ -33,11 +33,12 @@ Con `FIREBASE: null` in `app/config.js` il sito funziona con dati di prova salva
 
 1. Vai su [console.firebase.google.com](https://console.firebase.google.com) → **Crea un progetto** (es. *tgi-disponibilita*). Google Analytics non serve.
 2. **Build → Firestore Database → Crea database** → località **europe-west8 (Milano)** → *modalità di produzione*.
-3. **Firestore → Regole**: incolla [`firebase/firestore.rules`](firebase/firestore.rules), sostituisci `SUPERVISORI_EMAIL` con l'email dei supervisori (punto 5) e **Pubblica**.
+3. **Firestore → Regole**: sostituisci tutto il testo con il contenuto di [`firebase/firestore.rules`](firebase/firestore.rules) e **Pubblica**. Le email dei supervisori sono già dentro.
 4. **Build → Authentication → Inizia → Email/password** → abilita (solo la prima opzione) → Salva.
-5. **Authentication → Utenti → Aggiungi utente**: l'email dei supervisori (meglio una casella che controlli, serve per reimpostare la password) e la password dei supervisori.
-6. **Authentication → Impostazioni → Domini autorizzati**: aggiungi `fulvioferrara1984-hub.github.io`.
-7. **Impostazioni progetto (⚙️) → Le tue app → `</>` (Web)**: registra l'app (*Disponibilità*, senza Hosting) e copia l'oggetto `firebaseConfig`.
+5. **Authentication → Impostazioni → Domini autorizzati**: aggiungi `fulvioferrara1984-hub.github.io`.
+6. **Impostazioni progetto (⚙️) → Le tue app → `</>` (Web)**: registra l'app (*Disponibilità*, senza Hosting) e copia l'oggetto `firebaseConfig`.
+
+Gli account dei supervisori non si creano in console: ognuno lo crea da sé al primo accesso (punto 5 qui sotto).
 
 ### 2. Configurazione del sito
 
@@ -46,7 +47,7 @@ In [`app/config.js`](app/config.js):
 ```js
 window.DO_CONFIG = {
   FIREBASE: { apiKey: '…', authDomain: '…', projectId: '…', storageBucket: '…', messagingSenderId: '…', appId: '…' },
-  SUPERVISORI_EMAIL: 'la stessa email del punto 5',
+  SUPERVISORI: ['fferrara@tgisport.com', 'spedatella@tgisport.com', 'fgennaro@tgisport.com', 'ssolera@tgisport.com'],
   EMAIL_URL: 'https://script.google.com/macros/s/…/exec',
   EMULATORI: false,
 };
@@ -67,8 +68,8 @@ Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(
 
 ### 5. Primo accesso dei supervisori
 
-1. Apri `admin.html` con la password del punto 5.
-2. **Impostazioni**: email dei supervisori che ricevono la notifica a ogni invio.
+1. Ogni supervisore apre `admin.html` → **Primo accesso? Crea la tua password** → email TGI Sport e password scelta. Arriva un'email di Firebase con il link per confermare l'indirizzo (guardare anche nello spam); dopo il clic si entra con email e password.
+2. **Impostazioni**: email dei supervisori che ricevono la notifica a ogni invio (possono essere anche solo alcuni).
 3. **Operatori → + Nuovo operatore**: compare il **codice personale** con il **link d'invito** (*Copia messaggio d'invito* per WhatsApp). Il codice si vede una volta sola; se l'operatore lo perde, *Nuovo codice* (il vecchio smette subito di funzionare).
 
 ## Uso quotidiano
@@ -77,11 +78,13 @@ Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(
 - **Supervisori**: la dashboard si aggiorna da sola appena un operatore invia (badge su *Aggiornamenti*, avviso a schermo e, se attivate, notifiche del computer). Clic sull'intestazione di un giorno → pannello **Convocazione**; *Scrivi email ai selezionati* apre il programma di posta con tutti in Ccn.
 - **Richiedi disponibilità**: periodo (scorciatoie per questa settimana, la prossima, le prossime 2 o 4), messaggio facoltativo e operatori (già selezionati quelli a cui mancano giorni). Ogni operatore vede la richiesta in cima alla sua pagina, con i giorni richiesti evidenziati, e riceve un'email con il link. In **Aggiornamenti** c'è l'avanzamento, *Sollecita chi manca*, il messaggio per WhatsApp e *Chiudi*.
 - **Esporta CSV** scarica la settimana in vista (si apre con Excel).
-- **Password supervisori dimenticata**: Firebase → Authentication → Utenti → ⋮ → *Reimposta password* (arriva un'email all'indirizzo dei supervisori).
+- **Password dimenticata**: nella schermata di accesso, scrivere l'email e premere *Password dimenticata?*: arriva un'email per sceglierne una nuova.
+- **Aggiungere o togliere un supervisore**: modificare l'elenco delle email sia in [`firebase/firestore.rules`](firebase/firestore.rules) (poi ripubblicare le regole in console) sia in `SUPERVISORI` di `app/config.js`. Per togliere l'accesso basta toglierlo dalle regole; l'account si può eliminare da Authentication → Utenti.
 
 ## Sicurezza
 
 - Le regole di Firestore ricontrollano a ogni lettura e scrittura chi è l'utente: *Nuovo codice* e la disattivazione di un operatore hanno effetto immediato.
+- Un supervisore entra solo dopo aver confermato il proprio indirizzo: chi si registrasse con la sua email non riceverebbe il link.
 - Firebase blocca da solo i tentativi di accesso ripetuti.
 - Uscendo (*Esci*) si cancella anche la copia dei dati salvata sul dispositivo.
 - Le email partono dall'account Google che ha pubblicato lo script (limite di Google: 100 al giorno con Gmail, 1500 con Google Workspace); le notifiche ai supervisori sono al massimo una al minuto per operatore.

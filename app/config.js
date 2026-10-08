@@ -4,8 +4,8 @@
 window.DO_CONFIG = {
   // Firebase → Impostazioni progetto → Le tue app → App web → firebaseConfig
   FIREBASE: null,
-  // email dell'account dei supervisori creato in Firebase → Authentication (la stessa delle regole)
-  SUPERVISORI_EMAIL: '',
+  // email dei supervisori: le stesse di firebase/firestore.rules (aggiungerne una va fatto in entrambi i posti)
+  SUPERVISORI: ['fferrara@tgisport.com', 'spedatella@tgisport.com', 'fgennaro@tgisport.com', 'ssolera@tgisport.com'],
   // app web di Google Apps Script che spedisce le email (backend/Codice.gs)
   EMAIL_URL: 'https://script.google.com/macros/s/AKfycbzgfkg0SPZ0RJ-xWtxx5e62NLxSdMqL3ITOOiQqiHbnLcxgCftBOwKZtC6A_vZPiPby_w/exec',
   // solo per le prove in locale con l'emulatore di Firebase

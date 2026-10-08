@@ -7,7 +7,7 @@
   <title>Supervisori · Disponibilità TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css?v=3">
+  <link rel="stylesheet" href="app/stile.css?v=4">
 </head>
 <body>
   <header class="testata con-schede">
@@ -29,14 +29,20 @@
   <div class="accesso" id="accesso" hidden>
     <form class="accesso-scheda" id="accesso-form" autocomplete="on">
       <img class="accesso-logo" src="Logo/TGI-Sport_black.png" alt="TGI Sport" onerror="this.remove()">
-      <h1>Dashboard supervisori</h1>
-      <p>Inserisci la password dei supervisori per vedere le disponibilità del team.</p>
-      <input type="text" name="username" value="supervisori" autocomplete="username" hidden>
-      <label class="campo"><span>Password</span><input type="password" id="accesso-password" autocomplete="current-password" required></label>
+      <h1 id="accesso-titolo">Dashboard supervisori</h1>
+      <p id="accesso-testo">Entra con la tua email TGI Sport e la tua password.</p>
+      <label class="campo"><span>Email</span><input type="email" id="accesso-email" autocomplete="username" required></label>
+      <label class="campo"><span>Password</span><input type="password" id="accesso-password" autocomplete="current-password" minlength="8" required></label>
+      <label class="campo" id="accesso-conferma-riga" hidden><span>Ripeti la password</span><input type="password" id="accesso-conferma" autocomplete="new-password" minlength="8"></label>
       <label class="spunta"><input type="checkbox" id="accesso-ricorda" checked><span>Ricorda su questo computer</span></label>
       <div class="errore" id="accesso-errore" role="alert" hidden></div>
+      <div class="informazione" id="accesso-info" role="status" hidden></div>
       <button type="submit" class="primario" id="accesso-entra">Entra</button>
-      <p class="nota" id="accesso-demo" hidden>Demo: la password è <code>demo</code>.</p>
+      <div class="accesso-link">
+        <button type="button" class="link" id="accesso-modo">Primo accesso? Crea la tua password</button>
+        <button type="button" class="link" id="accesso-recupera">Password dimenticata?</button>
+      </div>
+      <p class="nota" id="accesso-demo" hidden>Demo: una email qualsiasi e la password <code>demo</code>.</p>
     </form>
   </div>
 
@@ -158,13 +164,12 @@
           </form>
         </section>
         <section class="scheda">
-          <div class="scheda-testa"><h2>Password supervisori</h2></div>
+          <div class="scheda-testa"><h2>La tua password</h2></div>
           <form class="scheda-corpo" id="form-password" autocomplete="on">
-            <input type="text" name="username" value="supervisori" autocomplete="username" hidden>
             <label class="campo"><span>Password attuale</span><input type="password" id="pw-attuale" autocomplete="current-password" required></label>
             <label class="campo"><span>Nuova password (almeno 8 caratteri)</span><input type="password" id="pw-nuova" autocomplete="new-password" minlength="8" required></label>
             <label class="campo"><span>Ripeti la nuova password</span><input type="password" id="pw-conferma" autocomplete="new-password" minlength="8" required></label>
-            <p class="nota" style="margin: 0 0 12px;">Gli altri supervisori dovranno rientrare con la nuova password.</p>
+            <p class="nota" style="margin: 0 0 12px;">Cambia solo la tua password: ogni supervisore ha la propria.</p>
             <button type="submit" class="primario">Cambia password</button>
           </form>
         </section>
@@ -249,10 +254,10 @@
     </form>
   </dialog>
 
-  <script src="app/config.js?v=3"></script>
-  <script src="app/comune.js?v=3"></script>
-  <script src="app/demo.js?v=3"></script>
-  <script src="app/dati-firebase.js?v=3"></script>
-  <script src="app/admin.js?v=3"></script>
+  <script src="app/config.js?v=4"></script>
+  <script src="app/comune.js?v=4"></script>
+  <script src="app/demo.js?v=4"></script>
+  <script src="app/dati-firebase.js?v=4"></script>
+  <script src="app/admin.js?v=4"></script>
 </body>
 </html>
