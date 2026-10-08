@@ -1,9 +1,28 @@
 # Disponibilità Ops · TGI Sport
 
-Specchietto delle disponibilità giornaliere dei freelance, per inviare le convocazioni agli eventi in modo mirato.
+Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file Excel delle convocazioni (fogli Convocazioni, Riepilogo, Consultivo, Impostazioni, Assenze). La piattaforma è solo operativa: niente fatture.
 
-- **`index.html` – operatori**: ognuno entra con il proprio codice personale, indica giorno per giorno (con vista settimanale) se è *Disponibile*, *Parziale* (con gli orari nella nota) o *Non disponibile*, e preme **Invia ai supervisori**.
-- **`admin.html` – supervisori**: griglia settimanale di tutto il team aggiornata in tempo reale (passando sopra una casella, o toccandola sul telefono, si legge la nota), filtro per mansione, pannello **Convocazione** per ogni giorno (chi è disponibile, email in Ccn, copia telefoni/elenco), **Richiedi disponibilità** per un periodo a scelta, scheda **Aggiornamenti** con ogni invio e lo stato delle richieste, gestione operatori e codici.
+- **`index.html` – operatori**: ognuno entra con il proprio codice personale, indica giorno per giorno se è *Disponibile*, *Parziale* (con gli orari) o *Non disponibile* e preme **Invia ai supervisori**. In alto trova **Le tue convocazioni** e le conferma (o dice che non può) con un tasto. Non vede compensi né note interne.
+- **`admin.html` – supervisori**:
+  - **Convocazioni**: partite e turni di supervisione della settimana; per ogni evento si sceglie l'operatore da un menu che mostra chi è disponibile, parziale, non disponibile o già impegnato; avviso di **doppio turno**; stati *da assegnare → da inviare → in attesa → confermato / rifiutato*, più *da sostituire* e *annullato*; **Invia convocazioni** le rende visibili agli operatori e manda le email.
+  - **Disponibilità**: griglia settimanale del team in tempo reale (passando su una casella si leggono nota e impegni del giorno), pannello per ogni giorno, **Richiedi disponibilità** per un periodo.
+  - **Aggiornamenti**: invii delle disponibilità, conferme e rifiuti delle convocazioni, stato delle richieste.
+  - **Riepilogo**: eventi coperti e compensi netti per operatore, competizione e mese; esportazione in Excel.
+  - **Operatori** (ruolo TL/OP, contratto P.IVA/Coop, codici) e **Impostazioni** (tariffe, competizioni, importazione dal file Excel, email, password).
+
+## Regole
+
+| | |
+|---|---|
+| Ritrovo | orario dell'evento meno 4 ore (modificabile sul singolo evento) |
+| Notturno | ritrovo dalle 22:00 alle 6:00 |
+| Gettoni netti | P.IVA: diurno 140, notturno 210, maggiorato 210 · Coop: diurno 175, notturno 262,50, maggiorato 262,50 |
+| Maggiorato | si sceglie sul singolo evento e prevale sulle altre regole |
+| UEFA | Champions, Europa e Conference League: metà del diurno |
+| Supervisione | un turno per giorno, solo operatori con ruolo **TL**; le partite vanno a TL o OP |
+| Annullati | non contano mai nei riepiloghi |
+
+Tutti i valori si cambiano da **Impostazioni → Tariffe e regole** e **Competizioni e sport** (casella *UEFA ½*).
 
 ## Come funziona
 
@@ -53,6 +72,13 @@ window.DO_CONFIG = {
 };
 ```
 
+### Aggiornamenti successivi
+
+Quando cambiano [`firebase/firestore.rules`](firebase/firestore.rules) o [`backend/Codice.gs`](backend/Codice.gs):
+
+- **regole**: Firebase → Firestore Database → Regole → incolla il file → **Pubblica**;
+- **script**: incolla il codice nell'editor di Apps Script, salva, poi **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione** (l'URL resta lo stesso).
+
 ### 3. Script per le email
 
 Nell'editor di Apps Script: sostituisci il codice con [`backend/Codice.gs`](backend/Codice.gs), metti l'ID del progetto Firebase in `FIREBASE_PROJECT_ID`, aggiorna il manifest con [`backend/appsscript.json`](backend/appsscript.json) (Impostazioni progetto → *Mostra il file manifest*). Poi **Esegui il deployment → Gestisci deployment → ✏️ → Versione: Nuova versione → Esegui il deployment** e accetta le nuove autorizzazioni. L'URL resta lo stesso.
@@ -71,6 +97,16 @@ Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(
 1. Ogni supervisore apre `admin.html` → **Primo accesso? Crea la tua password** → email TGI Sport e password scelta. Arriva un'email di Firebase con il link per confermare l'indirizzo (guardare anche nello spam); dopo il clic si entra con email e password.
 2. **Impostazioni**: email dei supervisori che ricevono la notifica a ogni invio (possono essere anche solo alcuni).
 3. **Operatori → + Nuovo operatore**: compare il **codice personale** con il **link d'invito** (*Copia messaggio d'invito* per WhatsApp). Il codice si vede una volta sola; se l'operatore lo perde, *Nuovo codice* (il vecchio smette subito di funzionare).
+
+## Importare il file Excel della stagione
+
+**Impostazioni → Importa dal file Excel** → scegli `Convocazioni_Operatori_2026-27.xlsx`. Il file viene letto solo nel browser; prima di importare compare un'anteprima.
+
+- operatori (ruolo TL a chi ha fatto turni di *Supporto*, contratto dal foglio Impostazioni), tariffe, sport e competizioni;
+- ogni riga del foglio Convocazioni diventa un evento: *Supporto* → turno di supervisione; *Deleted* → annullato (con lo storico di chi è stato tolto); *Cambiare …* → da sostituire; *Gettone maggiorato* → maggiorato; le partite di Europa e Conference League segnate come Champions passano alla loro competizione; con operatore e CONFERMA = SI → confermato, altrimenti in attesa di conferma;
+- le assenze diventano giorni *Non disponibile* (senza toccare ciò che l'operatore ha già indicato).
+
+Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operatori importati arrivano **senza codice**: crealo dalla scheda Operatori (*Crea codice*) quando li inviti.
 
 ## Uso quotidiano
 
@@ -102,6 +138,8 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/dati-firebase.js` | accessi e dati su Firebase |
 | `app/demo.js` | archivio di prova nel browser (senza Firebase) |
 | `app/comune.js` | date, avvisi, accesso, email |
+| `app/regole.js` | ritrovo, notturno, gettoni, stagione |
+| `app/convocazioni.js`, `app/riepilogo.js`, `app/impostazioni.js` | schede Convocazioni, Riepilogo, regole e importazione |
 | `app/config.js` | collegamento a Firebase e allo script delle email |
 | `app/stile.css`, `Logo/`, favicon | identità TGI Sport (come Mockup Studio) |
 | `firebase/` | regole di sicurezza di Firestore e configurazione dell'emulatore |

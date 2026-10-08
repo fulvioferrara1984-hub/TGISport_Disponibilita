@@ -9,6 +9,7 @@
   let salvati = {};               // ultima versione inviata, data → { s, n }
   let bozza = {};                 // modifiche non ancora inviate, data → { s, n }
   let richieste = [];             // richieste aperte dei supervisori: { id, da, a, messaggio }
+  let convocazioni = [];          // convocazioni ricevute (partite e turni di supervisione)
   let oggi = DO.iso(new Date()), limite = DO.aggiungi(oggi, 83);
   let lun = DO.lunedi(oggi);
   let invio = false;
@@ -66,13 +67,66 @@
         : attivo ? '<button type="button" class="link aggiungi-nota" data-nota>+ Aggiungi una nota</button>' : '';
       return '<li class="giorno' + (bozza[d] ? ' modificato' : '') + (attivo ? '' : ' passato') + (richiesto(d) && !v.s ? ' da-fare' : '') + '" data-data="' + d + '">'
         + '<div class="giorno-data"><b>' + g.nome + '</b><small>' + g.num + ' ' + g.mese + '</small>'
-        + (d === oggi ? '<span class="oggi">Oggi</span>' : '') + (richiesto(d) ? '<span class="richiesto">Richiesto</span>' : '') + '</div>'
+        + (d === oggi ? '<span class="oggi">Oggi</span>' : '') + (richiesto(d) ? '<span class="richiesto">Richiesto</span>' : '')
+        + convocazioni.filter((c) => c.data === d && c.stato !== 'annullato' && c.stato !== 'rifiutato')
+          .map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + (ritrovo(c) || '—') + '</span>').join('') + '</div>'
         + '<div class="giorno-scelte"><div class="stati" role="radiogroup" aria-label="Disponibilità di ' + g.nome + ' ' + g.num + '">' + stati + '</div>'
         + nota + '</div></li>';
     }).join('');
     disegnaRichieste();
+    disegnaConvocazioni();
     disegnaBarra();
   }
+
+  // ---------- convocazioni ----------
+  const ritrovo = (c) => c.convocazione || c.convocazioneCalcolata || '';
+
+  function disegnaConvocazioni() {
+    const box = $('mie-convocazioni');
+    const prossime = convocazioni.filter((c) => c.data >= oggi).sort((a, b) => (a.data + ritrovo(a)).localeCompare(b.data + ritrovo(b)));
+    box.hidden = !prossime.length;
+    if (!prossime.length) return;
+    const daRispondere = prossime.filter((c) => c.stato === 'convocato').length;
+    box.innerHTML = '<div class="scheda-testa"><h2>Le tue convocazioni</h2><span class="spazio"></span>'
+      + (daRispondere ? '<span class="stato-chip st-blu">' + daRispondere + ' da confermare</span>' : '') + '</div>'
+      + prossime.map((c) => {
+        const g = DO.giorno(c.data), sup = c.tipo === 'supervisione';
+        const orari = sup ? 'Inizio turno <span class="ritrovo">' + (ritrovo(c) || '—') + '</span>'
+          : (c.orario ? 'Evento alle ' + c.orario + ' · ' : '') + '<span class="ritrovo">ritrovo ' + (ritrovo(c) || '—') + '</span>';
+        const azioni = c.stato === 'annullato' ? '<span class="stato-chip st-annullato">Annullata</span>'
+          : c.stato === 'confermato' ? '<span class="stato-chip st-D">Confermata</span><button type="button" class="link" data-rispondi="rifiutato" data-id="' + c.id + '">Non posso più</button>'
+          : c.stato === 'rifiutato' ? '<span class="stato-chip st-A">Non puoi</span><button type="button" class="link" data-rispondi="confermato" data-id="' + c.id + '">Posso, confermo</button>'
+          : '<button type="button" class="bottone" data-rispondi="rifiutato" data-id="' + c.id + '">Non posso</button><button type="button" class="primario" data-rispondi="confermato" data-id="' + c.id + '">Confermo</button>';
+        return '<div class="convocazione' + (c.stato === 'annullato' ? ' annullata' : '') + '">'
+          + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
+          + '<div class="conv-info"><b>' + DO.esc(sup ? 'Turno di supervisione' : c.titolo) + '</b>'
+          + '<span>' + DO.esc([c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · ')) + '</span>'
+          + '<span>' + orari + '</span></div>'
+          + '<div class="conv-azioni">' + azioni + '</div></div>';
+      }).join('');
+  }
+
+  $('mie-convocazioni').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-rispondi]');
+    if (!b) return;
+    const c = convocazioni.find((x) => x.id === b.dataset.id), stato = b.dataset.rispondi;
+    let motivo = '';
+    if (stato === 'rifiutato') {
+      motivo = prompt('Perché non puoi? (facoltativo, lo leggono i supervisori)', '');
+      if (motivo === null) return;
+    }
+    b.disabled = true;
+    try {
+      await DO.dati.rispondiConvocazione(c, stato, motivo);
+      Object.assign(c, { stato, risposta: motivo });
+      salvaCopia();
+      disegna();
+      DO.avviso(stato === 'confermato' ? 'Convocazione confermata.' : 'Abbiamo avvisato i supervisori.', 'ok');
+    } catch (err) {
+      DO.avviso(err.message, 'errore');
+      b.disabled = false;
+    }
+  });
 
   function disegnaRichieste() {
     $('richieste').innerHTML = richieste.map((x) => {
@@ -198,7 +252,7 @@
 
   // ---------- avvio ----------
   function salvaCopia() {
-    DO.salvaCopia({ operatore, giorni: salvati, richieste, oggi, limite });
+    DO.salvaCopia({ operatore, giorni: salvati, richieste, convocazioni, oggi, limite });
   }
 
   function applica(r) {
@@ -207,6 +261,7 @@
     operatore = r.operatore;
     salvati = r.giorni || {};
     richieste = r.richieste || [];
+    if (r.convocazioni) convocazioni = r.convocazioni;
     // la bozza salvata sul dispositivo perde i giorni passati e quelli ormai uguali all'inviato
     bozza = DO.leggi(chiaveBozza()) || {};
     Object.keys(bozza).forEach((d) => { if (!modificabile(d) || uguali(bozza[d], salvati[d] || vuoto)) delete bozza[d]; });
@@ -241,7 +296,8 @@
       $('giorni').innerHTML = '<li class="caricamento"><span></span></li>';
     }
     try {
-      const r = await DO.dati.mieDisponibilita();
+      const [r, conv] = await Promise.all([DO.dati.mieDisponibilita(), DO.dati.mieConvocazioni().catch(() => null)]);
+      if (conv) r.convocazioni = conv;
       const settimana = lun;
       applica(r);
       lun = giaVisibile ? settimana : settimanaIniziale();

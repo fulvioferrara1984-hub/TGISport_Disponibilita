@@ -58,7 +58,7 @@ service cloud.firestore {
       // i supervisori possono solo segnarli come letti
       allow update: if supervisore() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['letto']);
       allow create: if operatore()
-        && request.resource.data.keys().hasOnly(['quando', 'operatoreId', 'nome', 'modifiche', 'letto'])
+        && request.resource.data.keys().hasOnly(['quando', 'operatoreId', 'nome', 'modifiche', 'letto', 'tipo', 'evento'])
         && request.resource.data.operatoreId == mioOperatore()
         && request.resource.data.letto == false
         && request.resource.data.modifiche is list;
@@ -67,6 +67,24 @@ service cloud.firestore {
     match /richieste/{richiesta} {
       allow read: if supervisore() || operatore();
       allow write: if supervisore();
+    }
+
+    // Eventi e turni: l'operatore vede solo le proprie convocazioni già inviate,
+    // e può soltanto confermarle o rifiutarle.
+    match /eventi/{evento} {
+      allow read: if supervisore()
+        || (operatore() && resource.data.operatoreId == mioOperatore() && resource.data.inviata == true);
+      allow create, delete: if supervisore();
+      allow update: if supervisore()
+        || (operatore() && resource.data.operatoreId == mioOperatore() && resource.data.inviata == true
+          && resource.data.stato != 'annullato'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stato', 'risposta', 'rispostaIl'])
+          && request.resource.data.stato in ['confermato', 'rifiutato']);
+    }
+
+    // Tariffe, competizioni e regole: solo i supervisori (gli operatori non vedono i compensi).
+    match /impostazioni/{documento} {
+      allow read, write: if supervisore();
     }
   }
 }

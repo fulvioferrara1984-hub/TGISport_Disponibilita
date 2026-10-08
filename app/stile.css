@@ -397,6 +397,112 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 .caricamento span { display: block; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--linea-forte); border-top-color: var(--accento); animation: gira .8s linear infinite; }
 @keyframes gira { to { transform: rotate(360deg); } }
 
+
+/* ---------- convocazioni (supervisori) ---------- */
+.testo-errore { color: var(--errore); }
+.tag { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: 600; background: var(--accento-tenue); color: var(--accento); white-space: nowrap; }
+.tag-sup { background: #efe9ff; color: #5b34c7; }
+.tag-magg { background: var(--attenzione-tenue); color: var(--attenzione); }
+.tag-errore { background: var(--errore-tenue); color: var(--errore); }
+.etichetta.ruolo-TL { background: #efe9ff; color: #5b34c7; }
+.etichetta.ruolo-OP { background: var(--vuoto); color: var(--inchiostro-2); }
+.st-blu { --st: var(--accento); --st-tenue: var(--accento-tenue); }
+.st-vuoto { --st: var(--inchiostro-3); --st-tenue: var(--vuoto); }
+.st-annullato { --st: var(--inchiostro-3); --st-tenue: var(--vuoto); text-decoration: line-through; }
+.stato-chip { display: inline-block; padding: 3px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--st-tenue, var(--vuoto)); color: var(--st, var(--inchiostro-2)); white-space: nowrap; }
+
+.conteggi-conv { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.conteggi-conv:empty { display: none; }
+.conteggio-conv { border: 1px solid var(--linea-forte); background: #fff; border-radius: 18px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; color: var(--inchiostro-2); }
+.conteggio-conv b { color: var(--inchiostro); font-variant-numeric: tabular-nums; }
+.conteggio-conv:hover { border-color: var(--inchiostro-3); }
+.conteggio-conv.attivo { border-color: var(--accento); background: var(--accento-tenue); color: var(--accento); }
+.conv-rifiutato b, .conv-sostituire b { color: var(--errore); }
+.conv-da-assegnare b { color: var(--attenzione); }
+.navigatore.spento .icona, .navigatore.spento #ev-oggi { visibility: hidden; }
+
+.ev-giorno { border-bottom: 1px solid var(--linea); }
+.ev-giorno:last-child { border-bottom: 0; }
+.ev-giorno.passato { opacity: .7; }
+.ev-giorno-testa { display: flex; align-items: baseline; gap: 12px; padding: 12px 18px 8px; background: #fafbfc; border-bottom: 1px solid var(--linea); }
+.ev-giorno-testa b { font-size: 14px; }
+.ev-giorno-testa span { color: var(--inchiostro-3); font-size: 12px; flex: 1; }
+.ev-giorno-testa.oggi b { color: var(--accento); }
+.ev-giorno-testa .link { font-size: 12px; }
+.ev-riga { display: grid; grid-template-columns: 92px minmax(0, 1.3fr) minmax(220px, 1fr) 150px 34px; gap: 14px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--linea); }
+.ev-giorno > .ev-riga:last-child { border-bottom: 0; }
+.ev-riga.sup { background: linear-gradient(90deg, #f6f2ff, transparent 60%); }
+.ev-riga.annullato { opacity: .55; }
+.ev-riga.annullato .ev-info b { text-decoration: line-through; }
+.ev-ora { display: flex; flex-direction: column; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.ev-ora b { font-size: 15px; }
+.ev-ora small { color: var(--inchiostro-3); font-size: 11.5px; }
+.ev-ora .notte { color: #5b34c7; font-weight: 600; }
+.ev-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ev-info b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-info small { color: var(--inchiostro-3); font-size: 12px; }
+.ev-tag { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.ev-nota { color: var(--inchiostro-2) !important; font-style: italic; }
+.ev-op { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ev-op select { height: 34px; font-size: 13px; }
+.avviso-op { font-size: 11.5px; color: var(--inchiostro-3); line-height: 1.35; }
+.avviso-op.giallo { color: var(--attenzione); }
+.avviso-op.rosso { color: var(--errore); }
+.ev-stato { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.ev-stato small { font-size: 11.5px; }
+.ev-modifica { width: 32px; height: 32px; }
+
+.tre-campi { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.dialog-azioni.separati { align-items: center; flex-wrap: wrap; }
+.dialog-azioni .spazio { flex: 1; }
+.storico { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; font-size: 12px; color: var(--inchiostro-3); max-height: 110px; overflow-y: auto; }
+.storico:empty { display: none; }
+.storico b { color: var(--inchiostro-2); font-weight: 600; }
+.griglia td.impegnato .chip::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 3px; height: 2px; border-radius: 1px; background: var(--accento); opacity: .7; }
+.popup-impegno { margin: 6px 0 0; padding: 6px 9px; border-radius: 7px; background: var(--accento-tenue); color: var(--accento-scuro); font-size: 12px; }
+
+/* ---------- riepilogo ---------- */
+#rie-contenuto { display: flex; flex-direction: column; gap: 18px; }
+#rie-contenuto > .errore { margin: 0; }
+.kpi { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.kpi > div { background: var(--pannello); border: 1px solid var(--linea); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: var(--ombra); }
+.kpi span { font-size: 12px; color: var(--inchiostro-2); }
+.kpi b { font-size: 22px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.tabella.numeri td, .tabella.numeri th { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tabella.numeri td:first-child, .tabella.numeri th:first-child, .tabella.numeri .sx { text-align: left; }
+.tabella tfoot td { font-weight: 700; background: #fafbfc; border-top: 1px solid var(--linea-forte); padding: 10px 14px; }
+
+/* ---------- impostazioni: regole e importazione ---------- */
+.tabella.tariffe td, .tabella.tariffe th { padding: 6px 8px; }
+.tabella.tariffe input { height: 32px; text-align: right; }
+.elenco-competizioni { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow-y: auto; }
+.elenco-competizioni li { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto 30px; gap: 8px; align-items: center; }
+.elenco-competizioni input[type="text"], .elenco-competizioni select { height: 32px; font-size: 13px; }
+.elenco-competizioni .spunta { margin: 0; font-size: 12px; white-space: nowrap; }
+.elenco-competizioni .icona { width: 30px; height: 30px; font-size: 12px; }
+.importazione { margin-top: 14px; padding: 14px; border-radius: 10px; background: #fafbfc; border: 1px solid var(--linea); }
+.importazione h3 { margin: 0 0 8px; font-size: 13.5px; }
+.importazione .elenco-semplice { line-height: 1.55; margin-bottom: 8px; }
+.importazione .elenco-semplice li { margin-bottom: 4px; }
+
+/* ---------- convocazioni (operatore) ---------- */
+.mie-convocazioni { margin-bottom: 16px; }
+.mie-convocazioni:empty { display: none; }
+.convocazione { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--linea); }
+.convocazione:last-child { border-bottom: 0; }
+.convocazione.annullata { opacity: .55; }
+.convocazione.annullata .conv-info b { text-decoration: line-through; }
+.conv-data { display: flex; flex-direction: column; align-items: center; line-height: 1.1; padding: 6px 0; border-radius: 10px; background: var(--accento-tenue); color: var(--accento); }
+.conv-data small { font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.conv-data b { font-size: 20px; }
+.conv-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.conv-info b { font-weight: 650; }
+.conv-info span { color: var(--inchiostro-2); font-size: 13px; }
+.conv-info .ritrovo { color: var(--inchiostro); font-weight: 600; }
+.conv-azioni { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.conv-azioni .primario { height: 36px; }
+.giorno-convocato { display: inline-block; margin-top: 4px; padding: 1px 7px; border-radius: 10px; background: var(--ok-tenue); color: var(--ok); font-size: 11px; font-weight: 600; }
+
 /* ---------- schermi piccoli ---------- */
 @media (max-width: 1080px) {
   .dashboard.con-pannello { grid-template-columns: minmax(0, 1fr); }
@@ -440,6 +546,22 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
   dialog form { padding: 20px 18px; }
   .popup { width: min(270px, calc(100vw - 16px)); }
   .elenco-conv.destinatari { max-height: 180px; }
+  .ev-giorno-testa { flex-wrap: wrap; padding: 10px 14px 8px; row-gap: 2px; }
+  .ev-giorno-testa span { flex: 1 1 auto; }
+  .ev-riga { grid-template-columns: 64px minmax(0, 1fr) 32px; gap: 8px 10px; padding: 12px 14px; }
+  .ev-ora { grid-row: 1 / span 2; align-self: start; }
+  .ev-info { grid-column: 2; }
+  .ev-modifica { grid-column: 3; grid-row: 1; align-self: start; }
+  .ev-op { grid-column: 2 / span 2; }
+  .ev-stato { grid-column: 2 / span 2; flex-direction: row; align-items: center; gap: 8px; }
+  .tre-campi { grid-template-columns: 1fr 1fr; }
+  .kpi { grid-template-columns: 1fr 1fr; }
+  .kpi b { font-size: 18px; }
+  .elenco-competizioni li { grid-template-columns: minmax(0, 1fr) 96px 30px; }
+  .elenco-competizioni .spunta { grid-column: 1; grid-row: 2; }
+  .convocazione { grid-template-columns: 54px minmax(0, 1fr); padding: 12px 14px; }
+  .conv-azioni { grid-column: 1 / -1; justify-content: stretch; }
+  .conv-azioni button { flex: 1; }
   .marchio-logo { height: 30px; }
   .marchio-nome { padding-left: 10px; font-size: 13.5px; }
   .testata .utente { display: none; }

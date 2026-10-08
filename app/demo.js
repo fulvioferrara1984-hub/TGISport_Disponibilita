@@ -15,6 +15,7 @@
     const operatori = nomi.map(([nome, mansione], i) => ({
       id: 'op-demo' + (i + 1), nome, mansione, email: nome.toLowerCase().replace(' ', '.') + '@esempio.it',
       telefono: '+39 333 000 00' + due(i + 1), attivo: true, codice: 'DEMO000' + (i + 1), ultimoInvio: '',
+      contratto: i % 4 === 3 ? 'Coop' : 'P.IVA', ruolo: i < 2 ? 'TL' : 'OP',
     }));
     const disponibilita = {}, invii = [];
     const lun = DO.lunedi(DO.oggi());
@@ -30,14 +31,26 @@
         modifiche: [{ d: DO.aggiungi(lun, 2 + k), da: '', a: 'D', n: '' }, { d: DO.aggiungi(lun, 4 + k), da: 'D', a: 'A', n: '' }] });
     });
     invii.sort((a, b) => (a.quando < b.quando ? -1 : 1));
-    return { operatori, disponibilita, invii, richieste: [], password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true } };
+    // qualche evento: una giornata di Serie A con supervisione, una partita di Champions
+    const partite = [[5, '15:00', 'Venezia-Napoli', 'op-demo3'], [5, '18:00', 'Bologna-Inter', 'op-demo4'], [5, '20:45', 'Roma-Genoa', 'op-demo5'],
+      [6, '12:30', 'Udinese-Lecce', 'op-demo7'], [6, '15:00', 'Fiorentina-Como', ''], [6, '20:45', 'Juventus-Lazio', '']];
+    const eventi = partite.map(([g, orario, titolo, op], i) => ({
+      id: 'ev' + i, tipo: 'partita', competizione: 'Serie A', round: '7', sport: 'Calcio', data: DO.aggiungi(lun, g), titolo, orario,
+      convocazione: '', operatoreId: op, stato: op ? (i < 2 ? 'confermato' : 'assegnato') : 'da-assegnare', inviata: op && i < 2, gettone: '', note: '',
+      daSostituire: false, risposta: '', storico: [],
+    }));
+    eventi.push({ id: 'evs1', tipo: 'supervisione', competizione: 'Serie A', round: '7', sport: 'Calcio', data: DO.aggiungi(lun, 5), titolo: 'Supervisione',
+      orario: '14:00', convocazione: '', convocazioneCalcolata: '10:00', operatoreId: 'op-demo1', stato: 'convocato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
+    eventi.push({ id: 'evc1', tipo: 'partita', competizione: 'Champions League', round: 'League Phase', sport: 'Calcio', data: DO.aggiungi(lun, 2), titolo: 'Feyenoord-Como',
+      orario: '18:45', convocazione: '', convocazioneCalcolata: '14:45', operatoreId: 'op-demo2', stato: 'confermato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
+    return { operatori, disponibilita, invii, richieste: [], eventi, regole: null, password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true } };
   }
 
   let dati = null, ruolo = '', alloScadere = null, utenteDemo = null;
   const ascoltatori = new Set();
 
   function carica() {
-    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.richieste) { dati = d; return; } } catch (e) { /* si riparte */ }
+    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.eventi) { dati = d; return; } } catch (e) { /* si riparte */ }
     dati = iniziali();
   }
   function salva() {
@@ -47,7 +60,8 @@
   // un'altra scheda (es. la pagina operatore) ha cambiato i dati: come l'ascolto in tempo reale di Firebase
   window.addEventListener('storage', (e) => { if (e.key === CHIAVE) { carica(); ascoltatori.forEach((cb) => cb()); } });
 
-  const pubblico = (o) => ({ id: o.id, nome: o.nome, mansione: o.mansione, email: o.email, telefono: o.telefono, attivo: o.attivo, ultimoInvio: o.ultimoInvio });
+  const pubblico = (o) => ({ id: o.id, nome: o.nome, mansione: o.mansione, email: o.email, telefono: o.telefono, attivo: o.attivo, ultimoInvio: o.ultimoInvio,
+    contratto: o.contratto || '', ruolo: o.ruolo || 'OP' });
   const norm = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const nuovoCodiceDemo = () => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 8; i++) c += a[Math.floor(Math.random() * 32)]; return c; };
   const formato = (c) => c.slice(0, 4) + '-' + c.slice(4);
@@ -134,6 +148,8 @@
       disponibilita: JSON.parse(JSON.stringify(dati.disponibilita)),
       invii: dati.invii.slice(-60).reverse(),
       richieste: dati.richieste.filter((x) => x.attiva).slice().reverse(),
+      eventi: JSON.parse(JSON.stringify(dati.eventi)),
+      regole: DO.regole.complete(dati.regole),
     });
     ascoltatori.add(invia);
     setTimeout(invia, 200);
@@ -147,7 +163,8 @@
 
   async function salvaOperatore(o) {
     await pausa(150);
-    const campi = { nome: String(o.nome || '').trim(), mansione: (o.mansione || '').trim(), email: (o.email || '').trim(), telefono: (o.telefono || '').trim(), attivo: o.attivo !== false };
+    const campi = { nome: String(o.nome || '').trim(), mansione: (o.mansione || '').trim(), email: (o.email || '').trim(), telefono: (o.telefono || '').trim(), attivo: o.attivo !== false,
+      contratto: o.contratto || '', ruolo: o.ruolo === 'TL' ? 'TL' : 'OP' };
     if (!campi.nome) throw new Error('Il nome è obbligatorio.');
     if (o.id) {
       const op = dati.operatori.find((x) => x.id === o.id);
@@ -192,6 +209,48 @@
     salva();
   }
 
+  // ---------- eventi e convocazioni ----------
+  const voce = (testo) => ({ quando: new Date().toISOString(), testo });
+  async function creaEventi(lista) {
+    lista.forEach((e, i) => dati.eventi.push(Object.assign({ convocazione: '', note: '', gettone: '', daSostituire: false, risposta: '' }, e, {
+      id: 'ev' + Date.now().toString(36) + i, operatoreId: e.operatoreId || '', stato: e.operatoreId ? 'assegnato' : 'da-assegnare', inviata: false, storico: [voce('Creato')],
+    })));
+    salva();
+  }
+  async function aggiornaEvento(id, campi, nota) {
+    const e = dati.eventi.find((x) => x.id === id);
+    Object.assign(e, campi);
+    if (nota) e.storico = (e.storico || []).concat(voce(nota));
+    salva();
+  }
+  async function eliminaEvento(id) { dati.eventi = dati.eventi.filter((x) => x.id !== id); salva(); }
+  async function inviaConvocazioni(eventi, contatti) {
+    eventi.forEach((x) => { const e = dati.eventi.find((y) => y.id === x.id); Object.assign(e, { inviata: true, stato: 'convocato', convocazioneCalcolata: x.convocazioneCalcolata }); });
+    salva();
+    return { inviate: pausa(600).then(() => ({ email: contatti.filter((c) => c.email).length })) };
+  }
+  async function salvaRegole(r) { dati.regole = r; salva(); }
+  async function importa(p) {
+    p.operatori.forEach((o) => { if (!dati.operatori.some((x) => x.id === o.id)) dati.operatori.push(Object.assign({ email: '', telefono: '', attivo: true, ultimoInvio: '', codice: '' }, o)); });
+    p.eventi.forEach((e) => { dati.eventi = dati.eventi.filter((x) => x.id !== e.id); dati.eventi.push(e); });
+    p.disponibilita.forEach((d) => { dati.disponibilita[d.id] = d.giorni; });
+    if (p.regole) dati.regole = p.regole;
+    salva();
+  }
+  async function mieConvocazioni() {
+    await pausa(150);
+    const op = operatoreValido();
+    return dati.eventi.filter((e) => e.operatoreId === op.id && e.inviata).map((e) => Object.assign({}, e, { note: undefined, gettone: undefined }));
+  }
+  async function rispondiConvocazione(ev, stato, motivo) {
+    await pausa(150);
+    const op = operatoreValido();
+    Object.assign(dati.eventi.find((e) => e.id === ev.id), { stato, risposta: motivo || '', rispostaIl: new Date().toISOString() });
+    dati.invii.push({ id: 'inv' + Date.now(), quando: new Date().toISOString(), operatoreId: op.id, nome: op.nome, modifiche: [], letto: false, tipo: 'convocazione',
+      evento: { id: ev.id, titolo: ev.titolo, data: ev.data, competizione: ev.competizione, stato, motivo: motivo || '' } });
+    salva();
+  }
+
   async function leggiImpostazioni() { await pausa(150); return dati.impostazioni; }
   async function salvaImpostazioni(x) {
     dati.impostazioni = { emailSupervisori: x.emailSupervisori || '', emailAttive: x.emailAttive !== false };
@@ -207,8 +266,9 @@
 
   DO.demo = {
     configura, utente, accediOperatore, accediSupervisore, creaSupervisore: soloFirebase, recuperaPassword: soloFirebase, esci,
-    mieDisponibilita, inviaDisponibilita,
+    mieDisponibilita, inviaDisponibilita, mieConvocazioni, rispondiConvocazione,
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
+    creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     azzera: () => { try { localStorage.removeItem(CHIAVE); } catch (e) { /* niente */ } },
   };

@@ -8,7 +8,7 @@
 
   let oggi = DO.oggi(), limite = DO.limite();
   let lun = DO.lunedi(oggi);
-  let operatori = [], disp = {}, feed = [], richieste = [], nonLettiOps = new Set();
+  let operatori = [], disp = {}, feed = [], richieste = [], nonLettiOps = new Set(), eventi = [], regole = DO.regole.complete(null);
   let giornoSel = '', selezionati = new Set();
   let vista = 'griglia', ferma = null, visti = null;
 
@@ -26,11 +26,13 @@
     vista = nome;
     nascondiPopup();
     document.querySelectorAll('#schede [data-vista]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.vista === nome)));
-    ['griglia', 'aggiornamenti', 'operatori', 'impostazioni'].forEach((v) => { $('vista-' + v).hidden = v !== nome; });
-    history.replaceState(null, '', nome === 'griglia' ? location.pathname : '#' + nome);
+    VISTE.forEach((v) => { $('vista-' + v).hidden = v !== nome; });
+    history.replaceState(null, '', nome === VISTE[0] ? location.pathname : '#' + nome);
     if (nome === 'operatori') disegnaOperatori();
     if (nome === 'impostazioni') caricaImpostazioni();
+    moduli.forEach((m) => m.mostra && m.mostra(nome));
   }
+  const VISTE = ['convocazioni', 'griglia', 'aggiornamenti', 'riepilogo', 'operatori', 'impostazioni'];
   $('schede').addEventListener('click', (e) => { const b = e.target.closest('[data-vista]'); if (b) mostra(b.dataset.vista); });
 
   // ---------- dati in tempo reale ----------
@@ -40,6 +42,8 @@
     operatori = stato.operatori;
     disp = stato.disponibilita;
     feed = stato.invii;
+    eventi = stato.eventi || [];
+    regole = stato.regole || DO.regole.complete(null);
     richieste = statoRichieste(stato.richieste);
     nonLettiOps = new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
     impostaNonLetti(feed.filter((x) => !x.letto).length);
@@ -50,7 +54,21 @@
     disegnaSintesiRichieste();
     disegnaFeed();
     if (vista === 'operatori') disegnaOperatori();
+    moduli.forEach((m) => m.aggiorna && m.aggiorna());
   }
+
+  // Le altre schede (convocazioni, riepilogo, impostazioni) sono in file a parte e leggono da qui.
+  const moduli = [];
+  const impegni = (id, d) => eventi.filter((e) => e.operatoreId === id && e.data === d && e.stato !== 'annullato');
+  DO.admin = {
+    registra: (m) => moduli.push(m),
+    get operatori() { return operatori; },
+    get disp() { return disp; },
+    get eventi() { return eventi; },
+    get regole() { return regole; },
+    get vista() { return vista; },
+    valore, impegni, etichettaGiorno, linkSito, mostra: (n) => mostra(n),
+  };
 
   function vaiSettimana(nuovo) {
     lun = nuovo;
@@ -121,7 +139,8 @@
         const chip = v.s
           ? '<span class="chip st-' + v.s + '"><span class="lungo">' + DO.STATI[v.s].breve + '</span><span class="corto">' + SIMBOLI[v.s] + '</span>' + (v.n ? '<span class="con-nota"></span>' : '') + '</span>'
           : '<span class="chip vuoto"><span class="lungo">' + (v.n ? 'Nota' : '—') + '</span><span class="corto">·</span>' + (v.n ? '<span class="con-nota"></span>' : '') + '</span>';
-        return '<td class="cella' + (d === giornoSel ? ' selezionato' : '') + (d < oggi ? ' passato' : '') + '" data-op="' + o.id + '" data-d="' + d + '" tabindex="0" aria-label="'
+        const imp = impegni(o.id, d).length;
+        return '<td class="cella' + (d === giornoSel ? ' selezionato' : '') + (d < oggi ? ' passato' : '') + (imp ? ' impegnato' : '') + '" data-op="' + o.id + '" data-d="' + d + '" tabindex="0" aria-label="'
           + DO.esc(o.nome + ', ' + etichettaGiorno(d) + ': ' + DO.nomeStato(v.s) + (v.n ? '. ' + v.n : '')) + '">' + chip + '</td>';
       }).join('');
       const sotto = [o.mansione, o.ultimoInvio ? 'inviato ' + DO.quando(o.ultimoInvio) : 'mai inviato'].filter(Boolean).join(' · ');
@@ -178,6 +197,8 @@
       + '<div class="popup-stato st-' + v.s + '"><span class="pallino"></span>' + DO.nomeStato(v.s) + '</div>'
       + (v.n ? '<p class="popup-nota">' + DO.esc(v.n) + '</p>' : v.s ? '<p class="popup-vuota">Nessuna nota</p>' : '')
       + (v.t ? '<small>Aggiornato ' + DO.quando(v.t) + '</small>' : '')
+      + impegni(o.id, d).map((e) => '<p class="popup-impegno">' + (e.tipo === 'supervisione' ? 'Supervisione' : DO.esc(e.titolo))
+        + ' · ritrovo ' + DO.regole.convocazione(e, regole) + '</p>').join('')
       + (o.telefono ? '<small>' + DO.esc(o.telefono) + '</small>' : '');
     popup.hidden = false;
     const r = td.getBoundingClientRect(), w = popup.offsetWidth, h = popup.offsetHeight;
@@ -474,6 +495,7 @@
   function disegnaFeed() {
     if (!feed.length) { $('feed').innerHTML = '<li class="griglia-vuota">Nessun invio per ora.</li>'; return; }
     $('feed').innerHTML = feed.map((x) => {
+      if (x.tipo === 'convocazione') return vocePerConvocazione(x);
       const n = x.modifiche.length;
       const modifiche = x.modifiche.slice(0, 14).map((m) => {
         const g = DO.giorno(m.d);
@@ -488,6 +510,17 @@
     }).join('');
   }
 
+  function vocePerConvocazione(x) {
+    const ev = x.evento || {}, si = ev.stato === 'confermato', g = ev.data ? DO.giorno(ev.data) : null;
+    return '<li class="feed-voce' + (x.letto ? '' : ' non-letto') + '"><span class="iniziali">' + DO.esc(DO.iniziali(x.nome)) + '</span>'
+      + '<div><p class="feed-titolo"><b>' + DO.esc(x.nome) + '</b> ' + (si ? 'ha confermato' : '<span class="testo-errore">non può partecipare</span>') + ': '
+      + DO.esc(ev.titolo || '') + (g ? ' · ' + g.breve + ' ' + g.num + ' ' + g.meseBreve : '') + '</p>'
+      + '<span class="feed-quando">' + DO.quando(x.quando) + '</span>'
+      + (ev.motivo ? '<ul class="modifiche"><li>' + DO.esc(ev.motivo) + '</li></ul>' : '') + '</div>'
+      + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-evento="' + DO.esc(ev.data || '') + '" data-id="' + x.id + '">Vedi convocazione</button>'
+      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
+  }
+
   async function segnaLetti(ids) {
     const daSegnare = (ids || feed.filter((x) => !x.letto).map((x) => x.id));
     if (!daSegnare.length) return;
@@ -497,6 +530,13 @@
   $('feed').addEventListener('click', (e) => {
     const letto = e.target.closest('[data-letto]');
     if (letto) segnaLetti([letto.dataset.letto]);
+    const vediEv = e.target.closest('[data-vedi-evento]');
+    if (vediEv) {
+      const x = feed.find((v) => v.id === vediEv.dataset.id);
+      if (x && !x.letto) segnaLetti([x.id]);
+      mostra('convocazioni');
+      moduli.forEach((m) => m.vaiA && m.vaiA(vediEv.dataset.vediEvento));
+    }
     const vedi = e.target.closest('[data-vedi]');
     if (vedi) {
       const x = feed.find((v) => v.id === vedi.dataset.vedi);
@@ -528,14 +568,17 @@
       $('tabella-operatori').innerHTML = '<div class="griglia-vuota">Nessun operatore. Crea il primo con <b>+ Nuovo operatore</b>.</div>';
       return;
     }
-    $('tabella-operatori').innerHTML = '<table class="tabella"><thead><tr><th>Operatore</th><th class="solo-desktop">Contatti</th><th>Stato</th><th class="solo-desktop">Ultimo invio</th><th></th></tr></thead><tbody>'
+    $('tabella-operatori').innerHTML = '<table class="tabella"><thead><tr><th>Operatore</th><th>Ruolo</th><th class="solo-desktop">Contratto</th><th class="solo-desktop">Contatti</th><th>Stato</th><th class="solo-desktop">Ultimo invio</th><th></th></tr></thead><tbody>'
       + elenco.map((o) => '<tr class="' + (o.attivo ? '' : 'disattivo') + '">'
         + '<td><b>' + DO.esc(o.nome) + '</b><br><small class="tenue">' + DO.esc(o.mansione || '—') + '</small></td>'
+        + '<td><span class="etichetta ruolo-' + o.ruolo + '">' + o.ruolo + '</span></td>'
+        + '<td class="solo-desktop">' + (o.contratto ? DO.esc(o.contratto) : '<span class="testo-errore">da indicare</span>') + '</td>'
         + '<td class="solo-desktop">' + DO.esc(o.email || '—') + '<br><small class="tenue">' + DO.esc(o.telefono || '') + '</small></td>'
-        + '<td><span class="etichetta' + (o.attivo ? '' : ' spenta') + '">' + (o.attivo ? 'Attivo' : 'Disattivato') + '</span></td>'
+        + '<td><span class="etichetta' + (o.attivo ? '' : ' spenta') + '">' + (o.attivo ? 'Attivo' : 'Disattivato') + '</span>'
+        + (o.uid === '' ? '<br><small class="testo-errore">senza codice</small>' : '') + '</td>'
         + '<td class="solo-desktop">' + (o.ultimoInvio ? DO.quando(o.ultimoInvio) : '<span class="tenue">mai</span>') + '</td>'
         + '<td class="azioni"><button type="button" class="bottone" data-modifica="' + o.id + '">Modifica</button> '
-        + '<button type="button" class="bottone" data-codice="' + o.id + '">Nuovo codice</button> '
+        + '<button type="button" class="bottone" data-codice="' + o.id + '">' + (o.uid === '' ? 'Crea codice' : 'Nuovo codice') + '</button> '
         + '<button type="button" class="bottone pericolo" data-elimina="' + o.id + '">Elimina</button></td></tr>').join('')
       + '</tbody></table>';
   }
@@ -548,6 +591,8 @@
     $('op-mansione').value = o ? o.mansione : '';
     $('op-email').value = o ? o.email : '';
     $('op-telefono').value = o ? o.telefono : '';
+    $('op-contratto').value = o ? o.contratto : 'P.IVA';
+    $('op-ruolo').value = o ? o.ruolo : 'OP';
     $('op-attivo').checked = o ? o.attivo : true;
     $('op-attivo-riga').hidden = !o;
     $('op-errore').hidden = true;
@@ -564,6 +609,7 @@
       const r = await DO.dati.salvaOperatore({
         id: inModifica && inModifica.id, nome: $('op-nome').value, mansione: $('op-mansione').value,
         email: $('op-email').value, telefono: $('op-telefono').value, attivo: $('op-attivo').checked,
+        contratto: $('op-contratto').value, ruolo: $('op-ruolo').value,
       });
       $('dlg-operatore').close();
       if (r.codice) mostraCodice(r.operatore, r.codice);
@@ -594,7 +640,7 @@
     if (!o) return;
     if (b.dataset.modifica) { apriOperatore(o); return; }
     if (b.dataset.codice) {
-      if (!confirm('Generare un nuovo codice per ' + o.nome + '? Quello attuale smetterà di funzionare.')) return;
+      if (o.uid !== '' && !confirm('Generare un nuovo codice per ' + o.nome + '? Quello attuale smetterà di funzionare.')) return;
       try { mostraCodice(o, (await DO.dati.nuovoCodice(o.id)).codice); } catch (err) { DO.avviso(err.message, 'errore'); }
       return;
     }
@@ -676,7 +722,7 @@
     $('btn-esci').hidden = false;
     aggiornaBottoneNotifiche();
     const iniziale = location.hash.slice(1);
-    mostra(['aggiornamenti', 'operatori', 'impostazioni'].includes(iniziale) ? iniziale : 'griglia');
+    mostra(VISTE.includes(iniziale) ? iniziale : VISTE[0]);
     $('griglia').innerHTML = '<div class="caricamento"><span></span></div>';
     visti = null;
     ferma = DO.dati.ascolta(aggiorna);

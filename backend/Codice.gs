@@ -21,7 +21,10 @@ function doPost(e) {
   let risposta;
   try {
     const r = JSON.parse(e.postData.contents);
-    const azioni = { notificaInvio, emailRichiesta, leggiImpostazioni: soloSupervisori(leggiImpostazioni), salvaImpostazioni: soloSupervisori(salvaImpostazioni) };
+    const azioni = {
+      notificaInvio, emailRichiesta, emailConvocazioni, notificaRisposta,
+      leggiImpostazioni: soloSupervisori(leggiImpostazioni), salvaImpostazioni: soloSupervisori(salvaImpostazioni),
+    };
     if (!azioni[r.azione]) throw new Error('Operazione non consentita.');
     risposta = { ok: true, dati: azioni[r.azione](r) };
   } catch (err) {
@@ -136,6 +139,62 @@ function emailRichiesta(r) {
   });
   esito.quotaRestante = MailApp.getRemainingDailyQuota();
   return esito;
+}
+
+// Convocazioni: un'email per operatore con tutti i suoi eventi, da confermare sulla piattaforma.
+function emailConvocazioni(r) {
+  verificaSupervisore(r.idToken);
+  const sito = /^https:\/\//.test(String(r.urlSito || '')) ? String(r.urlSito) : '';
+  const esito = { email: 0, nonInviate: [] };
+  (Array.isArray(r.convocazioni) ? r.convocazioni : []).slice(0, 100).forEach((c) => {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(c.email || ''))) { esito.nonInviate.push(c.nome); return; }
+    const eventi = (Array.isArray(c.eventi) ? c.eventi : []).slice(0, 60);
+    const righe = eventi.map((e) => '<tr><td style="padding:6px 14px 6px 0;white-space:nowrap"><b>' + esc(giornoLungo(String(e.data))) + '</b></td>'
+      + '<td style="padding:6px 14px 6px 0">' + esc(e.titolo || '') + '<br><span style="color:#8b919c;font-size:12px">' + esc([e.competizione, e.round].filter(Boolean).join(' · ')) + '</span></td>'
+      + '<td style="padding:6px 0;white-space:nowrap">' + (e.tipo === 'supervisione' ? 'inizio turno' : (e.orario ? 'evento ' + esc(e.orario) + '<br>' : '') + 'ritrovo')
+      + ' <b>' + esc(e.convocazione || '') + '</b></td></tr>').join('');
+    try {
+      MailApp.sendEmail({
+        to: c.email,
+        name: CONFIG.MITTENTE,
+        subject: eventi.length === 1 ? 'Convocazione: ' + eventi[0].titolo + ' · ' + giornoLungo(String(eventi[0].data)) : 'Convocazioni TGI Sport (' + eventi.length + ')',
+        htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p>Ciao ' + esc(String(c.nome || '').split(' ')[0]) + ',</p>'
+          + '<p>' + (eventi.length === 1 ? 'sei convocato per:' : 'sei convocato per questi eventi:') + '</p><table style="border-collapse:collapse">' + righe + '</table>'
+          + (sito ? '<p><a href="' + esc(sito) + '" style="display:inline-block;padding:10px 18px;background:#1740f0;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">Conferma sulla piattaforma</a></p>' : '')
+          + '<p style="color:#8b919c;font-size:12px">Per entrare usa il tuo codice personale.</p></div>',
+      });
+      esito.email++;
+    } catch (e) {
+      esito.nonInviate.push(c.nome);
+    }
+  });
+  esito.quotaRestante = MailApp.getRemainingDailyQuota();
+  return esito;
+}
+
+// Un operatore non può partecipare: i supervisori lo sanno subito anche per email.
+function notificaRisposta(r) {
+  const op = verificaOperatore(r.idToken);
+  const imp = leggiImpostazioni();
+  if (r.stato !== 'rifiutato' || !imp.emailAttive || !imp.emailSupervisori) return { inviata: false };
+  const ev = r.evento || {};
+  MailApp.sendEmail({
+    to: imp.emailSupervisori,
+    name: CONFIG.MITTENTE,
+    subject: 'Convocazione rifiutata: ' + op.nome + ' · ' + (ev.titolo || ''),
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p><b>' + esc(op.nome) + '</b> non può partecipare a <b>'
+      + esc(ev.titolo || '') + '</b>' + (ev.data ? ' (' + esc(giornoLungo(String(ev.data))) + ')' : '') + '.</p>'
+      + (r.motivo ? '<p style="padding:10px 14px;background:#f3f4f6;border-radius:8px">' + esc(String(r.motivo).slice(0, 200)) + '</p>' : '')
+      + (imp.urlAdmin ? '<p><a href="' + esc(imp.urlAdmin.replace(/#.*$/, '')) + '#convocazioni" style="color:#1740f0">Trova un sostituto</a></p>' : '') + '</div>',
+  });
+  return { inviata: true };
+}
+
+function giornoLungo(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const giorni = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+  const mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+  return giorni[new Date(iso + 'T12:00:00Z').getUTCDay()] + ' ' + Number(iso.slice(8)) + ' ' + mesi[Number(iso.slice(5, 7)) - 1];
 }
 
 // "dall'8 al 14 ottobre", "dal 28 ottobre all'11 novembre"

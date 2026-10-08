@@ -7,7 +7,7 @@
   <title>Supervisori · Disponibilità TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css?v=7">
+  <link rel="stylesheet" href="app/stile.css?v=8">
 </head>
 <body>
   <header class="testata con-schede">
@@ -16,8 +16,10 @@
       <span class="marchio-nome">Disponibilità · Supervisori</span>
     </div>
     <nav class="schede" role="tablist" aria-label="Sezioni" id="schede" hidden>
-      <button type="button" role="tab" data-vista="griglia" aria-selected="true">Disponibilità</button>
+      <button type="button" role="tab" data-vista="convocazioni" aria-selected="true">Convocazioni <span class="badge" id="badge-conv"></span></button>
+      <button type="button" role="tab" data-vista="griglia" aria-selected="false">Disponibilità</button>
       <button type="button" role="tab" data-vista="aggiornamenti" aria-selected="false">Aggiornamenti <span class="badge" id="badge"></span></button>
+      <button type="button" role="tab" data-vista="riepilogo" aria-selected="false">Riepilogo</button>
       <button type="button" role="tab" data-vista="operatori" aria-selected="false">Operatori</button>
       <button type="button" role="tab" data-vista="impostazioni" aria-selected="false">Impostazioni</button>
     </nav>
@@ -48,8 +50,51 @@
 
   <main class="contenuto" id="pagina" hidden>
 
+    <!-- ===================== CONVOCAZIONI ===================== -->
+    <section id="vista-convocazioni">
+      <div class="titolo-pagina">
+        <div>
+          <h1>Convocazioni</h1>
+          <p>Crea partite e turni di supervisione, assegna gli operatori e invia le convocazioni.</p>
+        </div>
+        <div class="strumenti">
+          <button type="button" class="bottone" id="ev-nuova-sup">+ Supervisione</button>
+          <button type="button" class="bottone" id="ev-nuove">+ Partite</button>
+          <button type="button" class="primario" id="ev-invia">Invia convocazioni</button>
+        </div>
+      </div>
+      <div class="conteggi-conv" id="ev-conteggi"></div>
+      <section class="scheda">
+        <div class="scheda-testa">
+          <div class="navigatore" id="ev-navigatore">
+            <button type="button" class="icona" id="ev-prec" aria-label="Settimana precedente">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="settimana" aria-live="polite"><span id="ev-etichetta"></span><small id="ev-riepilogo"></small></div>
+            <button type="button" class="icona" id="ev-succ" aria-label="Settimana successiva">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button type="button" class="bottone" id="ev-oggi">Oggi</button>
+          </div>
+          <span class="spazio"></span>
+          <div class="strumenti">
+            <select id="ev-filtro-comp" aria-label="Filtra per competizione"><option value="">Tutte le competizioni</option></select>
+            <select id="ev-filtro-stato" aria-label="Filtra per stato">
+              <option value="">Settimana in vista</option>
+              <option value="da-assegnare">Da assegnare (tutte)</option>
+              <option value="assegnato">Da inviare (tutte)</option>
+              <option value="convocato">In attesa di risposta (tutte)</option>
+              <option value="rifiutato">Rifiutate (tutte)</option>
+              <option value="sostituire">Da sostituire (tutte)</option>
+            </select>
+          </div>
+        </div>
+        <div id="ev-giorni"><div class="caricamento"><span></span></div></div>
+      </section>
+    </section>
+
     <!-- ===================== DISPONIBILITÀ ===================== -->
-    <section id="vista-griglia">
+    <section id="vista-griglia" hidden>
       <div class="titolo-pagina">
         <div>
           <h1>Disponibilità del team</h1>
@@ -137,6 +182,21 @@
       </section>
     </section>
 
+    <!-- ===================== RIEPILOGO ===================== -->
+    <section id="vista-riepilogo" hidden>
+      <div class="titolo-pagina">
+        <div>
+          <h1>Riepilogo</h1>
+          <p>Eventi coperti e compensi netti, calcolati dalle convocazioni (gli eventi annullati non contano).</p>
+        </div>
+        <div class="strumenti">
+          <select id="rie-periodo" aria-label="Periodo"></select>
+          <button type="button" class="bottone" id="rie-excel">Esporta Excel</button>
+        </div>
+      </div>
+      <div id="rie-contenuto"></div>
+    </section>
+
     <!-- ===================== OPERATORI ===================== -->
     <section id="vista-operatori" hidden>
       <div class="titolo-pagina">
@@ -153,6 +213,42 @@
     <section id="vista-impostazioni" hidden>
       <div class="titolo-pagina"><div><h1>Impostazioni</h1></div></div>
       <div class="impostazioni">
+        <section class="scheda">
+          <div class="scheda-testa"><h2>Tariffe e regole</h2></div>
+          <form class="scheda-corpo" id="form-regole">
+            <table class="tabella tariffe">
+              <thead><tr><th>Netto per evento</th><th>Diurno</th><th>Notturno</th><th>Maggiorato</th></tr></thead>
+              <tbody>
+                <tr><td>P.IVA</td><td><input type="number" step="0.01" min="0" data-tariffa="P.IVA.diurno"></td><td><input type="number" step="0.01" min="0" data-tariffa="P.IVA.notturno"></td><td><input type="number" step="0.01" min="0" data-tariffa="P.IVA.maggiorato"></td></tr>
+                <tr><td>Coop</td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.diurno"></td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.notturno"></td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.maggiorato"></td></tr>
+              </tbody>
+            </table>
+            <p class="nota" style="margin: 8px 0 14px;">Competizioni UEFA: metà del diurno. Il maggiorato si sceglie sul singolo evento.</p>
+            <div class="tre-campi">
+              <label class="campo"><span>Convocazione: ore prima dell'evento</span><input type="number" id="reg-anticipo" min="0" max="12" step="0.25"></label>
+              <label class="campo"><span>Notturno se il ritrovo è dalle</span><input type="time" id="reg-notte-da"></label>
+              <label class="campo"><span>alle</span><input type="time" id="reg-notte-a"></label>
+            </div>
+            <button type="submit" class="primario">Salva regole</button>
+          </form>
+        </section>
+        <section class="scheda">
+          <div class="scheda-testa"><h2>Competizioni e sport</h2></div>
+          <form class="scheda-corpo" id="form-competizioni">
+            <ul class="elenco-competizioni" id="reg-competizioni"></ul>
+            <button type="button" class="link" id="reg-aggiungi-comp" style="margin: 8px 0 14px;">+ Aggiungi competizione</button>
+            <label class="campo"><span>Sport (separati da virgola)</span><textarea id="reg-sport" rows="2"></textarea></label>
+            <button type="submit" class="primario">Salva competizioni</button>
+          </form>
+        </section>
+        <section class="scheda">
+          <div class="scheda-testa"><h2>Importa dal file Excel</h2></div>
+          <div class="scheda-corpo">
+            <p class="nota" style="margin: 0 0 12px;">Carica il file delle convocazioni (es. <code>Convocazioni_Operatori_2026-27.xlsx</code>): operatori, tariffe, competizioni, eventi e assenze entrano nella piattaforma. Il file viene letto solo nel browser. Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli.</p>
+            <label class="bottone"><input type="file" id="imp-file" accept=".xlsx,.xlsm" hidden>Scegli il file…</label>
+            <div id="imp-anteprima" class="importazione" hidden></div>
+          </div>
+        </section>
         <section class="scheda">
           <div class="scheda-testa"><h2>Notifiche email</h2></div>
           <form class="scheda-corpo" id="form-email">
@@ -186,6 +282,10 @@
       <datalist id="elenco-mansioni"></datalist>
       <label class="campo"><span>Email</span><input type="email" id="op-email" maxlength="120"></label>
       <label class="campo"><span>Telefono</span><input type="tel" id="op-telefono" maxlength="30"></label>
+      <div class="due-campi">
+        <label class="campo"><span>Ruolo</span><select id="op-ruolo"><option value="OP">OP – operatore</option><option value="TL">TL – team leader (anche supervisione)</option></select></label>
+        <label class="campo"><span>Contratto</span><select id="op-contratto"><option>P.IVA</option><option>Coop</option></select></label>
+      </div>
       <label class="spunta" id="op-attivo-riga"><input type="checkbox" id="op-attivo" checked><span>Attivo (può entrare e compare nella griglia)</span></label>
       <div class="errore" id="op-errore" hidden></div>
       <div class="dialog-azioni">
@@ -239,6 +339,92 @@
     </form>
   </dialog>
 
+  <!-- Evento: modifica -->
+  <dialog id="dlg-evento" class="largo">
+    <form method="dialog" id="form-evento">
+      <h2 id="evd-titolo">Evento</h2>
+      <div class="due-campi">
+        <label class="campo"><span>Competizione</span><select id="evd-competizione" data-elenco="competizioni"></select></label>
+        <label class="campo"><span>Round / giornata</span><input type="text" id="evd-round" maxlength="40"></label>
+      </div>
+      <label class="campo" id="evd-titolo-riga"><span>Partita</span><input type="text" id="evd-partita" maxlength="120" placeholder="es. Inter-Monza"></label>
+      <div class="tre-campi">
+        <label class="campo"><span>Data</span><input type="date" id="evd-data" required></label>
+        <label class="campo" id="evd-orario-riga"><span>Orario evento</span><input type="time" id="evd-orario"></label>
+        <label class="campo"><span>Ritrovo <small id="evd-ritrovo-auto"></small></span><input type="time" id="evd-convocazione"></label>
+      </div>
+      <div class="due-campi">
+        <label class="campo"><span>Sport</span><select id="evd-sport" data-elenco="sport"></select></label>
+        <label class="campo"><span>Note interne (non visibili agli operatori)</span><input type="text" id="evd-note" maxlength="300"></label>
+      </div>
+      <label class="spunta"><input type="checkbox" id="evd-maggiorato"><span>Gettone maggiorato</span></label>
+      <label class="spunta"><input type="checkbox" id="evd-sostituire"><span>Da sostituire (l'operatore assegnato va cambiato)</span></label>
+      <div class="storico" id="evd-storico"></div>
+      <div class="errore" id="evd-errore" hidden></div>
+      <div class="dialog-azioni separati">
+        <button type="button" class="bottone pericolo" id="evd-elimina">Elimina</button>
+        <button type="button" class="bottone" id="evd-annulla-evento">Annulla evento</button>
+        <span class="spazio"></span>
+        <button type="button" class="bottone" data-chiudi>Chiudi</button>
+        <button type="submit" class="primario">Salva</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Nuove partite: una per riga -->
+  <dialog id="dlg-partite" class="largo">
+    <form method="dialog" id="form-partite">
+      <h2>Nuove partite</h2>
+      <div class="tre-campi">
+        <label class="campo"><span>Competizione</span><select id="evp-competizione" data-elenco="competizioni" required></select></label>
+        <label class="campo"><span>Round / giornata</span><input type="text" id="evp-round" maxlength="40"></label>
+        <label class="campo"><span>Sport</span><select id="evp-sport" data-elenco="sport"></select></label>
+      </div>
+      <label class="campo"><span>Una partita per riga: data, orario, partita</span>
+        <textarea id="evp-righe" rows="8" placeholder="17/10 15:00 Venezia-Napoli&#10;17/10 18:00 Bologna-Inter&#10;18/10 20:45 Juventus-Lazio"></textarea></label>
+      <p class="nota" id="evp-anteprima"></p>
+      <div class="errore" id="evp-errore" hidden></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" data-chiudi>Annulla</button>
+        <button type="submit" class="primario" id="evp-crea">Crea partite</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Nuovi turni di supervisione: uno per giorno -->
+  <dialog id="dlg-supervisione">
+    <form method="dialog" id="form-supervisione">
+      <h2>Turni di supervisione</h2>
+      <p class="nota" style="margin: -6px 0 14px;">Un turno per ogni giorno del periodo. Si possono assegnare solo operatori con ruolo TL.</p>
+      <div class="due-campi">
+        <label class="campo"><span>Dal</span><input type="date" id="evs-da" required></label>
+        <label class="campo"><span>Al</span><input type="date" id="evs-a" required></label>
+      </div>
+      <div class="due-campi">
+        <label class="campo"><span>Competizione</span><select id="evs-competizione" data-elenco="competizioni"></select></label>
+        <label class="campo"><span>Inizio turno (ritrovo)</span><input type="time" id="evs-ritrovo" value="10:00" required></label>
+      </div>
+      <label class="campo"><span>TL (facoltativo)</span><select id="evs-tl"></select></label>
+      <div class="errore" id="evs-errore" hidden></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" data-chiudi>Annulla</button>
+        <button type="submit" class="primario">Crea turni</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Invio delle convocazioni -->
+  <dialog id="dlg-invia">
+    <form method="dialog" id="form-invia">
+      <h2>Invia convocazioni</h2>
+      <div class="nota" id="evi-elenco"></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" data-chiudi>Annulla</button>
+        <button type="submit" class="primario" id="evi-conferma">Invia</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Codice personale appena creato -->
   <dialog id="dlg-codice">
     <form method="dialog">
@@ -254,10 +440,14 @@
     </form>
   </dialog>
 
-  <script src="app/config.js?v=7"></script>
-  <script src="app/comune.js?v=7"></script>
-  <script src="app/demo.js?v=7"></script>
-  <script src="app/dati-firebase.js?v=7"></script>
-  <script src="app/admin.js?v=7"></script>
+  <script src="app/config.js?v=8"></script>
+  <script src="app/comune.js?v=8"></script>
+  <script src="app/demo.js?v=8"></script>
+  <script src="app/dati-firebase.js?v=8"></script>
+  <script src="app/regole.js?v=8"></script>
+  <script src="app/admin.js?v=8"></script>
+  <script src="app/convocazioni.js?v=8"></script>
+  <script src="app/riepilogo.js?v=8"></script>
+  <script src="app/impostazioni.js?v=8"></script>
 </body>
 </html>

@@ -96,7 +96,7 @@
 
   const pubblico = (id, o) => ({
     id, nome: o.nome || '', mansione: o.mansione || '', email: o.email || '', telefono: o.telefono || '',
-    attivo: o.attivo !== false, ultimoInvio: o.ultimoInvio || '',
+    attivo: o.attivo !== false, ultimoInvio: o.ultimoInvio || '', contratto: o.contratto || '', ruolo: o.ruolo || 'OP',
   });
 
   // ---------- sessione ----------
@@ -275,7 +275,7 @@
   // ---------- supervisori ----------
   // Ascolto in tempo reale: alla prima lettura arrivano tutti i dati, poi solo ciò che cambia.
   function ascolta(cb) {
-    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null };
+    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null };
     const pronto = () => { if (Object.values(stato).every((v) => v !== null)) cb(Object.assign({}, stato)); };
     let fermo = false;
     const errore = (e) => {
@@ -283,6 +283,16 @@
       if (e.code === 'permission-denied') negato(e, 'Sessione scaduta: accedi di nuovo.').catch(() => {});
       else DO.avviso('Aggiornamento in tempo reale interrotto: ' + traduci(e).message, 'errore');
     };
+    // Eventi e regole sono arrivati dopo: se le regole di Firestore non sono ancora aggiornate
+    // il resto della dashboard funziona lo stesso, con un avviso invece di far uscire.
+    const erroreNuovo = (chiave, vuoto) => (e) => {
+      if (fermo) return;
+      if (e.code !== 'permission-denied') { errore(e); return; }
+      stato[chiave] = vuoto;
+      pronto();
+      if (!avvisato) { avvisato = true; DO.avviso('Convocazioni non disponibili: pubblica le nuove regole di Firestore (vedi README).', 'errore', 12000); }
+    };
+    let avvisato = false;
     const ferma = [
       F.onSnapshot(F.collection(db, 'operatori'), (s) => {
         stato.operatori = s.docs.map((d) => Object.assign(pubblico(d.id, d.data()), { uid: d.data().uid }));
@@ -302,6 +312,15 @@
         stato.richieste = s.docs.map((d) => Object.assign({ id: d.id }, d.data())).sort((a, b) => (a.creata < b.creata ? 1 : -1));
         pronto();
       }, errore),
+      // eventi e turni della stagione in corso (da agosto): calendario e riepilogo senza altre letture
+      F.onSnapshot(F.query(F.collection(db, 'eventi'), F.where('data', '>=', DO.regole.stagione(DO.oggi()).da)), (s) => {
+        stato.eventi = s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+        pronto();
+      }, erroreNuovo('eventi', [])),
+      F.onSnapshot(F.doc(db, 'impostazioni', 'regole'), (d) => {
+        stato.regole = DO.regole.complete(d.exists() ? d.data() : null);
+        pronto();
+      }, erroreNuovo('regole', DO.regole.complete(null))),
     ];
     return () => { fermo = true; ferma.forEach((f) => f()); };
   }
@@ -322,6 +341,7 @@
     const campi = {
       nome: String(o.nome || '').trim().slice(0, 80), mansione: String(o.mansione || '').trim().slice(0, 60),
       email: String(o.email || '').trim().slice(0, 120), telefono: String(o.telefono || '').trim().slice(0, 30), attivo: o.attivo !== false,
+      contratto: ['P.IVA', 'Coop'].includes(o.contratto) ? o.contratto : '', ruolo: o.ruolo === 'TL' ? 'TL' : 'OP',
     };
     if (!campi.nome) throw new Error('Il nome è obbligatorio.');
     if (o.id) {
@@ -383,6 +403,124 @@
     return scrivi(() => F.updateDoc(F.doc(db, 'richieste', id), { attiva: false }));
   }
 
+  // ---------- eventi e convocazioni (supervisori) ----------
+  const voce = (testo) => ({ quando: new Date().toISOString(), testo });
+
+  function pulisciEvento(e) {
+    return {
+      tipo: e.tipo === 'supervisione' ? 'supervisione' : 'partita',
+      competizione: String(e.competizione || '').slice(0, 80), round: String(e.round == null ? '' : e.round).slice(0, 40),
+      sport: String(e.sport || '').slice(0, 40), data: e.data, titolo: String(e.titolo || '').trim().slice(0, 120),
+      orario: e.orario || '', convocazione: e.convocazione || '', note: String(e.note || '').slice(0, 300),
+      // orario di ritrovo già calcolato: gli operatori non leggono le regole (anticipo, tariffe)
+      convocazioneCalcolata: e.convocazioneCalcolata || '',
+      gettone: e.gettone === 'maggiorato' ? 'maggiorato' : '', daSostituire: !!e.daSostituire,
+    };
+  }
+
+  function creaEventi(lista) {
+    return scrivi(async () => {
+      for (let i = 0; i < lista.length; i += 400) {
+        const batch = F.writeBatch(db);
+        lista.slice(i, i + 400).forEach((e) => {
+          batch.set(F.doc(F.collection(db, 'eventi')), Object.assign(pulisciEvento(e), {
+            operatoreId: e.operatoreId || '', stato: e.operatoreId ? 'assegnato' : 'da-assegnare', inviata: false,
+            risposta: '', rispostaIl: '', storico: [voce('Creato')], creato: new Date().toISOString(),
+          }));
+        });
+        await batch.commit();
+      }
+    });
+  }
+
+  // campi: modifiche ai dati dell'evento; nota: riga da aggiungere allo storico
+  function aggiornaEvento(id, campi, nota) {
+    const dati = Object.assign({}, campi);
+    if (nota) dati.storico = F.arrayUnion(voce(nota));
+    return scrivi(() => F.updateDoc(F.doc(db, 'eventi', id), dati));
+  }
+
+  const eliminaEvento = (id) => scrivi(() => F.deleteDoc(F.doc(db, 'eventi', id)));
+
+  // Le convocazioni diventano visibili agli operatori; le email partono in sottofondo.
+  async function inviaConvocazioni(eventi, contatti, urlSito) {
+    await scrivi(async () => {
+      for (let i = 0; i < eventi.length; i += 400) {
+        const batch = F.writeBatch(db);
+        eventi.slice(i, i + 400).forEach((e) => batch.update(F.doc(db, 'eventi', e.id), {
+          inviata: true, stato: 'convocato', risposta: '', rispostaIl: '', convocazioneCalcolata: e.convocazioneCalcolata || '',
+          storico: F.arrayUnion(voce('Convocazione inviata')),
+        }));
+        await batch.commit();
+      }
+    });
+    const conEmail = contatti.filter((c) => c.email);
+    // dentro un oggetto: restituire direttamente la promessa farebbe aspettare l'invio delle email
+    return { inviate: conEmail.length ? email('emailConvocazioni', { convocazioni: conEmail, urlSito }) : Promise.resolve({ email: 0 }) };
+  }
+
+  const salvaRegole = (r) => scrivi(() => F.setDoc(F.doc(db, 'impostazioni', 'regole'), r));
+
+  // Importazione dal file Excel: identificativi fissi, così ripeterla aggiorna senza duplicare.
+  async function importa(p) {
+    await scrivi(async () => {
+      const scritture = [];
+      p.operatori.forEach((o) => scritture.push(['set', F.doc(db, 'operatori', o.id), {
+        nome: o.nome, mansione: o.mansione || '', email: '', telefono: '', attivo: true, contratto: o.contratto, ruolo: o.ruolo,
+        uid: '', ultimoInvio: '', creato: new Date().toISOString(),
+      }]));
+      p.eventi.forEach((e) => scritture.push(['set', F.doc(db, 'eventi', e.id), Object.assign(pulisciEvento(e), {
+        operatoreId: e.operatoreId, stato: e.stato, inviata: e.inviata, risposta: '', rispostaIl: '',
+        storico: e.storico, creato: new Date().toISOString(), fonte: 'excel',
+      })]));
+      p.disponibilita.forEach((d) => scritture.push(['set', F.doc(db, 'disponibilita', d.id), { giorni: d.giorni }]));
+      if (p.regole) scritture.push(['set', F.doc(db, 'impostazioni', 'regole'), p.regole]);
+      for (let i = 0; i < scritture.length; i += 400) {
+        const batch = F.writeBatch(db);
+        scritture.slice(i, i + 400).forEach(([, rif, dati]) => batch.set(rif, dati));
+        await batch.commit();
+      }
+    });
+  }
+
+  // ---------- convocazioni (operatore) ----------
+  async function mieConvocazioni() {
+    const op = operatoreCorrente || await caricaOperatore();
+    try {
+      const s = await F.getDocs(F.query(F.collection(db, 'eventi'), F.where('operatoreId', '==', op.id), F.where('inviata', '==', true)));
+      // all'operatore arrivano solo i dati operativi: niente note interne né gettoni
+      return s.docs.map((d) => {
+        const e = d.data();
+        return { id: d.id, tipo: e.tipo, competizione: e.competizione, round: e.round, sport: e.sport, data: e.data, titolo: e.titolo,
+          orario: e.orario, convocazione: e.convocazione, convocazioneCalcolata: e.convocazioneCalcolata || '', stato: e.stato, risposta: e.risposta || '' };
+      });
+    } catch (e) {
+      // un accesso revocato lo segnala già mieDisponibilita: qui, nel dubbio, nessuna convocazione
+      if (e.code === 'permission-denied') return [];
+      throw traduci(e);
+    }
+  }
+
+  async function rispondiConvocazione(ev, stato, motivo) {
+    const op = operatoreCorrente || await caricaOperatore();
+    const adesso = new Date().toISOString();
+    try {
+      const batch = F.writeBatch(db);
+      batch.update(F.doc(db, 'eventi', ev.id), { stato, risposta: String(motivo || '').slice(0, 200), rispostaIl: adesso });
+      batch.set(F.doc(F.collection(db, 'invii')), {
+        quando: adesso, operatoreId: op.id, nome: op.nome, modifiche: [], letto: false, tipo: 'convocazione',
+        evento: { id: ev.id, titolo: ev.titolo, data: ev.data, competizione: ev.competizione || '', stato, motivo: String(motivo || '').slice(0, 200) },
+      });
+      await batch.commit();
+    } catch (e) {
+      return negato(e, 'Il tuo accesso non è più valido: contatta i supervisori.');
+    }
+    if (stato === 'rifiutato') {
+      email('notificaRisposta', { evento: { titolo: ev.titolo, data: ev.data, competizione: ev.competizione || '' }, stato, motivo })
+        .catch((e) => console.warn('Email ai supervisori non inviata:', e.message));
+    }
+  }
+
   const leggiImpostazioni = () => email('leggiImpostazioni');
   const salvaImpostazioni = (x) => email('salvaImpostazioni', x);
 
@@ -402,8 +540,9 @@
 
   DO.firebase = {
     configura, utente, accediOperatore, accediSupervisore, creaSupervisore, recuperaPassword, esci,
-    mieDisponibilita, inviaDisponibilita,
+    mieDisponibilita, inviaDisponibilita, mieConvocazioni, rispondiConvocazione,
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
+    creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
   };
 })(window.DO = window.DO || {});
