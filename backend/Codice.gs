@@ -34,6 +34,14 @@ function doGet() {
   return ContentService.createTextOutput('Disponibilità Ops: il servizio email è attivo.');
 }
 
+// Da eseguire una volta dall'editor: chiede le autorizzazioni (collegamento a Firebase e invio email)
+// e scrive nel registro se è tutto pronto.
+function verificaAutorizzazioni() {
+  const r = UrlFetchApp.fetch('https://firestore.googleapis.com/v1/projects/' + CONFIG.FIREBASE_PROJECT_ID + '/databases/(default)/documents/invii?pageSize=1', { muteHttpExceptions: true });
+  const firebase = r.getResponseCode() === 403 ? 'raggiungibile (accesso protetto dalle regole, corretto)' : 'risposta inattesa ' + r.getResponseCode();
+  console.log('Firebase: ' + firebase + ' · email ancora disponibili oggi: ' + MailApp.getRemainingDailyQuota());
+}
+
 // ---------------------------------------------------------------- chi sta chiamando
 
 function firestore(percorso, idToken) {
