@@ -173,7 +173,7 @@
     invio = true;
     disegnaBarra();
     try {
-      const r = await DO.chiama('inviaDisponibilita', { giorni });
+      const r = await DO.dati.inviaDisponibilita(giorni);
       Object.keys(giorni).forEach((d) => { salvati[d] = { s: giorni[d].s, n: giorni[d].n }; });
       bozza = {};
       salvaBozza();
@@ -226,10 +226,10 @@
   }
 
   // Si mostra subito l'ultima versione salvata sul dispositivo, poi si aggiorna con quella del server.
-  async function carica() {
+  async function carica(idOperatore) {
     $('pagina').hidden = false;
     const copia = DO.leggiCopia();
-    const giaVisibile = !!(copia && copia.operatore);
+    const giaVisibile = !!(copia && copia.operatore && copia.operatore.id === idOperatore);
     if (giaVisibile) {
       // la copia può essere di ieri: i giorni ormai passati non devono risultare modificabili
       const adesso = DO.iso(new Date());
@@ -241,7 +241,7 @@
       $('giorni').innerHTML = '<li class="caricamento"><span></span></li>';
     }
     try {
-      const r = await DO.chiama('mieDisponibilita', { da: DO.aggiungi(DO.lunedi(DO.iso(new Date())), -7 * (SETTIMANE_INDIETRO + 1)), a: DO.aggiungi(DO.iso(new Date()), 7 * 26) });
+      const r = await DO.dati.mieDisponibilita();
       const settimana = lun;
       applica(r);
       lun = giaVisibile ? settimana : settimanaIniziale();
@@ -249,42 +249,47 @@
       salvaCopia();
     } catch (e) {
       if (!giaVisibile) $('giorni').innerHTML = '<li class="griglia-vuota">' + DO.esc(e.message) + '</li>';
-      else if (DO.sessione()) DO.avviso('Non riesco ad aggiornare i dati: ' + e.message, 'errore');
+      else if (operatore) DO.avviso('Non riesco ad aggiornare i dati: ' + e.message, 'errore');
     } finally {
       $('aggiornamento').hidden = true;
     }
   }
 
-  async function accedi(codice) {
-    const ricorda = $('accesso-ricorda').checked;
-    const r = await DO.chiama('accedi', { ruolo: 'operatore', codice });
-    DO.salvaSessione({ token: r.token, operatore: r.operatore }, ricorda);
-    return r;
-  }
+  const accedi = (codice) => DO.dati.accediOperatore(codice, $('accesso-ricorda').checked);
 
   async function entra() {
     $('pagina').hidden = true;
     $('barra-invio').hidden = true;
     $('accesso-demo').hidden = !DO.inDemo;
+    let op = null;
+    try {
+      const u = await DO.dati.utente();
+      op = u && u.operatore;
+    } catch (e) {
+      $('pagina').hidden = false;
+      $('giorni').innerHTML = '<li class="griglia-vuota">Non riesco a collegarmi: ' + DO.esc(e.message) + '<br>Controlla la connessione e ricarica la pagina.</li>';
+      return;
+    }
     // link d'invito: index.html#codice=XXXX-XXXX entra direttamente
     const dalLink = new URLSearchParams(location.hash.slice(1)).get('codice');
     if (dalLink) {
       history.replaceState(null, '', location.pathname + location.search);
-      try { await accedi(dalLink); } catch (e) { DO.avviso(e.message, 'errore'); }
+      try { op = await accedi(dalLink); } catch (e) { DO.avviso(e.message, 'errore'); }
     }
-    if (!DO.sessione()) await DO.chiediAccesso(() => accedi($('accesso-codice').value));
-    await carica();
+    if (!op) op = await DO.chiediAccesso(() => accedi($('accesso-codice').value));
+    await carica(op.id);
   }
 
-  function esci() {
+  async function esci() {
     if (nModifiche() && !confirm('Hai modifiche non inviate: restano salvate su questo dispositivo. Uscire comunque?')) return;
-    DO.chiudiSessione();
+    await DO.dati.esci();
+    DO.dimentica();
     operatore = null;
     location.reload();
   }
   $('btn-esci').addEventListener('click', esci);
 
-  DO.avviaSessione('operatore', (messaggio) => {
+  DO.avviaPagina('operatore', (messaggio) => {
     DO.avviso(messaggio, 'errore');
     operatore = null;
     entra();

@@ -1,9 +1,10 @@
-/* Disponibilità Ops — funzioni comuni alle due pagine: chiamate al backend, sessione, date, avvisi. */
+/* Disponibilità Ops — funzioni comuni alle due pagine: date, memoria del browser, avvisi, accesso, email. */
 (function (DO) {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
-  const API_URL = (window.DO_CONFIG && window.DO_CONFIG.API_URL) || '';
+  const CONFIG = window.DO_CONFIG || {};
+  const SETTIMANE_AVANTI = 12;   // settimane future che gli operatori possono compilare
 
   // ---------- testo ----------
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -16,6 +17,8 @@
   const aggiungi = (s, n) => { const d = daIso(s); d.setDate(d.getDate() + n); return iso(d); };
   const lunedi = (s) => aggiungi(s, -((daIso(s).getDay() + 6) % 7));
   const settimana = (lun) => Array.from({ length: 7 }, (_, i) => aggiungi(lun, i));
+  const oggi = () => iso(new Date());
+  const limite = () => aggiungi(lunedi(oggi()), SETTIMANE_AVANTI * 7 - 1);
   const GIORNI = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
   const GIORNI_BREVI = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
@@ -73,73 +76,46 @@
     } catch (e) { /* senza memoria si rientra a ogni visita */ }
   }
 
-  // ---------- sessione e chiamate al backend ----------
-  let sessione = null, chiaveSessione = '', alloScadere = null;
+  // ---------- pagina: archivio dati (Firebase o demo) e sessione ----------
+  let ruolo = '';
 
-  function avviaSessione(ruolo, scaduta) {
-    chiaveSessione = 'do-sessione-' + ruolo;
-    sessione = leggi(chiaveSessione);
-    alloScadere = scaduta;
-    return sessione;
-  }
-  function salvaSessione(s, ricorda) {
-    sessione = s;
-    scrivi(chiaveSessione, s, ricorda);
-  }
-  function ricordata() {
-    try { return !!localStorage.getItem(chiaveSessione); } catch (e) { return false; }
-  }
-  function aggiornaToken(token) {
-    if (sessione) salvaSessione(Object.assign({}, sessione, { token }), ricordata());
-  }
-  function chiudiSessione() {
-    sessione = null;
-    scrivi(chiaveSessione, null);
-    scrivi(chiaveSessione + '-dati', null);
+  function avviaPagina(r, alloScadere) {
+    ruolo = r;
+    DO.dati = DO.inDemo ? DO.demo : DO.firebase;
+    DO.dati.configura(r, alloScadere);
   }
 
-  // Ultimi dati ricevuti: si mostrano subito all'apertura mentre Google prepara quelli nuovi.
-  // Stanno dove sta la sessione (dispositivo o sola scheda) e si cancellano con Esci.
-  const leggiCopia = () => (sessione && leggi(chiaveSessione + '-dati')) || null;
-  const salvaCopia = (dati) => { if (sessione) scrivi(chiaveSessione + '-dati', dati, ricordata()); };
+  // "Ricorda su questo dispositivo": l'accesso e la copia dei dati restano anche chiudendo il browser.
+  const ricordato = () => !!leggi('do-ricorda-' + ruolo);
+  const ricorda = (si) => scrivi('do-ricorda-' + ruolo, si ? 1 : null, true);
 
-  async function chiama(azione, dati) {
-    const richiesta = Object.assign({ azione, token: sessione && sessione.token }, dati || {});
-    let risposta;
-    if (!API_URL) {
-      risposta = await DO.demo.chiama(richiesta);
-    } else {
-      // Google a volte risponde lentamente o con una sua pagina d'errore invece del risultato:
-      // si avvisa chi aspetta e si riprova. Ripetere è sicuro: il backend salva solo le differenze.
-      const lento = setTimeout(() => avviso('Il server di Google risponde lentamente, attendi qualche secondo…', '', 8000), 6000);
+  // Ultimi dati ricevuti: si mostrano subito all'apertura mentre arrivano quelli aggiornati.
+  const leggiCopia = () => leggi('do-copia-' + ruolo);
+  const salvaCopia = (dati) => scrivi('do-copia-' + ruolo, dati, ricordato());
+  const dimentica = () => { scrivi('do-copia-' + ruolo, null); ricorda(false); };
+
+  // ---------- email: le spedisce lo script Google, in sottofondo ----------
+  // Google a volte risponde lentamente o con una sua pagina d'errore: si riprova fino a 3 volte.
+  async function inviaEmail(azione, dati) {
+    if (!CONFIG.EMAIL_URL) throw new Error('Invio email non configurato.');
+    const richiesta = Object.assign({ azione }, dati || {});
+    for (let tentativo = 1; ; tentativo++) {
+      let risposta, motivo;
       try {
-        for (let tentativo = 1; !risposta; tentativo++) {
-          let motivo;
-          try {
-            // text/plain evita la richiesta preliminare CORS, che Apps Script non gestisce
-            const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(richiesta), redirect: 'follow' });
-            const testo = await r.text();
-            try { risposta = JSON.parse(testo); } catch (e) { motivo = 'Il server non ha risposto correttamente (' + r.status + '). Riprova tra poco.'; }
-          } catch (e) {
-            motivo = 'Connessione non riuscita: controlla la rete e riprova.';
-          }
-          if (risposta) break;
-          if (tentativo === 3) throw new Error(motivo);
-          await new Promise((fatto) => setTimeout(fatto, 700 * tentativo));
-        }
-      } finally {
-        clearTimeout(lento);
+        // text/plain evita la richiesta preliminare CORS, che Apps Script non gestisce
+        const r = await fetch(CONFIG.EMAIL_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(richiesta), redirect: 'follow' });
+        const testo = await r.text();
+        try { risposta = JSON.parse(testo); } catch (e) { motivo = 'Il servizio email di Google non ha risposto correttamente.'; }
+      } catch (e) {
+        motivo = 'Connessione non riuscita.';
       }
-    }
-    if (!risposta.ok) {
-      // più chiamate possono scadere insieme: si torna all'accesso una volta sola
-      if (risposta.codice === 'sessione' && azione !== 'accedi' && sessione) {
-        chiudiSessione();
-        if (alloScadere) alloScadere(risposta.errore);
+      if (risposta) {
+        if (!risposta.ok) throw new Error(risposta.errore || 'Email non inviate.');
+        return risposta.dati;
       }
-      throw new Error(risposta.errore || 'Errore sconosciuto.');
+      if (tentativo === 3) throw new Error(motivo);
+      await new Promise((fatto) => setTimeout(fatto, 1000 * tentativo));
     }
-    return risposta.dati;
   }
 
   // ---------- avvisi ----------
@@ -162,12 +138,12 @@
     }
   }
 
-  // ---------- accesso: mostra la scheda e si risolve con la risposta del backend ----------
+  // ---------- accesso: mostra la scheda e si risolve quando prepara() riesce ----------
   function chiediAccesso(prepara) {
     return new Promise((fatto) => {
       const box = $('accesso'), form = $('accesso-form'), errore = $('accesso-errore'), bottone = $('accesso-entra');
       box.hidden = false;
-      const primo = form.querySelector('input');
+      const primo = form.querySelector('input:not([hidden])');
       requestAnimationFrame(() => primo.focus());
       const invio = async (e) => {
         e.preventDefault();
@@ -195,16 +171,16 @@
   }
 
   function mostraDemo() {
-    if (API_URL) return;
+    if (!DO.inDemo) return;
     const b = document.createElement('div');
     b.className = 'demo-banner';
-    b.innerHTML = '<b>Modalità demo</b>: dati di prova salvati solo in questo browser. Per usare il sito con il team, collega il Google Sheet (vedi README).';
+    b.innerHTML = '<b>Modalità demo</b>: dati di prova salvati solo in questo browser. Per usare il sito con il team, collega Firebase (vedi README).';
     document.querySelector('.testata').after(b);
   }
 
   Object.assign(DO, {
-    $, esc, iniziali, iso, daIso, aggiungi, lunedi, settimana, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
-    STATI, nomeStato, leggi, scrivi, avviaSessione, salvaSessione, aggiornaToken, chiudiSessione, leggiCopia, salvaCopia,
-    sessione: () => sessione, chiama, avviso, copia, chiediAccesso, mostraDemo, inDemo: !API_URL,
+    $, esc, iniziali, iso, daIso, aggiungi, lunedi, settimana, oggi, limite, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
+    STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
+    inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
   });
 })(window.DO = window.DO || {});

@@ -8,6 +8,7 @@
 !/app/
 !/Logo/
 !/backend/
+!/firebase/
 
 # File di sistema macOS
 **/.DS_Store

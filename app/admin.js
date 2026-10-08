@@ -1,18 +1,16 @@
-/* Disponibilità Ops — dashboard dei supervisori: griglia settimanale, convocazioni, richieste, aggiornamenti, operatori. */
+/* Disponibilità Ops — dashboard dei supervisori: griglia settimanale, convocazioni, richieste, aggiornamenti, operatori.
+ * I dati arrivano in tempo reale dall'archivio (Firebase o demo): niente ricariche né controlli periodici. */
 (function (DO) {
   'use strict';
 
   const $ = DO.$;
-  const OGNI_QUANTO = 45000;          // controllo dei nuovi invii (ms)
-  const DATI_FRESCHI = 60000;         // entro questo tempo cambiare settimana non richiama il server
   const SIMBOLI = { D: '✓', P: '½', A: '✕' };
 
-  let oggi = DO.iso(new Date()), limite = DO.aggiungi(oggi, 83);
+  let oggi = DO.oggi(), limite = DO.limite();
   let lun = DO.lunedi(oggi);
   let operatori = [], disp = {}, feed = [], richieste = [], nonLettiOps = new Set();
-  let caricato = { da: '', a: '', quando: 0 };
   let giornoSel = '', selezionati = new Set();
-  let ultimoVisto = '', timer = null, vista = 'griglia', ultimaRichiesta = 0;
+  let vista = 'griglia', ferma = null, visti = null;
 
   const visibili = () => {
     const mansione = $('filtro-mansione').value, testo = $('filtro-testo').value.trim().toLowerCase();
@@ -30,61 +28,57 @@
     document.querySelectorAll('#schede [data-vista]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.vista === nome)));
     ['griglia', 'aggiornamenti', 'operatori', 'impostazioni'].forEach((v) => { $('vista-' + v).hidden = v !== nome; });
     history.replaceState(null, '', nome === 'griglia' ? location.pathname : '#' + nome);
-    if (nome === 'aggiornamenti') caricaFeed();
     if (nome === 'operatori') disegnaOperatori();
     if (nome === 'impostazioni') caricaImpostazioni();
   }
   $('schede').addEventListener('click', (e) => { const b = e.target.closest('[data-vista]'); if (b) mostra(b.dataset.vista); });
 
-  // ---------- dati ----------
-  // Una sola chiamata porta sei settimane attorno a quella in vista, più operatori, richieste e
-  // stato delle notifiche: cambiare settimana è istantaneo e Google viene interpellato di rado.
-  function applica(r, da, a) {
-    operatori = r.operatori;
-    disp = r.disponibilita;
-    oggi = r.oggi;
-    limite = r.limite || limite;
-    caricato = { da, a, quando: Date.now() };
-    if (r.richieste) richieste = r.richieste;
-    if (r.nonLettiOperatori) nonLettiOps = new Set(r.nonLettiOperatori);
-    impostaNonLetti(r.nonLetti);
-    if (r.ultimo !== undefined && !ultimoVisto) ultimoVisto = r.ultimo || ' ';
+  // ---------- dati in tempo reale ----------
+  function aggiorna(stato) {
+    oggi = DO.oggi();
+    limite = DO.limite();
+    operatori = stato.operatori;
+    disp = stato.disponibilita;
+    feed = stato.invii;
+    richieste = statoRichieste(stato.richieste);
+    nonLettiOps = new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
+    impostaNonLetti(feed.filter((x) => !x.letto).length);
+    avvisaNuovi();
     aggiornaMansioni();
     disegnaGriglia();
     disegnaPannello();
     disegnaSintesiRichieste();
+    disegnaFeed();
     if (vista === 'operatori') disegnaOperatori();
   }
 
-  // Se si cambia settimana mentre una risposta è in viaggio, vale solo l'ultima richiesta.
-  async function carica() {
-    const n = ++ultimaRichiesta;
-    const da = DO.aggiungi(lun, -14), a = DO.aggiungi(lun, 27);
-    $('btn-aggiorna').classList.add('gira');
-    try {
-      const r = await DO.chiama('panoramica', { da, a });
-      if (n !== ultimaRichiesta) return;
-      applica(r, da, a);
-      DO.salvaCopia({ r, da, a });
-    } finally {
-      if (n === ultimaRichiesta) $('btn-aggiorna').classList.remove('gira');
-    }
-  }
-
-  async function vaiSettimana(nuovo) {
+  function vaiSettimana(nuovo) {
     lun = nuovo;
-    const dentro = lun >= caricato.da && DO.aggiungi(lun, 6) <= caricato.a;
-    if (dentro) disegnaGriglia();
-    else $('griglia').innerHTML = '<div class="caricamento"><span></span></div>';
-    $('sett-etichetta').textContent = DO.etichettaSettimana(lun);
-    if (dentro && Date.now() - caricato.quando < DATI_FRESCHI) return;
-    try { await carica(); } catch (e) { erroreGriglia(e, dentro); }
+    disegnaGriglia();
   }
 
-  function erroreGriglia(e, giaVisibile) {
-    if (!DO.sessione()) return;
-    if (giaVisibile) DO.avviso('Non riesco ad aggiornare i dati: ' + e.message, 'errore');
-    else $('griglia').innerHTML = '<div class="griglia-vuota">' + DO.esc(e.message) + '<br><button type="button" class="link" id="riprova">Riprova</button></div>';
+  // Avanzamento di ogni richiesta: chi ha già compilato tutti i giorni ancora modificabili.
+  function statoRichieste(elenco) {
+    return elenco.filter((x) => x.a >= DO.aggiungi(oggi, -7)).map((x) => {
+      const giorni = [];
+      for (let d = x.da > oggi ? x.da : oggi; d <= x.a && d <= limite; d = DO.aggiungi(d, 1)) giorni.push(d);
+      const destinatari = (x.destinatari || []).map((id) => operatori.find((o) => o.id === id)).filter(Boolean)
+        .map((o) => ({ id: o.id, nome: o.nome, mancanti: giorni.filter((d) => !valore(o.id, d).s).length }));
+      return { id: x.id, creata: x.creata, da: x.da, a: x.a, messaggio: x.messaggio || '', scaduta: x.a < oggi, destinatari };
+    });
+  }
+
+  // Invii arrivati mentre la dashboard è aperta: avviso a schermo e, se attivata, notifica del computer.
+  function avvisaNuovi() {
+    if (!visti) { visti = new Set(feed.map((x) => x.id)); return; }
+    const nuovi = feed.filter((x) => !visti.has(x.id));
+    nuovi.forEach((x) => visti.add(x.id));
+    const nomi = [...new Set(nuovi.map((x) => x.nome))].join(', ');
+    if (!nomi) return;
+    DO.avviso('Nuovo aggiornamento da ' + nomi + '.', 'ok', 6000);
+    if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+      new Notification('Disponibilità aggiornate', { body: nomi + ' ha inviato le disponibilità.', icon: 'app/favicon-180.png' });
+    }
   }
 
   // ---------- griglia ----------
@@ -143,12 +137,10 @@
     if (b) apriPannello(b.dataset.giorno === giornoSel ? '' : b.dataset.giorno);
     const vai = e.target.closest('[data-vai]');
     if (vai) mostra(vai.dataset.vai);
-    if (e.target.id === 'riprova') vaiSettimana(lun);
   });
   $('sett-prec').addEventListener('click', () => vaiSettimana(DO.aggiungi(lun, -7)));
   $('sett-succ').addEventListener('click', () => vaiSettimana(DO.aggiungi(lun, 7)));
   $('sett-oggi').addEventListener('click', () => vaiSettimana(DO.lunedi(oggi)));
-  $('btn-aggiorna').addEventListener('click', () => carica().catch((e) => erroreGriglia(e, true)));
   $('filtro-mansione').addEventListener('change', () => { disegnaGriglia(); disegnaPannello(); });
   $('filtro-testo').addEventListener('input', () => { disegnaGriglia(); disegnaPannello(); });
 
@@ -306,7 +298,7 @@
   });
 
   // ---------- richieste di disponibilità ----------
-  let anteprima = { da: '', a: '', disp: {} }, soloQuesti = null, timerAnteprima = null;
+  let soloQuesti = null, timerAnteprima = null;
 
   function apriRichiesta(opzioni) {
     const o = opzioni || {};
@@ -349,25 +341,11 @@
     for (let d = $('ric-da').value > oggi ? $('ric-da').value : oggi; d && d <= $('ric-a').value && d <= limite; d = DO.aggiungi(d, 1)) out.push(d);
     return out;
   }
-  const mancanti = (id, giorni) => giorni.filter((d) => !((anteprima.disp[id] || {})[d] || {}).s).length;
+  const mancanti = (id, giorni) => giorni.filter((d) => !valore(id, d).s).length;
 
-  async function caricaAnteprima() {
-    const da = $('ric-da').value, a = $('ric-a').value;
-    if (!da || !a) return;
-    $('ric-destinatari').innerHTML = '<li class="caricamento"><span></span></li>';
-    // se il periodo è già tra i dati caricati non serve chiamare il server
-    if (da >= caricato.da && a <= caricato.a) {
-      anteprima = { da, a, disp };
-    } else {
-      try {
-        const r = await DO.chiama('panoramica', { da, a });
-        anteprima = { da, a, disp: r.disponibilita };
-      } catch (e) {
-        anteprima = { da, a, disp: {} };
-        DO.avviso('Non riesco a leggere chi ha già risposto: ' + e.message, 'errore');
-      }
-    }
-    if ($('ric-da').value === da && $('ric-a').value === a) disegnaDestinatari(true);
+  // tutte le disponibilità sono già in memoria: l'anteprima è immediata
+  function caricaAnteprima() {
+    if ($('ric-da').value && $('ric-a').value) disegnaDestinatari(true);
   }
 
   function disegnaDestinatari(preseleziona) {
@@ -410,20 +388,27 @@
     $('ric-invia').disabled = true;
     $('ric-invia').textContent = 'Invio in corso…';
     $('ric-errore').hidden = true;
+    const contatti = operatori.filter((o) => destinatari.includes(o.id)).map((o) => ({ nome: o.nome, email: o.email }));
     try {
-      const r = await DO.chiama('creaRichiesta', { da, a, messaggio, destinatari, email, urlSito: linkSito() });
+      const r = await DO.dati.creaRichiesta({ da, a, messaggio, destinatari, contatti, email, urlSito: linkSito() });
       $('dlg-richiesta').close();
-      const righe = [];
-      if (email) righe.push(r.email ? 'Email inviata a ' + r.email + (r.email === 1 ? ' operatore.' : ' operatori.') : 'Nessuna email inviata.');
-      if (r.senzaEmail && r.senzaEmail.length) righe.push('Senza email registrata: ' + r.senzaEmail.join(', ') + '.');
-      if (r.nonInviate && r.nonInviate.length) righe.push('Email non partita per: ' + r.nonInviate.join(', ') + ' (controlla l\'indirizzo).');
-      if (r.quotaRestante !== undefined && r.quotaRestante < 20) righe.push('Attenzione: oggi Google permette ancora ' + r.quotaRestante + ' email.');
-      righe.push('La richiesta compare anche sulla pagina di ciascun operatore.');
+      // la richiesta è già sulla pagina degli operatori; le email partono in sottofondo
+      const righe = ['La richiesta compare già sulla pagina di ciascun operatore.'];
+      if (email) righe.push('Email in partenza…');
+      if (r.senzaEmail.length) righe.push('Senza email registrata: ' + r.senzaEmail.join(', ') + '.');
       $('esito-testo').innerHTML = righe.map((x) => '<p>' + DO.esc(x) + '</p>').join('');
       $('esito-whatsapp').onclick = () => DO.copia(messaggioWhatsApp(da, a, messaggio), 'Messaggio copiato: incollalo su WhatsApp.');
       $('dlg-esito').showModal();
-      caricaFeed(true);
-      carica().catch(() => {});
+      if (email) {
+        r.inviate.then((x) => {
+          const testo = x.email ? 'Email inviata a ' + x.email + (x.email === 1 ? ' operatore.' : ' operatori.') : 'Nessuna email inviata.';
+          const avvisi = (x.nonInviate && x.nonInviate.length ? ' Non partita per: ' + x.nonInviate.join(', ') + '.' : '')
+            + (x.quotaRestante !== undefined && x.quotaRestante < 20 ? ' Oggi Google permette ancora ' + x.quotaRestante + ' email.' : '');
+          const p = $('esito-testo').querySelector('p:nth-child(2)');
+          if (p && $('dlg-esito').open) p.textContent = testo + avvisi;
+          DO.avviso(testo + avvisi, avvisi ? 'errore' : 'ok', 6000);
+        }).catch((e) => DO.avviso('Richiesta salvata, ma le email non sono partite: ' + e.message, 'errore', 8000));
+      }
     } catch (err) {
       $('ric-errore').textContent = err.message;
       $('ric-errore').hidden = false;
@@ -475,9 +460,7 @@
     if (b.dataset.ricChiudi) {
       if (!confirm('Chiudere la richiesta? Sparirà dalla pagina degli operatori.')) return;
       try {
-        await DO.chiama('chiudiRichiesta', { id: x.id });
-        richieste = richieste.filter((y) => y.id !== x.id);
-        disegnaSintesiRichieste();
+        await DO.dati.chiudiRichiesta(x.id);
       } catch (err) { DO.avviso(err.message, 'errore'); }
     }
   });
@@ -486,20 +469,6 @@
   function impostaNonLetti(n) {
     $('badge').textContent = n ? String(n) : '';
     document.title = (n ? '(' + n + ') ' : '') + 'Supervisori · Disponibilità TGI Sport';
-  }
-
-  async function caricaFeed(silenzioso) {
-    if (!silenzioso && !feed.length) $('feed').innerHTML = '<li class="caricamento"><span></span></li>';
-    try {
-      const r = await DO.chiama('aggiornamenti', { limite: 150 });
-      feed = Array.isArray(r) ? r : r.invii;
-      if (r.richieste) { richieste = r.richieste; disegnaSintesiRichieste(); }
-      impostaNonLetti(feed.filter((x) => !x.letto).length);
-      nonLettiOps = new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
-      disegnaFeed();
-    } catch (e) {
-      if (!silenzioso) $('feed').innerHTML = '<li class="griglia-vuota">' + DO.esc(e.message) + '</li>';
-    }
   }
 
   function disegnaFeed() {
@@ -520,15 +489,9 @@
   }
 
   async function segnaLetti(ids) {
-    try {
-      const r = await DO.chiama('segnaLetti', ids ? { ids } : {});
-      feed.forEach((x) => { if (!ids || ids.includes(x.id)) x.letto = true; });
-      nonLettiOps = new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
-      impostaNonLetti(r.nonLetti);
-      disegnaFeed();
-    } catch (e) {
-      DO.avviso(e.message, 'errore');
-    }
+    const daSegnare = (ids || feed.filter((x) => !x.letto).map((x) => x.id));
+    if (!daSegnare.length) return;
+    try { await DO.dati.segnaLetti(daSegnare); } catch (e) { DO.avviso(e.message, 'errore'); }
   }
 
   $('feed').addEventListener('click', (e) => {
@@ -545,33 +508,6 @@
     }
   });
   $('btn-tutti-letti').addEventListener('click', () => segnaLetti(null));
-
-  // Controllo periodico (chiamata leggera): se arriva un invio nuovo si ricaricano i dati.
-  async function controlla() {
-    try {
-      const s = await DO.chiama('stato');
-      impostaNonLetti(s.nonLetti);
-      if (!ultimoVisto) { ultimoVisto = s.ultimo || ' '; return; }
-      if (!s.ultimo || s.ultimo <= ultimoVisto) return;
-      const prima = ultimoVisto;
-      ultimoVisto = s.ultimo;
-      await caricaFeed(true);
-      const nomi = [...new Set(feed.filter((x) => x.quando > prima).map((x) => x.nome))].join(', ');
-      if (nomi) {
-        DO.avviso('Nuovo aggiornamento da ' + nomi + '.', 'ok', 6000);
-        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-          new Notification('Disponibilità aggiornate', { body: nomi + ' ha inviato le disponibilità.', icon: 'app/favicon-180.png' });
-        }
-      }
-      await carica();
-    } catch (e) { /* si riprova al prossimo giro */ }
-  }
-
-  function avviaControlli() {
-    clearInterval(timer);
-    timer = setInterval(controlla, OGNI_QUANTO);
-  }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && DO.sessione() && ultimoVisto) controlla(); });
 
   function aggiornaBottoneNotifiche() {
     const b = $('btn-notifiche-desktop');
@@ -625,16 +561,11 @@
     const bottone = $('op-salva');
     bottone.disabled = true;
     try {
-      const r = await DO.chiama('salvaOperatore', { operatore: {
+      const r = await DO.dati.salvaOperatore({
         id: inModifica && inModifica.id, nome: $('op-nome').value, mansione: $('op-mansione').value,
         email: $('op-email').value, telefono: $('op-telefono').value, attivo: $('op-attivo').checked,
-      } });
-      const i = operatori.findIndex((o) => o.id === r.operatore.id);
-      if (i >= 0) operatori[i] = r.operatore; else operatori.push(r.operatore);
+      });
       $('dlg-operatore').close();
-      aggiornaMansioni();
-      disegnaOperatori();
-      disegnaGriglia();
       if (r.codice) mostraCodice(r.operatore, r.codice);
       else DO.avviso('Operatore salvato.', 'ok');
     } catch (err) {
@@ -664,48 +595,53 @@
     if (b.dataset.modifica) { apriOperatore(o); return; }
     if (b.dataset.codice) {
       if (!confirm('Generare un nuovo codice per ' + o.nome + '? Quello attuale smetterà di funzionare.')) return;
-      try { mostraCodice(o, (await DO.chiama('nuovoCodice', { id: o.id })).codice); } catch (err) { DO.avviso(err.message, 'errore'); }
+      try { mostraCodice(o, (await DO.dati.nuovoCodice(o.id)).codice); } catch (err) { DO.avviso(err.message, 'errore'); }
       return;
     }
     if (!confirm('Eliminare ' + o.nome + ' e tutte le sue disponibilità? Per sospenderlo e basta, usa Modifica → Attivo.')) return;
     try {
-      await DO.chiama('eliminaOperatore', { id: o.id });
-      operatori = operatori.filter((x) => x.id !== o.id);
-      delete disp[o.id];
-      aggiornaMansioni();
-      disegnaOperatori();
-      disegnaGriglia();
+      await DO.dati.eliminaOperatore(o.id);
       DO.avviso(o.nome + ' eliminato.', 'ok');
     } catch (err) { DO.avviso(err.message, 'errore'); }
   });
 
   // ---------- impostazioni ----------
   async function caricaImpostazioni() {
+    $('imp-email').placeholder = 'Caricamento…';
     try {
-      const r = await DO.chiama('leggiImpostazioni');
-      $('imp-email').value = r.emailSupervisori.split(',').join(', ');
+      const r = await DO.dati.leggiImpostazioni();
+      $('imp-email').value = r.emailSupervisori.split(',').filter(Boolean).join(', ');
       $('imp-email-attive').checked = r.emailAttive;
-    } catch (e) { DO.avviso(e.message, 'errore'); }
+    } catch (e) {
+      DO.avviso('Impostazioni email non disponibili: ' + e.message, 'errore');
+    } finally {
+      $('imp-email').placeholder = 'nome.cognome@tgisport.it, …';
+    }
   }
 
   $('form-email').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const b = e.target.querySelector('button[type="submit"]');
+    b.disabled = true;
     try {
-      await DO.chiama('salvaImpostazioni', {
+      await DO.dati.salvaImpostazioni({
         emailSupervisori: $('imp-email').value, emailAttive: $('imp-email-attive').checked,
         // il link nelle email porta a questa pagina, direttamente agli aggiornamenti
         urlAdmin: location.href.split('#')[0] + '#aggiornamenti',
       });
       DO.avviso('Impostazioni salvate.', 'ok');
-    } catch (err) { DO.avviso(err.message, 'errore'); }
+    } catch (err) {
+      DO.avviso(err.message, 'errore');
+    } finally {
+      b.disabled = false;
+    }
   });
 
   $('form-password').addEventListener('submit', async (e) => {
     e.preventDefault();
     if ($('pw-nuova').value !== $('pw-conferma').value) { DO.avviso('Le due password nuove non coincidono.', 'errore'); return; }
     try {
-      const r = await DO.chiama('cambiaPassword', { attuale: $('pw-attuale').value, nuova: $('pw-nuova').value });
-      DO.aggiornaToken(r.token);
+      await DO.dati.cambiaPassword($('pw-attuale').value, $('pw-nuova').value);
       e.target.reset();
       DO.avviso('Password cambiata.', 'ok');
     } catch (err) { DO.avviso(err.message, 'errore'); }
@@ -717,11 +653,17 @@
     $('schede').hidden = true;
     $('btn-esci').hidden = true;
     $('accesso-demo').hidden = !DO.inDemo;
-    if (!DO.sessione()) {
-      await DO.chiediAccesso(async () => {
-        const r = await DO.chiama('accedi', { ruolo: 'admin', password: $('accesso-password').value });
-        DO.salvaSessione({ token: r.token }, $('accesso-ricorda').checked);
-      });
+    let u = null;
+    try {
+      u = await DO.dati.utente();
+    } catch (e) {
+      $('accesso').hidden = false;
+      $('accesso-errore').textContent = 'Non riesco a collegarmi: ' + e.message + '. Controlla la connessione e ricarica la pagina.';
+      $('accesso-errore').hidden = false;
+      return;
+    }
+    if (!u) {
+      await DO.chiediAccesso(() => DO.dati.accediSupervisore($('accesso-password').value, $('accesso-ricorda').checked));
     }
     $('pagina').hidden = false;
     $('schede').hidden = false;
@@ -729,27 +671,20 @@
     aggiornaBottoneNotifiche();
     const iniziale = location.hash.slice(1);
     mostra(['aggiornamenti', 'operatori', 'impostazioni'].includes(iniziale) ? iniziale : 'griglia');
-    // si parte dagli ultimi dati visti su questo computer, poi arrivano quelli aggiornati
-    const copia = DO.leggiCopia();
-    const giaVisibile = !!(copia && copia.r && lun >= copia.da && DO.aggiungi(lun, 6) <= copia.a);
-    if (giaVisibile) {
-      applica(copia.r, copia.da, copia.a);
-      caricato.quando = 0;
-      ultimoVisto = '';
-    } else {
-      $('griglia').innerHTML = '<div class="caricamento"><span></span></div>';
-    }
-    try { await carica(); } catch (e) { erroreGriglia(e, giaVisibile); }
-    avviaControlli();
+    $('griglia').innerHTML = '<div class="caricamento"><span></span></div>';
+    visti = null;
+    ferma = DO.dati.ascolta(aggiorna);
   }
 
-  $('btn-esci').addEventListener('click', () => {
-    DO.chiudiSessione();
+  $('btn-esci').addEventListener('click', async () => {
+    if (ferma) ferma();
+    await DO.dati.esci();
+    DO.dimentica();
     location.replace(location.pathname);
   });
 
-  DO.avviaSessione('admin', (messaggio) => {
-    clearInterval(timer);
+  DO.avviaPagina('admin', (messaggio) => {
+    if (ferma) { ferma(); ferma = null; }
     DO.avviso(messaggio, 'errore');
     entra();
   });

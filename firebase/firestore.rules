@@ -1,0 +1,65 @@
+rules_version = '2';
+
+// Disponibilità Ops · TGI Sport — chi può leggere e scrivere cosa.
+// Supervisori: l'account con l'email qui sotto (la stessa di SUPERVISORI_EMAIL in app/config.js).
+// Operatori: un account per codice; utenti/{uid} dice a quale operatore appartiene.
+// Cambiare codice o disattivare un operatore toglie l'accesso subito, perché ogni regola lo ricontrolla.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function supervisore() {
+      return request.auth != null && request.auth.token.email == 'SUPERVISORI_EMAIL';
+    }
+    function abbinamento() {
+      return /databases/$(database)/documents/utenti/$(request.auth.uid);
+    }
+    function mioOperatore() {
+      return get(abbinamento()).data.operatoreId;
+    }
+    // l'utente è l'operatore {id}, e quell'operatore è attivo
+    function operatoreAttivo(id) {
+      return request.auth != null && exists(abbinamento()) && mioOperatore() == id
+        && get(/databases/$(database)/documents/operatori/$(id)).data.attivo == true;
+    }
+    function operatore() {
+      return request.auth != null && exists(abbinamento()) && operatoreAttivo(mioOperatore());
+    }
+
+    match /utenti/{uid} {
+      allow read: if supervisore() || (request.auth != null && request.auth.uid == uid);
+      allow write: if supervisore();
+    }
+
+    match /operatori/{id} {
+      allow read: if supervisore() || operatoreAttivo(id);
+      allow create, delete: if supervisore();
+      // l'operatore può aggiornare solo la data del suo ultimo invio
+      allow update: if supervisore()
+        || (operatoreAttivo(id) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoInvio']));
+    }
+
+    match /disponibilita/{id} {
+      allow read: if supervisore() || operatoreAttivo(id);
+      allow create, update: if (supervisore() || operatoreAttivo(id))
+        && request.resource.data.keys().hasOnly(['giorni']) && request.resource.data.giorni is map;
+      allow delete: if supervisore();
+    }
+
+    match /invii/{invio} {
+      allow read, delete: if supervisore();
+      // i supervisori possono solo segnarli come letti
+      allow update: if supervisore() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['letto']);
+      allow create: if operatore()
+        && request.resource.data.keys().hasOnly(['quando', 'operatoreId', 'nome', 'modifiche', 'letto'])
+        && request.resource.data.operatoreId == mioOperatore()
+        && request.resource.data.letto == false
+        && request.resource.data.modifiche is list;
+    }
+
+    match /richieste/{richiesta} {
+      allow read: if supervisore() || operatore();
+      allow write: if supervisore();
+    }
+  }
+}

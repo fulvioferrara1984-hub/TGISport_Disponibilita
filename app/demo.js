@@ -1,17 +1,11 @@
-/* Disponibilità Ops — backend di prova: imita il Google Apps Script salvando tutto nel browser.
- * Si usa solo quando in config.js manca API_URL. Password supervisori: demo · codici operatori: DEMO-0001 … */
+/* Disponibilità Ops — archivio di prova: stessa interfaccia di dati-firebase.js, ma tutto resta nel browser.
+ * Si usa quando in config.js manca FIREBASE. Password supervisori: demo · codici operatori: DEMO-0001 … DEMO-0008 */
 (function (DO) {
   'use strict';
 
   const CHIAVE = 'do-demo-dati';
-  const SETTIMANE_AVANTI = 12;
   const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
   const due = (n) => String(n).padStart(2, '0');
-  const iso = (d) => d.getFullYear() + '-' + due(d.getMonth() + 1) + '-' + due(d.getDate());
-  const aggiungi = (s, n) => { const [a, m, g] = s.split('-').map(Number); return iso(new Date(a, m - 1, g + n)); };
-  const lunedi = (s) => { const [a, m, g] = s.split('-').map(Number); return aggiungi(s, -((new Date(a, m - 1, g).getDay() + 6) % 7)); };
-  const oggi = () => iso(new Date());
-  const limite = () => aggiungi(lunedi(oggi()), SETTIMANE_AVANTI * 7 - 1);
 
   function iniziali() {
     const nomi = [
@@ -22,173 +16,199 @@
       id: 'op-demo' + (i + 1), nome, mansione, email: nome.toLowerCase().replace(' ', '.') + '@esempio.it',
       telefono: '+39 333 000 00' + due(i + 1), attivo: true, codice: 'DEMO000' + (i + 1), ultimoInvio: '',
     }));
-    const disponibilita = {};
-    const lun = lunedi(oggi());
-    const invii = [];
+    const disponibilita = {}, invii = [];
+    const lun = DO.lunedi(DO.oggi());
     operatori.slice(0, 6).forEach((o, k) => {
       disponibilita[o.id] = {};
       for (let i = 0; i < 14; i++) {
         const r = (k * 7 + i * 3) % 10;
         if (i > 9 && k % 2) continue;
-        disponibilita[o.id][aggiungi(lun, i)] = r < 6 ? { s: 'D', n: '' } : r < 8 ? { s: 'P', n: 'Solo dalle 18:00' } : { s: 'A', n: '' };
+        disponibilita[o.id][DO.aggiungi(lun, i)] = r < 6 ? { s: 'D', n: '' } : r < 8 ? { s: 'P', n: 'Solo dalle 18:00' } : { s: 'A', n: '' };
       }
       o.ultimoInvio = new Date(Date.now() - (k + 1) * 3600e3 * 5).toISOString();
       invii.push({ id: 'inv' + k, quando: o.ultimoInvio, operatoreId: o.id, nome: o.nome, letto: k > 1,
-        modifiche: [{ d: aggiungi(lun, 2 + k), da: '', a: 'D', n: '' }, { d: aggiungi(lun, 4 + k), da: 'D', a: 'A', n: '' }] });
+        modifiche: [{ d: DO.aggiungi(lun, 2 + k), da: '', a: 'D', n: '' }, { d: DO.aggiungi(lun, 4 + k), da: 'D', a: 'A', n: '' }] });
     });
     invii.sort((a, b) => (a.quando < b.quando ? -1 : 1));
-    return { operatori, disponibilita, invii, richieste: [], password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true, urlAdmin: '' } };
+    return { operatori, disponibilita, invii, richieste: [], password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true } };
   }
+
+  let dati = null, ruolo = '', alloScadere = null, utenteDemo = null;
+  const ascoltatori = new Set();
 
   function carica() {
-    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d) return Object.assign({ richieste: [] }, d); } catch (e) { /* si riparte dai dati di prova */ }
-    return iniziali();
+    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.richieste) { dati = d; return; } } catch (e) { /* si riparte */ }
+    dati = iniziali();
   }
-  function salva(d) { try { localStorage.setItem(CHIAVE, JSON.stringify(d)); } catch (e) { /* solo in memoria */ } }
+  function salva() {
+    try { localStorage.setItem(CHIAVE, JSON.stringify(dati)); } catch (e) { /* solo in memoria */ }
+    ascoltatori.forEach((cb) => cb());
+  }
+  // un'altra scheda (es. la pagina operatore) ha cambiato i dati: come l'ascolto in tempo reale di Firebase
+  window.addEventListener('storage', (e) => { if (e.key === CHIAVE) { carica(); ascoltatori.forEach((cb) => cb()); } });
 
-  let dati = null;
-  const errore = (messaggio, codice) => ({ ok: false, errore: messaggio, codice: codice || '' });
   const pubblico = (o) => ({ id: o.id, nome: o.nome, mansione: o.mansione, email: o.email, telefono: o.telefono, attivo: o.attivo, ultimoInvio: o.ultimoInvio });
-  const nonLetti = () => dati.invii.filter((x) => !x.letto).length;
   const norm = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const nuovoCodice = () => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 8; i++) c += a[Math.floor(Math.random() * 32)]; return c; };
+  const nuovoCodiceDemo = () => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 8; i++) c += a[Math.floor(Math.random() * 32)]; return c; };
   const formato = (c) => c.slice(0, 4) + '-' + c.slice(4);
+  const chiaveSessione = () => 'do-demo-sessione-' + ruolo;
 
-  function filtra(mappa, da, a) {
-    const out = {};
-    Object.keys(mappa || {}).forEach((d) => { if (d >= da && d <= a) out[d] = mappa[d]; });
-    return out;
+  function configura(r, scaduta) {
+    ruolo = r;
+    alloScadere = scaduta;
+    carica();
   }
 
-  const azioni = {
-    accedi(r) {
-      if (r.ruolo === 'admin') {
-        if (r.password !== dati.password) return errore('Password errata.');
-        return { token: 'demo|ad' };
-      }
-      const op = dati.operatori.find((o) => o.codice === norm(r.codice));
-      if (!op) return errore('Codice non valido.');
-      if (!op.attivo) return errore('Il tuo accesso è disattivato: contatta i supervisori.');
-      return { token: 'demo|op|' + op.id, operatore: pubblico(op) };
-    },
-    mieDisponibilita(r, op) {
-      const richieste = dati.richieste.filter((x) => x.attiva && x.a >= oggi() && x.destinatari.includes(op.id))
-        .map((x) => ({ id: x.id, da: x.da, a: x.a, messaggio: x.messaggio, creata: x.creata }));
-      return { giorni: filtra(dati.disponibilita[op.id], r.da, r.a), operatore: pubblico(op), richieste, oggi: oggi(), limite: limite() };
-    },
-    inviaDisponibilita(r, op) {
-      const mappa = dati.disponibilita[op.id] = dati.disponibilita[op.id] || {};
-      const adesso = new Date().toISOString(), modifiche = [];
-      for (const d of Object.keys(r.giorni || {}).sort()) {
-        if (d < oggi() || d > limite()) return errore('Il giorno ' + d + ' non è più modificabile.');
-        const prima = mappa[d] || { s: '', n: '' }, dopo = { s: r.giorni[d].s || '', n: String(r.giorni[d].n || '').trim() };
-        if (prima.s === dopo.s && prima.n === dopo.n) continue;
-        modifiche.push({ d, da: prima.s, a: dopo.s, n: dopo.n });
-        mappa[d] = Object.assign(dopo, { t: adesso });
-      }
-      op.ultimoInvio = adesso;
-      dati.invii.push({ id: 'inv' + Date.now(), quando: adesso, operatoreId: op.id, nome: op.nome, modifiche, letto: false });
-      return { inviatoIl: adesso, modifiche: modifiche.length };
-    },
-    panoramica(r) {
-      const disponibilita = {};
-      Object.keys(dati.disponibilita).forEach((id) => { disponibilita[id] = filtra(dati.disponibilita[id], r.da, r.a); });
-      return Object.assign(azioni.stato(), {
-        operatori: dati.operatori.map(pubblico), disponibilita, oggi: oggi(), limite: limite(),
-        nonLettiOperatori: [...new Set(dati.invii.filter((x) => !x.letto).map((x) => x.operatoreId))],
-        richieste: azioni.aggiornamenti({}).richieste,
-      });
-    },
-    stato() {
-      return { nonLetti: nonLetti(), ultimo: dati.invii.length ? dati.invii[dati.invii.length - 1].quando : '' };
-    },
-    aggiornamenti(r) {
-      const richieste = dati.richieste.filter((x) => x.attiva && x.a >= aggiungi(oggi(), -7)).slice().reverse().map((x) => {
-        const giorni = [];
-        for (let d = x.da > oggi() ? x.da : oggi(); d <= x.a; d = aggiungi(d, 1)) giorni.push(d);
-        const destinatari = x.destinatari.map((id) => dati.operatori.find((o) => o.id === id)).filter(Boolean).map((o) => ({
-          id: o.id, nome: o.nome, mancanti: giorni.filter((d) => !((dati.disponibilita[o.id] || {})[d] || {}).s).length,
-        }));
-        return { id: x.id, creata: x.creata, da: x.da, a: x.a, messaggio: x.messaggio, scaduta: x.a < oggi(), destinatari };
-      });
-      return { invii: dati.invii.slice(-(r.limite || 100)).reverse(), richieste };
-    },
-    creaRichiesta(r) {
-      if (!r.da || !r.a || r.da > r.a) return errore('Periodo non valido.');
-      if (r.a < oggi()) return errore('Il periodo è già passato.');
-      const ops = dati.operatori.filter((o) => o.attivo && (r.destinatari || []).includes(o.id));
-      if (!ops.length) return errore('Scegli almeno un operatore.');
-      const id = 'ric' + Date.now();
-      dati.richieste.push({ id, creata: new Date().toISOString(), da: r.da, a: r.a, messaggio: String(r.messaggio || '').trim(), destinatari: ops.map((o) => o.id), attiva: true });
-      const conEmail = r.email === false ? [] : ops.filter((o) => o.email);
-      return { id, email: conEmail.length, senzaEmail: r.email === false ? [] : ops.filter((o) => !o.email).map((o) => o.nome), nonInviate: [], quotaRestante: 100 - conEmail.length };
-    },
-    chiudiRichiesta(r) {
-      const x = dati.richieste.find((y) => y.id === r.id);
-      if (!x) return errore('Richiesta non trovata.');
-      x.attiva = false;
-      return { chiusa: x.id };
-    },
-    segnaLetti(r) {
-      dati.invii.forEach((x) => { if (!r.ids || r.ids.includes(x.id)) x.letto = true; });
-      return { nonLetti: nonLetti() };
-    },
-    salvaOperatore(r) {
-      const o = r.operatore || {};
-      if (!String(o.nome || '').trim()) return errore('Il nome è obbligatorio.');
-      const campi = { nome: o.nome.trim(), mansione: (o.mansione || '').trim(), email: (o.email || '').trim(), telefono: (o.telefono || '').trim(), attivo: o.attivo !== false };
-      if (o.id) {
-        const op = dati.operatori.find((x) => x.id === o.id);
-        if (!op) return errore('Operatore non trovato.');
-        Object.assign(op, campi);
-        return { operatore: pubblico(op) };
-      }
-      const op = Object.assign({ id: 'op-' + Date.now().toString(36), codice: nuovoCodice(), ultimoInvio: '' }, campi);
-      dati.operatori.push(op);
-      return { operatore: pubblico(op), codice: formato(op.codice) };
-    },
-    nuovoCodice(r) {
-      const op = dati.operatori.find((x) => x.id === r.id);
-      if (!op) return errore('Operatore non trovato.');
-      op.codice = nuovoCodice();
-      return { codice: formato(op.codice) };
-    },
-    eliminaOperatore(r) {
-      dati.operatori = dati.operatori.filter((x) => x.id !== r.id);
-      delete dati.disponibilita[r.id];
-      return { eliminato: r.id };
-    },
-    leggiImpostazioni() { return dati.impostazioni; },
-    salvaImpostazioni(r) {
-      dati.impostazioni = { emailSupervisori: r.emailSupervisori || '', emailAttive: r.emailAttive !== false, urlAdmin: r.urlAdmin || '' };
-      return dati.impostazioni;
-    },
-    cambiaPassword(r) {
-      if (r.attuale !== dati.password) return errore('La password attuale non è corretta.');
-      if (String(r.nuova || '').length < 8) return errore('La nuova password deve avere almeno 8 caratteri.');
-      dati.password = r.nuova;
-      return { token: 'demo|ad' };
-    },
-  };
-  const SOLO_OPERATORE = ['mieDisponibilita', 'inviaDisponibilita'];
+  async function utente() {
+    const s = DO.leggi(chiaveSessione());
+    if (!s) return null;
+    if (ruolo === 'admin') return { admin: true };
+    const op = dati.operatori.find((o) => o.id === s.id && o.attivo);
+    if (!op) { DO.scrivi(chiaveSessione(), null); return null; }
+    utenteDemo = op;
+    return { operatore: pubblico(op) };
+  }
 
-  async function chiama(r) {
-    await pausa(250);
-    dati = carica();
-    let risultato;
-    if (r.azione === 'accedi') {
-      risultato = azioni.accedi(r);
-    } else {
-      const [demo, ruolo, id] = String(r.token || '').split('|');
-      const op = ruolo === 'op' && dati.operatori.find((o) => o.id === id && o.attivo);
-      if (demo !== 'demo' || (ruolo === 'op' && !op)) return errore('Sessione scaduta: accedi di nuovo.', 'sessione');
-      if (!azioni[r.azione] || (ruolo === 'op') !== SOLO_OPERATORE.includes(r.azione)) return errore('Operazione non consentita.');
-      risultato = azioni[r.azione](r, op);
+  async function accediOperatore(codice, ricorda) {
+    await pausa(150);
+    carica();
+    const op = dati.operatori.find((o) => o.codice === norm(codice));
+    if (!op) throw new Error('Codice non valido.');
+    if (!op.attivo) throw new Error('Il tuo accesso è disattivato: contatta i supervisori.');
+    DO.scrivi(chiaveSessione(), { id: op.id }, ricorda);
+    DO.ricorda(ricorda);
+    utenteDemo = op;
+    return pubblico(op);
+  }
+
+  async function accediSupervisore(password, ricorda) {
+    await pausa(150);
+    if (password !== dati.password) throw new Error('Password errata.');
+    DO.scrivi(chiaveSessione(), { admin: true }, ricorda);
+    DO.ricorda(ricorda);
+    return { admin: true };
+  }
+
+  async function esci() { DO.scrivi(chiaveSessione(), null); }
+
+  function operatoreValido() {
+    carica();
+    const op = utenteDemo && dati.operatori.find((o) => o.id === utenteDemo.id && o.attivo);
+    if (!op) {
+      DO.scrivi(chiaveSessione(), null);
+      if (alloScadere) alloScadere('Il tuo accesso è disattivato: contatta i supervisori.');
+      throw new Error('Accesso non più valido.');
     }
-    if (risultato && risultato.ok === false) return risultato;
-    salva(dati);
-    return { ok: true, dati: risultato };
+    return op;
   }
 
-  DO.demo = { chiama, azzera: () => { try { localStorage.removeItem(CHIAVE); } catch (e) { /* niente */ } } };
+  async function mieDisponibilita() {
+    await pausa(150);
+    const op = operatoreValido(), oggi = DO.oggi();
+    const richieste = dati.richieste.filter((x) => x.attiva && x.a >= oggi && x.destinatari.includes(op.id))
+      .map((x) => ({ id: x.id, da: x.da, a: x.a, messaggio: x.messaggio, creata: x.creata }));
+    return { operatore: pubblico(op), giorni: Object.assign({}, dati.disponibilita[op.id]), richieste, oggi, limite: DO.limite() };
+  }
+
+  async function inviaDisponibilita(giorni) {
+    await pausa(200);
+    const op = operatoreValido();
+    const mappa = dati.disponibilita[op.id] = dati.disponibilita[op.id] || {};
+    const adesso = new Date().toISOString(), modifiche = [];
+    Object.keys(giorni).sort().filter((d) => d >= DO.oggi() && d <= DO.limite()).forEach((d) => {
+      const prima = mappa[d] || {}, s = giorni[d].s || '', n = String(giorni[d].n || '').trim();
+      if ((prima.s || '') === s && (prima.n || '') === n) return;
+      modifiche.push({ d, da: prima.s || '', a: s, n });
+      if (!s && !n) delete mappa[d]; else mappa[d] = { s, n, t: adesso };
+    });
+    op.ultimoInvio = adesso;
+    dati.invii.push({ id: 'inv' + Date.now(), quando: adesso, operatoreId: op.id, nome: op.nome, modifiche, letto: false });
+    salva();
+    return { inviatoIl: adesso, modifiche: modifiche.length };
+  }
+
+  function ascolta(cb) {
+    const invia = () => cb({
+      operatori: dati.operatori.map(pubblico),
+      disponibilita: JSON.parse(JSON.stringify(dati.disponibilita)),
+      invii: dati.invii.slice(-60).reverse(),
+      richieste: dati.richieste.filter((x) => x.attiva).slice().reverse(),
+    });
+    ascoltatori.add(invia);
+    setTimeout(invia, 200);
+    return () => ascoltatori.delete(invia);
+  }
+
+  async function segnaLetti(ids) {
+    dati.invii.forEach((x) => { if (ids.includes(x.id)) x.letto = true; });
+    salva();
+  }
+
+  async function salvaOperatore(o) {
+    await pausa(150);
+    const campi = { nome: String(o.nome || '').trim(), mansione: (o.mansione || '').trim(), email: (o.email || '').trim(), telefono: (o.telefono || '').trim(), attivo: o.attivo !== false };
+    if (!campi.nome) throw new Error('Il nome è obbligatorio.');
+    if (o.id) {
+      const op = dati.operatori.find((x) => x.id === o.id);
+      Object.assign(op, campi);
+      salva();
+      return { operatore: pubblico(op) };
+    }
+    const op = Object.assign({ id: 'op-' + Date.now().toString(36), codice: nuovoCodiceDemo(), ultimoInvio: '' }, campi);
+    dati.operatori.push(op);
+    salva();
+    return { operatore: pubblico(op), codice: formato(op.codice) };
+  }
+
+  async function nuovoCodice(id) {
+    const op = dati.operatori.find((x) => x.id === id);
+    op.codice = nuovoCodiceDemo();
+    salva();
+    return { codice: formato(op.codice) };
+  }
+
+  async function eliminaOperatore(id) {
+    dati.operatori = dati.operatori.filter((x) => x.id !== id);
+    delete dati.disponibilita[id];
+    salva();
+  }
+
+  async function creaRichiesta(r) {
+    await pausa(150);
+    if (!r.da || !r.a || r.da > r.a) throw new Error('Periodo non valido.');
+    if (r.a < DO.oggi()) throw new Error('Il periodo è già passato.');
+    if (!r.destinatari.length) throw new Error('Scegli almeno un operatore.');
+    const id = 'ric' + Date.now();
+    dati.richieste.push({ id, creata: new Date().toISOString(), da: r.da, a: r.a, messaggio: String(r.messaggio || '').trim(), destinatari: r.destinatari, attiva: true });
+    salva();
+    const conEmail = r.email ? r.contatti.filter((c) => c.email) : [];
+    return { id, senzaEmail: r.email ? r.contatti.filter((c) => !c.email).map((c) => c.nome) : [], inviate: pausa(800).then(() => ({ email: conEmail.length })) };
+  }
+
+  async function chiudiRichiesta(id) {
+    const x = dati.richieste.find((y) => y.id === id);
+    if (x) x.attiva = false;
+    salva();
+  }
+
+  async function leggiImpostazioni() { await pausa(150); return dati.impostazioni; }
+  async function salvaImpostazioni(x) {
+    dati.impostazioni = { emailSupervisori: x.emailSupervisori || '', emailAttive: x.emailAttive !== false };
+    salva();
+    return dati.impostazioni;
+  }
+  async function cambiaPassword(attuale, nuova) {
+    if (attuale !== dati.password) throw new Error('La password attuale non è corretta.');
+    if (String(nuova).length < 8) throw new Error('La nuova password deve avere almeno 8 caratteri.');
+    dati.password = nuova;
+    salva();
+  }
+
+  DO.demo = {
+    configura, utente, accediOperatore, accediSupervisore, esci,
+    mieDisponibilita, inviaDisponibilita,
+    ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
+    leggiImpostazioni, salvaImpostazioni, cambiaPassword,
+    azzera: () => { try { localStorage.removeItem(CHIAVE); } catch (e) { /* niente */ } },
+  };
 })(window.DO = window.DO || {});
