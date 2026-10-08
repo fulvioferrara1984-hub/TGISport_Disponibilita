@@ -42,6 +42,9 @@
 
   const num = (n) => (n ? String(n) : '<span class="tenue">0</span>');
   const eur = (n) => (n ? R.euro(n) : '<span class="tenue">–</span>');
+  // nelle tabelle larghe: senza ",00" quando l'importo è intero
+  const eurBreve = (n) => (!n ? '<span class="tenue">–</span>' : Number.isInteger(Math.round(n * 100) / 100)
+    ? n.toLocaleString('it-IT', { useGrouping: 'always', maximumFractionDigits: 0 }) + ' €' : R.euro(n));
 
   function disegna() {
     if (A.vista !== 'riepilogo') return;
@@ -77,19 +80,19 @@
     let tabMese = '';
     if (p.id === 'stagione') {
       const mesi = periodi().slice(1);
-      tabMese = '<section class="scheda"><div class="scheda-testa"><h2>Netto per mese</h2></div><div class="tabella-box"><table class="tabella numeri"><thead><tr><th>Operatore</th>'
+      tabMese = '<section class="scheda"><div class="scheda-testa"><h2>Netto per mese</h2></div><div class="tabella-box"><table class="tabella numeri compatta ampia"><thead><tr><th>Operatore</th>'
         + mesi.map((m) => '<th>' + m.nome.slice(0, 3) + ' ' + m.nome.slice(-2) + '</th>').join('') + '<th>Totale</th></tr></thead><tbody>'
         + ops.filter((x) => x.t.n).map(({ o, t }) => '<tr><td><b>' + DO.esc(o.nome) + '</b></td>' + mesi.map((m) => {
           const qui = lista.filter((r) => r.operatoreId === o.id && r.data >= m.da && r.data <= m.a);
-          return '<td title="' + qui.length + ' eventi">' + eur(qui.reduce((s, r) => s + r.g.importo, 0)) + '</td>';
-        }).join('') + '<td><b>' + eur(t.euro) + '</b></td></tr>').join('')
-        + '</tbody><tfoot><tr><td>Totale</td>' + mesi.map((m) => '<td>' + R.euro(lista.filter((r) => r.data >= m.da && r.data <= m.a).reduce((s, r) => s + r.g.importo, 0)) + '</td>').join('')
-        + '<td>' + R.euro(tot.euro) + '</td></tr></tfoot></table></div></section>';
+          return '<td title="' + qui.length + ' eventi">' + eurBreve(qui.reduce((s, r) => s + r.g.importo, 0)) + '</td>';
+        }).join('') + '<td><b>' + eurBreve(t.euro) + '</b></td></tr>').join('')
+        + '</tbody><tfoot><tr><td>Totale</td>' + mesi.map((m) => '<td>' + eurBreve(lista.filter((r) => r.data >= m.da && r.data <= m.a).reduce((s, r) => s + r.g.importo, 0)) + '</td>').join('')
+        + '<td>' + eurBreve(tot.euro) + '</td></tr></tfoot></table></div></section>';
     }
 
     // operatori × competizioni
     const opsAttivi = ops.filter((x) => x.t.n);
-    const tabIncrocio = opsAttivi.length ? '<section class="scheda"><div class="scheda-testa"><h2>Eventi per operatore e competizione</h2></div><div class="tabella-box"><table class="tabella numeri"><thead><tr><th>Competizione</th>'
+    const tabIncrocio = opsAttivi.length ? '<section class="scheda"><div class="scheda-testa"><h2>Eventi per operatore e competizione</h2></div><div class="tabella-box"><table class="tabella numeri compatta ampia"><thead><tr><th>Competizione</th>'
       + opsAttivi.map(({ o }) => '<th>' + DO.esc(o.nome.split(' ')[0]) + ' ' + DO.esc((o.nome.split(' ')[1] || '').slice(0, 1)) + '.</th>').join('') + '<th>Totale</th></tr></thead><tbody>'
       + comps.filter((c) => lista.some((r) => (r.competizione || '(senza competizione)') === c)).map((c) => '<tr><td><b>' + DO.esc(c) + '</b></td>' + opsAttivi.map(({ o }) =>
         '<td>' + num(lista.filter((r) => r.operatoreId === o.id && (r.competizione || '(senza competizione)') === c).length) + '</td>').join('')

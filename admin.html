@@ -7,7 +7,7 @@
   <title>Supervisori · Disponibilità TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css?v=8">
+  <link rel="stylesheet" href="app/stile.css?v=9">
 </head>
 <body>
   <header class="testata con-schede">
@@ -213,62 +213,66 @@
     <section id="vista-impostazioni" hidden>
       <div class="titolo-pagina"><div><h1>Impostazioni</h1></div></div>
       <div class="impostazioni">
-        <section class="scheda">
-          <div class="scheda-testa"><h2>Tariffe e regole</h2></div>
-          <form class="scheda-corpo" id="form-regole">
-            <table class="tabella tariffe">
-              <thead><tr><th>Netto per evento</th><th>Diurno</th><th>Notturno</th><th>Maggiorato</th></tr></thead>
-              <tbody>
-                <tr><td>P.IVA</td><td><input type="number" step="0.01" min="0" data-tariffa="P.IVA.diurno"></td><td><input type="number" step="0.01" min="0" data-tariffa="P.IVA.notturno"></td><td><input type="number" step="0.01" min="0" data-tariffa="P.IVA.maggiorato"></td></tr>
-                <tr><td>Coop</td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.diurno"></td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.notturno"></td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.maggiorato"></td></tr>
-              </tbody>
-            </table>
-            <p class="nota" style="margin: 8px 0 14px;">Competizioni UEFA: metà del diurno. Il maggiorato si sceglie sul singolo evento.</p>
-            <div class="tre-campi">
-              <label class="campo"><span>Convocazione: ore prima dell'evento</span><input type="number" id="reg-anticipo" min="0" max="12" step="0.25"></label>
-              <label class="campo"><span>Notturno se il ritrovo è dalle</span><input type="time" id="reg-notte-da"></label>
-              <label class="campo"><span>alle</span><input type="time" id="reg-notte-a"></label>
+        <div class="impostazioni-colonna">
+          <section class="scheda">
+            <div class="scheda-testa"><h2>Tariffe e regole</h2></div>
+            <form class="scheda-corpo" id="form-regole">
+              <table class="tabella tariffe">
+                <thead><tr><th>Netto €</th><th>Diurno</th><th>Notturno</th><th>Maggiorato</th></tr></thead>
+                <tbody>
+                  <tr><td>P.IVA</td><td><input type="number" step="0.01" min="0" data-tariffa="P.IVA.diurno"></td><td><input type="number" step="0.01" min="0" data-tariffa="P.IVA.notturno"></td><td><input type="number" step="0.01" min="0" data-tariffa="P.IVA.maggiorato"></td></tr>
+                  <tr><td>Coop</td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.diurno"></td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.notturno"></td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.maggiorato"></td></tr>
+                </tbody>
+              </table>
+              <p class="nota" style="margin: 8px 0 14px;">Competizioni UEFA: metà del diurno. Il maggiorato si sceglie sul singolo evento.</p>
+              <div class="tre-campi">
+                <label class="campo"><span>Ritrovo: ore prima</span><input type="number" id="reg-anticipo" min="0" max="12" step="0.25"></label>
+                <label class="campo"><span>Notturno: ritrovo dalle</span><input type="time" id="reg-notte-da"></label>
+                <label class="campo"><span>alle</span><input type="time" id="reg-notte-a"></label>
+              </div>
+              <button type="submit" class="primario">Salva regole</button>
+            </form>
+          </section>
+          <section class="scheda">
+            <div class="scheda-testa"><h2>Notifiche email</h2></div>
+            <form class="scheda-corpo" id="form-email">
+              <label class="campo"><span>Email dei supervisori (separate da virgola)</span>
+                <textarea id="imp-email" rows="3" placeholder="nome.cognome@tgisport.it, …"></textarea></label>
+              <label class="spunta" style="margin: 0 0 14px;"><input type="checkbox" id="imp-email-attive"><span>Invia un'email a ogni invio degli operatori</span></label>
+              <p class="nota" style="margin: 0 0 12px;">Le notifiche compaiono comunque nella scheda <b>Aggiornamenti</b>.</p>
+              <button type="submit" class="primario">Salva</button>
+            </form>
+          </section>
+        </div>
+        <div class="impostazioni-colonna">
+          <section class="scheda">
+            <div class="scheda-testa"><h2>Competizioni e sport</h2></div>
+            <form class="scheda-corpo" id="form-competizioni">
+              <ul class="elenco-competizioni" id="reg-competizioni"></ul>
+              <button type="button" class="link" id="reg-aggiungi-comp" style="margin: 8px 0 14px;">+ Aggiungi competizione</button>
+              <label class="campo"><span>Sport (separati da virgola)</span><textarea id="reg-sport" rows="3"></textarea></label>
+              <button type="submit" class="primario">Salva competizioni</button>
+            </form>
+          </section>
+          <section class="scheda">
+            <div class="scheda-testa"><h2>Importa dal file Excel</h2></div>
+            <div class="scheda-corpo">
+              <p class="nota" style="margin: 0 0 12px;">Carica il file delle convocazioni (es. <code>Convocazioni_Operatori_2026-27.xlsx</code>): operatori, tariffe, competizioni, eventi e assenze entrano nella piattaforma. Il file viene letto solo nel browser. Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli.</p>
+              <label class="bottone"><input type="file" id="imp-file" accept=".xlsx,.xlsm" hidden>Scegli il file…</label>
+              <div id="imp-anteprima" class="importazione" hidden></div>
             </div>
-            <button type="submit" class="primario">Salva regole</button>
-          </form>
-        </section>
-        <section class="scheda">
-          <div class="scheda-testa"><h2>Competizioni e sport</h2></div>
-          <form class="scheda-corpo" id="form-competizioni">
-            <ul class="elenco-competizioni" id="reg-competizioni"></ul>
-            <button type="button" class="link" id="reg-aggiungi-comp" style="margin: 8px 0 14px;">+ Aggiungi competizione</button>
-            <label class="campo"><span>Sport (separati da virgola)</span><textarea id="reg-sport" rows="2"></textarea></label>
-            <button type="submit" class="primario">Salva competizioni</button>
-          </form>
-        </section>
-        <section class="scheda">
-          <div class="scheda-testa"><h2>Importa dal file Excel</h2></div>
-          <div class="scheda-corpo">
-            <p class="nota" style="margin: 0 0 12px;">Carica il file delle convocazioni (es. <code>Convocazioni_Operatori_2026-27.xlsx</code>): operatori, tariffe, competizioni, eventi e assenze entrano nella piattaforma. Il file viene letto solo nel browser. Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli.</p>
-            <label class="bottone"><input type="file" id="imp-file" accept=".xlsx,.xlsm" hidden>Scegli il file…</label>
-            <div id="imp-anteprima" class="importazione" hidden></div>
-          </div>
-        </section>
-        <section class="scheda">
-          <div class="scheda-testa"><h2>Notifiche email</h2></div>
-          <form class="scheda-corpo" id="form-email">
-            <label class="campo"><span>Email dei supervisori (separate da virgola)</span>
-              <textarea id="imp-email" rows="3" placeholder="nome.cognome@tgisport.it, …"></textarea></label>
-            <label class="spunta" style="margin: 0 0 14px;"><input type="checkbox" id="imp-email-attive"><span>Invia un'email a ogni invio degli operatori</span></label>
-            <p class="nota" style="margin: 0 0 12px;">Le notifiche compaiono comunque nella scheda <b>Aggiornamenti</b>.</p>
-            <button type="submit" class="primario">Salva</button>
-          </form>
-        </section>
-        <section class="scheda">
-          <div class="scheda-testa"><h2>La tua password</h2></div>
-          <form class="scheda-corpo" id="form-password" autocomplete="on">
-            <label class="campo"><span>Password attuale</span><input type="password" id="pw-attuale" autocomplete="current-password" required></label>
-            <label class="campo"><span>Nuova password (almeno 8 caratteri)</span><input type="password" id="pw-nuova" autocomplete="new-password" minlength="8" required></label>
-            <label class="campo"><span>Ripeti la nuova password</span><input type="password" id="pw-conferma" autocomplete="new-password" minlength="8" required></label>
-            <p class="nota" style="margin: 0 0 12px;">Cambia solo la tua password: ogni supervisore ha la propria.</p>
-            <button type="submit" class="primario">Cambia password</button>
-          </form>
-        </section>
+          </section>
+          <section class="scheda">
+            <div class="scheda-testa"><h2>La tua password</h2></div>
+            <form class="scheda-corpo" id="form-password" autocomplete="on">
+              <label class="campo"><span>Password attuale</span><input type="password" id="pw-attuale" autocomplete="current-password" required></label>
+              <label class="campo"><span>Nuova password (almeno 8 caratteri)</span><input type="password" id="pw-nuova" autocomplete="new-password" minlength="8" required></label>
+              <label class="campo"><span>Ripeti la nuova password</span><input type="password" id="pw-conferma" autocomplete="new-password" minlength="8" required></label>
+              <p class="nota" style="margin: 0 0 12px;">Cambia solo la tua password: ogni supervisore ha la propria.</p>
+              <button type="submit" class="primario">Cambia password</button>
+            </form>
+          </section>
+        </div>
       </div>
     </section>
   </main>
@@ -440,14 +444,14 @@
     </form>
   </dialog>
 
-  <script src="app/config.js?v=8"></script>
-  <script src="app/comune.js?v=8"></script>
-  <script src="app/demo.js?v=8"></script>
-  <script src="app/dati-firebase.js?v=8"></script>
-  <script src="app/regole.js?v=8"></script>
-  <script src="app/admin.js?v=8"></script>
-  <script src="app/convocazioni.js?v=8"></script>
-  <script src="app/riepilogo.js?v=8"></script>
-  <script src="app/impostazioni.js?v=8"></script>
+  <script src="app/config.js?v=9"></script>
+  <script src="app/comune.js?v=9"></script>
+  <script src="app/demo.js?v=9"></script>
+  <script src="app/dati-firebase.js?v=9"></script>
+  <script src="app/regole.js?v=9"></script>
+  <script src="app/admin.js?v=9"></script>
+  <script src="app/convocazioni.js?v=9"></script>
+  <script src="app/riepilogo.js?v=9"></script>
+  <script src="app/impostazioni.js?v=9"></script>
 </body>
 </html>

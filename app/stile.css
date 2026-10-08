@@ -99,12 +99,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---------- campi e bottoni ---------- */
 .campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .campo > span { font-size: 12.5px; color: var(--inchiostro-2); font-weight: 500; }
-input[type="text"], input[type="email"], input[type="tel"], input[type="search"], input[type="password"], input[type="date"], select, textarea {
+input[type="text"], input[type="email"], input[type="tel"], input[type="search"], input[type="password"], input[type="date"], input[type="time"], input[type="number"], select, textarea {
   height: 36px; padding: 0 10px; border: 1px solid var(--linea-forte); border-radius: 8px; background: #fff; width: 100%;
   outline: none; transition: border-color .15s, box-shadow .15s;
 }
 textarea { height: auto; padding: 8px 10px; resize: vertical; line-height: 1.45; }
 input:focus, select:focus, textarea:focus { border-color: var(--accento); box-shadow: 0 0 0 3px var(--accento-tenue); }
+/* menu a tendina con una sola freccia (quella di sistema su Mac si sovrappone al testo) */
+select {
+  -webkit-appearance: none; appearance: none; padding-right: 28px; text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%235a606d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 9px center; background-size: 12px;
+}
+select::-ms-expand { display: none; }
 input:disabled { background: var(--vuoto); color: var(--inchiostro-3); }
 
 .spunta { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; margin: 6px 0 0; }
@@ -155,7 +162,7 @@ button.primario:disabled { background: #b7c3ee; cursor: not-allowed; }
 .pallino-nota { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--inchiostro-2); }
 
 /* ---------- impaginazione ---------- */
-.contenuto { max-width: 1240px; margin: 0 auto; padding: 22px 20px 120px; }
+.contenuto { max-width: 1480px; margin: 0 auto; padding: 22px 20px 120px; }
 .contenuto.stretto { max-width: 780px; }
 .titolo-pagina { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .titolo-pagina h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
@@ -362,7 +369,8 @@ table.tabella { width: 100%; border-collapse: collapse; }
 .tabella-box { overflow-x: auto; }
 
 /* ---------- impostazioni ---------- */
-.impostazioni { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; align-items: start; }
+.impostazioni { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.impostazioni-colonna { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .impostazioni form { display: flex; flex-direction: column; }
 .impostazioni form .primario { width: auto; align-self: flex-start; margin-top: 6px; }
 
@@ -471,12 +479,21 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 .tabella.numeri td, .tabella.numeri th { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tabella.numeri td:first-child, .tabella.numeri th:first-child, .tabella.numeri .sx { text-align: left; }
 .tabella tfoot td { font-weight: 700; background: #fafbfc; border-top: 1px solid var(--linea-forte); padding: 10px 14px; }
+.tabella.compatta td, .tabella.compatta th { padding: 9px 10px; font-size: 12.5px; }
+.tabella.compatta tfoot td { padding: 9px 10px; }
+.tabella.ampia th:first-child, .tabella.ampia td:first-child { position: sticky; left: 0; z-index: 1; background: #fff; }
+.tabella.ampia th:last-child, .tabella.ampia td:last-child { position: sticky; right: 0; z-index: 1; background: #fff; box-shadow: -1px 0 0 var(--linea); }
+.tabella.ampia thead th:first-child, .tabella.ampia thead th:last-child { background: #fafbfc; }
+.tabella.ampia tfoot td:first-child, .tabella.ampia tfoot td:last-child { background: #fafbfc; }
 
 /* ---------- impostazioni: regole e importazione ---------- */
+.tabella.tariffe { table-layout: fixed; }
 .tabella.tariffe td, .tabella.tariffe th { padding: 6px 8px; }
-.tabella.tariffe input { height: 32px; text-align: right; }
-.elenco-competizioni { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow-y: auto; }
-.elenco-competizioni li { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto 30px; gap: 8px; align-items: center; }
+.tabella.tariffe th:first-child, .tabella.tariffe td:first-child { width: 80px; font-weight: 600; }
+.tabella.tariffe input { height: 34px; text-align: right; padding: 0 8px; }
+.tre-campi .campo { justify-content: flex-end; }
+.elenco-competizioni { list-style: none; margin: 0; padding: 0 4px 0 0; display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }
+.elenco-competizioni li { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto 32px; gap: 8px; align-items: center; }
 .elenco-competizioni input[type="text"], .elenco-competizioni select { height: 32px; font-size: 13px; }
 .elenco-competizioni .spunta { margin: 0; font-size: 12px; white-space: nowrap; }
 .elenco-competizioni .icona { width: 30px; height: 30px; font-size: 12px; }
@@ -556,6 +573,7 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
   .ev-stato { grid-column: 2 / span 2; flex-direction: row; align-items: center; gap: 8px; }
   .tre-campi { grid-template-columns: 1fr 1fr; }
   .kpi { grid-template-columns: 1fr 1fr; }
+  .impostazioni { grid-template-columns: minmax(0, 1fr); }
   .kpi b { font-size: 18px; }
   .elenco-competizioni li { grid-template-columns: minmax(0, 1fr) 96px 30px; }
   .elenco-competizioni .spunta { grid-column: 1; grid-row: 2; }
