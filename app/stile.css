@@ -507,6 +507,7 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 /* ---------- convocazioni (operatore) ---------- */
 .mie-convocazioni { margin-bottom: 16px; }
 .mie-convocazioni:empty { display: none; }
+.conv-vuoto { margin: 0; padding: 14px 18px; color: var(--inchiostro-2); font-size: 13px; line-height: 1.5; }
 .convocazione { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--linea); }
 .convocazione:last-child { border-bottom: 0; }
 .convocazione.annullata { opacity: .55; }

@@ -84,8 +84,12 @@
   function disegnaConvocazioni() {
     const box = $('mie-convocazioni');
     const prossime = convocazioni.filter((c) => c.data >= oggi).sort((a, b) => (a.data + ritrovo(a)).localeCompare(b.data + ritrovo(b)));
-    box.hidden = !prossime.length;
-    if (!prossime.length) return;
+    box.hidden = false;
+    if (!prossime.length) {
+      box.innerHTML = '<div class="scheda-testa"><h2>Le tue convocazioni</h2></div>'
+        + '<p class="conv-vuoto">Nessuna convocazione in programma. Quando i supervisori ti convocano la trovi qui, da confermare.</p>';
+      return;
+    }
     const daRispondere = prossime.filter((c) => c.stato === 'convocato').length;
     box.innerHTML = '<div class="scheda-testa"><h2>Le tue convocazioni</h2><span class="spazio"></span>'
       + (daRispondere ? '<span class="stato-chip st-blu">' + daRispondere + ' da confermare</span>' : '') + '</div>'
