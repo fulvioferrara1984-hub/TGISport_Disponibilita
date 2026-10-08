@@ -7,7 +7,7 @@
   <title>Supervisori · Disponibilità TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css?v=9">
+  <link rel="stylesheet" href="app/stile.css?v=10">
 </head>
 <body>
   <header class="testata con-schede">
@@ -78,8 +78,8 @@
           </div>
           <span class="spazio"></span>
           <div class="strumenti">
-            <select id="ev-filtro-comp" aria-label="Filtra per competizione"><option value="">Tutte le competizioni</option></select>
-            <select id="ev-filtro-stato" aria-label="Filtra per stato">
+            <select id="ev-filtro-comp" aria-label="Filtra per competizione" autocomplete="off"><option value="">Tutte le competizioni</option></select>
+            <select id="ev-filtro-stato" aria-label="Filtra per stato" autocomplete="off">
               <option value="">Settimana in vista</option>
               <option value="da-assegnare">Da assegnare (tutte)</option>
               <option value="assegnato">Da inviare (tutte)</option>
@@ -89,6 +89,7 @@
             </select>
           </div>
         </div>
+        <div class="filtro-attivo" id="ev-filtro-attivo" hidden></div>
         <div id="ev-giorni"><div class="caricamento"><span></span></div></div>
       </section>
     </section>
@@ -444,14 +445,14 @@
     </form>
   </dialog>
 
-  <script src="app/config.js?v=9"></script>
-  <script src="app/comune.js?v=9"></script>
-  <script src="app/demo.js?v=9"></script>
-  <script src="app/dati-firebase.js?v=9"></script>
-  <script src="app/regole.js?v=9"></script>
-  <script src="app/admin.js?v=9"></script>
-  <script src="app/convocazioni.js?v=9"></script>
-  <script src="app/riepilogo.js?v=9"></script>
-  <script src="app/impostazioni.js?v=9"></script>
+  <script src="app/config.js?v=10"></script>
+  <script src="app/comune.js?v=10"></script>
+  <script src="app/demo.js?v=10"></script>
+  <script src="app/dati-firebase.js?v=10"></script>
+  <script src="app/regole.js?v=10"></script>
+  <script src="app/admin.js?v=10"></script>
+  <script src="app/convocazioni.js?v=10"></script>
+  <script src="app/riepilogo.js?v=10"></script>
+  <script src="app/impostazioni.js?v=10"></script>
 </body>
 </html>

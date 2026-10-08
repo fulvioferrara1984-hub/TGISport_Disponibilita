@@ -428,6 +428,8 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 .conv-rifiutato b, .conv-sostituire b { color: var(--errore); }
 .conv-da-assegnare b { color: var(--attenzione); }
 .navigatore.spento .icona, .navigatore.spento #ev-oggi { visibility: hidden; }
+.filtro-attivo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 18px; background: var(--accento-tenue); color: var(--accento-scuro); border-bottom: 1px solid #cdd8ff; font-size: 13px; }
+.filtro-attivo .bottone { margin-left: auto; height: 30px; }
 
 .ev-giorno { border-bottom: 1px solid var(--linea); }
 .ev-giorno:last-child { border-bottom: 0; }

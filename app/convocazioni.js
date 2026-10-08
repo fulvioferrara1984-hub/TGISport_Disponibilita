@@ -43,6 +43,10 @@
     const f = $('ev-filtro-stato').value;
     $('ev-navigatore').classList.toggle('spento', !!f);
     $('ev-etichetta').textContent = f ? 'Tutte le date' : DO.etichettaSettimana(lun);
+    // la vista principale è la settimana: un filtro per stato è una lista a parte, con il ritorno ben visibile
+    $('ev-filtro-attivo').hidden = !f;
+    if (f) $('ev-filtro-attivo').innerHTML = 'Stai vedendo: <b>' + DO.esc($('ev-filtro-stato').selectedOptions[0].textContent.replace(' (tutte)', '')) + '</b>, tutte le date'
+      + '<button type="button" class="bottone" id="ev-torna">← Torna alla settimana</button>';
     aggiornaCompetizioni();
     const lista = eventiVisibili();
     const attivi = lista.filter((e) => e.stato !== 'annullato');
@@ -92,7 +96,7 @@
     const voci = ammessi.map((o) => {
       const v = A.valore(o.id, e.data), occupato = altriImpegni(e, o.id).length;
       const segno = { D: '✓', P: '½', A: '✕' }[v.s] || '·';
-      const extra = (v.s === 'P' && v.n ? ' — ' + v.n : v.s === 'A' ? ' — non disponibile' : !v.s ? ' — non indicato' : '') + (occupato ? ' · già impegnato' : '');
+      const extra = (v.s === 'P' && v.n ? ' — ' + v.n : v.s === 'A' ? ' — non disponibile' : !v.s ? ' — disponibilità non indicata' : '') + (occupato ? ' · già impegnato' : '');
       return { o, peso: peso[v.s || ''] + (occupato ? 0.5 : 0), testo: (occupato ? '⚠ ' : segno + ' ') + o.nome + extra };
     }).sort((a, b) => a.peso - b.peso || a.o.nome.localeCompare(b.o.nome, 'it'));
     return '<select data-assegna="' + e.id + '"' + (e.stato === 'annullato' ? ' disabled' : '') + ' aria-label="Operatore">'
@@ -179,6 +183,10 @@
   $('ev-succ').addEventListener('click', () => { lun = DO.aggiungi(lun, 7); disegna(); });
   $('ev-oggi').addEventListener('click', () => { lun = DO.lunedi(DO.oggi()); $('ev-filtro-stato').value = ''; disegna(); });
   $('ev-filtro-comp').addEventListener('change', disegna);
+  $('ev-filtro-attivo').addEventListener('click', (e) => { if (e.target.id === 'ev-torna') { $('ev-filtro-stato').value = ''; disegna(); } });
+  // all'apertura si parte sempre dalla settimana corrente (il browser altrimenti ricorda l'ultimo filtro)
+  $('ev-filtro-stato').value = '';
+  $('ev-filtro-comp').value = '';
   $('ev-filtro-stato').addEventListener('change', disegna);
   $('ev-conteggi').addEventListener('click', (e) => {
     const b = e.target.closest('[data-filtra]');
