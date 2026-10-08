@@ -8,7 +8,7 @@
  */
 
 const CONFIG = {
-  FIREBASE_PROJECT_ID: 'INCOLLA-QUI-IL-PROJECT-ID',   // Impostazioni progetto di Firebase → ID progetto
+  FIREBASE_PROJECT_ID: 'tgi-availability',          // Impostazioni progetto di Firebase → ID progetto
   MITTENTE: 'Disponibilità Ops · TGI Sport',
   PAUSA_NOTIFICHE_SECONDI: 60,                        // al massimo un'email ai supervisori al minuto per operatore
 };
