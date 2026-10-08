@@ -37,11 +37,11 @@
         modifiche: [{ d: aggiungi(lun, 2 + k), da: '', a: 'D', n: '' }, { d: aggiungi(lun, 4 + k), da: 'D', a: 'A', n: '' }] });
     });
     invii.sort((a, b) => (a.quando < b.quando ? -1 : 1));
-    return { operatori, disponibilita, invii, password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true, urlAdmin: '' } };
+    return { operatori, disponibilita, invii, richieste: [], password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true, urlAdmin: '' } };
   }
 
   function carica() {
-    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d) return d; } catch (e) { /* si riparte dai dati di prova */ }
+    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d) return Object.assign({ richieste: [] }, d); } catch (e) { /* si riparte dai dati di prova */ }
     return iniziali();
   }
   function salva(d) { try { localStorage.setItem(CHIAVE, JSON.stringify(d)); } catch (e) { /* solo in memoria */ } }
@@ -72,7 +72,9 @@
       return { token: 'demo|op|' + op.id, operatore: pubblico(op) };
     },
     mieDisponibilita(r, op) {
-      return { giorni: filtra(dati.disponibilita[op.id], r.da, r.a), operatore: pubblico(op), oggi: oggi(), limite: limite() };
+      const richieste = dati.richieste.filter((x) => x.attiva && x.a >= oggi() && x.destinatari.includes(op.id))
+        .map((x) => ({ id: x.id, da: x.da, a: x.a, messaggio: x.messaggio, creata: x.creata }));
+      return { giorni: filtra(dati.disponibilita[op.id], r.da, r.a), operatore: pubblico(op), richieste, oggi: oggi(), limite: limite() };
     },
     inviaDisponibilita(r, op) {
       const mappa = dati.disponibilita[op.id] = dati.disponibilita[op.id] || {};
@@ -91,13 +93,41 @@
     panoramica(r) {
       const disponibilita = {};
       Object.keys(dati.disponibilita).forEach((id) => { disponibilita[id] = filtra(dati.disponibilita[id], r.da, r.a); });
-      return { operatori: dati.operatori.map(pubblico), disponibilita, nonLetti: nonLetti(), oggi: oggi(), limite: limite() };
+      return Object.assign(azioni.stato(), {
+        operatori: dati.operatori.map(pubblico), disponibilita, oggi: oggi(), limite: limite(),
+        nonLettiOperatori: [...new Set(dati.invii.filter((x) => !x.letto).map((x) => x.operatoreId))],
+        richieste: azioni.aggiornamenti({}).richieste,
+      });
     },
     stato() {
       return { nonLetti: nonLetti(), ultimo: dati.invii.length ? dati.invii[dati.invii.length - 1].quando : '' };
     },
     aggiornamenti(r) {
-      return dati.invii.slice(-(r.limite || 100)).reverse();
+      const richieste = dati.richieste.filter((x) => x.attiva && x.a >= aggiungi(oggi(), -7)).slice().reverse().map((x) => {
+        const giorni = [];
+        for (let d = x.da > oggi() ? x.da : oggi(); d <= x.a; d = aggiungi(d, 1)) giorni.push(d);
+        const destinatari = x.destinatari.map((id) => dati.operatori.find((o) => o.id === id)).filter(Boolean).map((o) => ({
+          id: o.id, nome: o.nome, mancanti: giorni.filter((d) => !((dati.disponibilita[o.id] || {})[d] || {}).s).length,
+        }));
+        return { id: x.id, creata: x.creata, da: x.da, a: x.a, messaggio: x.messaggio, scaduta: x.a < oggi(), destinatari };
+      });
+      return { invii: dati.invii.slice(-(r.limite || 100)).reverse(), richieste };
+    },
+    creaRichiesta(r) {
+      if (!r.da || !r.a || r.da > r.a) return errore('Periodo non valido.');
+      if (r.a < oggi()) return errore('Il periodo è già passato.');
+      const ops = dati.operatori.filter((o) => o.attivo && (r.destinatari || []).includes(o.id));
+      if (!ops.length) return errore('Scegli almeno un operatore.');
+      const id = 'ric' + Date.now();
+      dati.richieste.push({ id, creata: new Date().toISOString(), da: r.da, a: r.a, messaggio: String(r.messaggio || '').trim(), destinatari: ops.map((o) => o.id), attiva: true });
+      const conEmail = r.email === false ? [] : ops.filter((o) => o.email);
+      return { id, email: conEmail.length, senzaEmail: r.email === false ? [] : ops.filter((o) => !o.email).map((o) => o.nome), nonInviate: [], quotaRestante: 100 - conEmail.length };
+    },
+    chiudiRichiesta(r) {
+      const x = dati.richieste.find((y) => y.id === r.id);
+      if (!x) return errore('Richiesta non trovata.');
+      x.attiva = false;
+      return { chiusa: x.id };
     },
     segnaLetti(r) {
       dati.invii.forEach((x) => { if (!r.ids || r.ids.includes(x.id)) x.letto = true; });

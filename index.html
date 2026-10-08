@@ -7,7 +7,7 @@
   <title>Disponibilità · TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css">
+  <link rel="stylesheet" href="app/stile.css?v=2">
 </head>
 <body>
   <header class="testata">
@@ -40,14 +40,17 @@
         <h1 id="saluto">Le tue disponibilità</h1>
         <p>Indica per ogni giorno se sei disponibile, poi premi <b>Invia ai supervisori</b>.</p>
       </div>
+      <span class="aggiornamento" id="aggiornamento" hidden><span></span>Aggiornamento…</span>
     </div>
+
+    <div id="richieste"></div>
 
     <div class="conferma" id="conferma" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m7.5 12.5 3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <div><b>Disponibilità inviate</b><span id="conferma-testo">I supervisori hanno ricevuto la notifica.</span></div>
     </div>
 
-    <section class="scheda">
+    <section class="scheda" id="settimana-scheda">
       <div class="scheda-testa">
         <div class="navigatore">
           <button type="button" class="icona" id="sett-prec" aria-label="Settimana precedente">
@@ -57,11 +60,10 @@
           <button type="button" class="icona" id="sett-succ" aria-label="Settimana successiva">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
+          <button type="button" class="bottone" id="sett-oggi" title="Torna alla settimana corrente">Oggi</button>
         </div>
-        <span class="spazio"></span>
-        <button type="button" class="bottone" id="sett-oggi">Questa settimana</button>
       </div>
-      <div class="scheda-corpo" style="padding-bottom: 14px; border-bottom: 1px solid var(--linea);">
+      <div class="scheda-corpo azioni-box">
         <div class="azioni-rapide">
           <span>Tutta la settimana:</span>
           <button type="button" class="bottone st-D" data-tutti="D"><span class="pallino"></span>Disponibile</button>
@@ -87,9 +89,9 @@
     </div>
   </div>
 
-  <script src="app/config.js"></script>
-  <script src="app/demo.js"></script>
-  <script src="app/comune.js"></script>
-  <script src="app/operatore.js"></script>
+  <script src="app/config.js?v=2"></script>
+  <script src="app/demo.js?v=2"></script>
+  <script src="app/comune.js?v=2"></script>
+  <script src="app/operatore.js?v=2"></script>
 </body>
 </html>

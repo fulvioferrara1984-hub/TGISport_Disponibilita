@@ -8,9 +8,11 @@
   let operatore = null;
   let salvati = {};               // ultima versione inviata, data → { s, n }
   let bozza = {};                 // modifiche non ancora inviate, data → { s, n }
+  let richieste = [];             // richieste aperte dei supervisori: { id, da, a, messaggio }
   let oggi = DO.iso(new Date()), limite = DO.aggiungi(oggi, 83);
   let lun = DO.lunedi(oggi);
   let invio = false;
+  const noteAperte = new Set();   // giorni in cui l'operatore ha chiesto di scrivere una nota
 
   const chiaveBozza = () => 'do-bozza-' + operatore.id;
   const vuoto = { s: '', n: '' };
@@ -18,6 +20,13 @@
   const uguali = (a, b) => (a.s || '') === (b.s || '') && (a.n || '') === (b.n || '');
   const modificabile = (d) => d >= oggi && d <= limite;
   const nModifiche = () => Object.keys(bozza).length;
+  const richiesto = (d) => modificabile(d) && richieste.some((x) => d >= x.da && d <= x.a);
+
+  function giorniDi(x) {
+    const out = [];
+    for (let d = x.da > oggi ? x.da : oggi; d <= x.a && d <= limite; d = DO.aggiungi(d, 1)) out.push(d);
+    return out;
+  }
 
   function salvaBozza() {
     DO.scrivi(chiaveBozza(), nModifiche() ? bozza : null, true);
@@ -49,14 +58,36 @@
       const stati = Object.keys(DO.STATI).map((s) =>
         '<button type="button" role="radio" class="st-' + s + '" data-stato="' + s + '" aria-checked="' + (v.s === s) + '"' + (attivo ? '' : ' disabled') + '>'
         + '<span class="pallino"></span><span>' + DO.STATI[s].nome + '</span></button>').join('');
-      return '<li class="giorno' + (bozza[d] ? ' modificato' : '') + (attivo ? '' : ' passato') + '" data-data="' + d + '">'
+      // la nota si mostra solo quando serve: per i parziali, se c'è già o se l'operatore la chiede
+      const conNota = v.s === 'P' || v.n || noteAperte.has(d);
+      const nota = conNota
+        ? '<input type="text" class="nota-giorno" maxlength="200" placeholder="' + (v.s === 'P' ? 'Orari (es. solo dalle 18:00)' : 'Nota facoltativa') + '" value="' + DO.esc(v.n) + '"'
+          + (attivo ? '' : ' disabled') + ' aria-label="Nota per ' + g.nome + ' ' + g.num + '">'
+        : attivo ? '<button type="button" class="link aggiungi-nota" data-nota>+ Aggiungi una nota</button>' : '';
+      return '<li class="giorno' + (bozza[d] ? ' modificato' : '') + (attivo ? '' : ' passato') + (richiesto(d) && !v.s ? ' da-fare' : '') + '" data-data="' + d + '">'
         + '<div class="giorno-data"><b>' + g.nome + '</b><small>' + g.num + ' ' + g.mese + '</small>'
-        + (d === oggi ? '<span class="oggi">Oggi</span>' : '') + '</div>'
+        + (d === oggi ? '<span class="oggi">Oggi</span>' : '') + (richiesto(d) ? '<span class="richiesto">Richiesto</span>' : '') + '</div>'
         + '<div class="giorno-scelte"><div class="stati" role="radiogroup" aria-label="Disponibilità di ' + g.nome + ' ' + g.num + '">' + stati + '</div>'
-        + '<input type="text" class="nota-giorno" maxlength="200" placeholder="' + (v.s === 'P' ? 'Orari (es. solo dalle 18:00)' : 'Nota facoltativa') + '" value="' + DO.esc(v.n) + '"'
-        + (attivo ? '' : ' disabled') + ' aria-label="Nota per ' + g.nome + ' ' + g.num + '"></div></li>';
+        + nota + '</div></li>';
     }).join('');
+    disegnaRichieste();
     disegnaBarra();
+  }
+
+  function disegnaRichieste() {
+    $('richieste').innerHTML = richieste.map((x) => {
+      const giorni = giorniDi(x);
+      const mancanti = giorni.filter((d) => !valore(d).s).length;
+      const daInviare = !mancanti && giorni.some((d) => bozza[d]);
+      const stato = mancanti ? '<b>' + mancanti + (mancanti === 1 ? ' giorno da compilare' : ' giorni da compilare') + '</b>'
+        : daInviare ? '<b>Compilata</b>: ricordati di premere Invia' : '<b>Completata</b>, grazie!';
+      const vai = DO.lunedi(giorni.find((d) => !valore(d).s) || giorni[0] || x.da);
+      return '<div class="richiesta' + (mancanti || daInviare ? '' : ' fatta') + '">'
+        + '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 10h17M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'
+        + '<div class="richiesta-testo"><span>I supervisori chiedono le tue disponibilità <b>' + DO.periodo(x.da, x.a) + '</b></span>'
+        + (x.messaggio ? '<q>' + DO.esc(x.messaggio) + '</q>' : '') + '<small>' + stato + '</small></div>'
+        + (mancanti && vai !== lun ? '<button type="button" class="bottone" data-vai="' + vai + '">Vai al periodo</button>' : '') + '</div>';
+    }).join('');
   }
 
   function disegnaBarra() {
@@ -71,20 +102,40 @@
 
   // ---------- interazione ----------
   $('giorni').addEventListener('click', (e) => {
+    const li = e.target.closest('.giorno');
+    if (!li) return;
+    const d = li.dataset.data;
+    if (e.target.closest('[data-nota]')) {
+      noteAperte.add(d);
+      disegna();
+      $('giorni').querySelector('[data-data="' + d + '"] .nota-giorno').focus();
+      return;
+    }
     const b = e.target.closest('[data-stato]');
     if (!b) return;
-    const d = b.closest('.giorno').dataset.data, v = valore(d);
-    imposta(d, { s: v.s === b.dataset.stato ? '' : b.dataset.stato, n: v.n });
+    const v = valore(d), nuovo = v.s === b.dataset.stato ? '' : b.dataset.stato;
+    imposta(d, { s: nuovo, n: v.n });
     $('conferma').hidden = true;
     disegna();
+    // per un parziale servono gli orari: si porta subito il cursore sulla nota
+    if (nuovo === 'P' && !v.n) $('giorni').querySelector('[data-data="' + d + '"] .nota-giorno').focus();
   });
 
   $('giorni').addEventListener('input', (e) => {
     if (!e.target.classList.contains('nota-giorno')) return;
     const li = e.target.closest('.giorno'), d = li.dataset.data;
+    noteAperte.add(d);
     imposta(d, { s: valore(d).s, n: e.target.value });
     li.classList.toggle('modificato', !!bozza[d]);
     disegnaBarra();
+  });
+
+  $('richieste').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-vai]');
+    if (!b) return;
+    lun = b.dataset.vai;
+    disegna();
+    $('settimana-scheda').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   document.querySelectorAll('[data-tutti]').forEach((b) => b.addEventListener('click', () => {
@@ -127,6 +178,7 @@
       bozza = {};
       salvaBozza();
       operatore.ultimoInvio = r.inviatoIl;
+      salvaCopia();
       const n = Math.max(r.modifiche, cambiati);
       $('conferma-testo').textContent = (n ? n + (n === 1 ? ' giorno aggiornato. ' : ' giorni aggiornati. ') : 'Nessuna modifica: hai confermato le disponibilità. ')
         + 'I supervisori hanno ricevuto la notifica.';
@@ -145,15 +197,16 @@
   });
 
   // ---------- avvio ----------
-  async function carica() {
-    $('pagina').hidden = false;
-    $('giorni').innerHTML = '<li class="caricamento"><span></span></li>';
-    const r = await DO.chiama('mieDisponibilita', { da: DO.aggiungi(DO.lunedi(oggi), -7 * (SETTIMANE_INDIETRO + 1)), a: DO.aggiungi(oggi, 7 * 26) });
+  function salvaCopia() {
+    DO.salvaCopia({ operatore, giorni: salvati, richieste, oggi, limite });
+  }
+
+  function applica(r) {
     oggi = r.oggi;
     limite = r.limite;
-    lun = DO.lunedi(oggi);
     operatore = r.operatore;
     salvati = r.giorni || {};
+    richieste = r.richieste || [];
     // la bozza salvata sul dispositivo perde i giorni passati e quelli ormai uguali all'inviato
     bozza = DO.leggi(chiaveBozza()) || {};
     Object.keys(bozza).forEach((d) => { if (!modificabile(d) || uguali(bozza[d], salvati[d] || vuoto)) delete bozza[d]; });
@@ -164,6 +217,42 @@
     $('btn-esci').hidden = false;
     $('barra-invio').hidden = false;
     disegna();
+  }
+
+  // Con una richiesta da compilare si apre direttamente il periodo richiesto, altrimenti la settimana corrente.
+  function settimanaIniziale() {
+    const daFare = richieste.map(giorniDi).flat().find((d) => !valore(d).s);
+    return DO.lunedi(daFare || oggi);
+  }
+
+  // Si mostra subito l'ultima versione salvata sul dispositivo, poi si aggiorna con quella del server.
+  async function carica() {
+    $('pagina').hidden = false;
+    const copia = DO.leggiCopia();
+    const giaVisibile = !!(copia && copia.operatore);
+    if (giaVisibile) {
+      // la copia può essere di ieri: i giorni ormai passati non devono risultare modificabili
+      const adesso = DO.iso(new Date());
+      applica(Object.assign({}, copia, { oggi: adesso > copia.oggi ? adesso : copia.oggi }));
+      lun = settimanaIniziale();
+      disegna();
+      $('aggiornamento').hidden = false;
+    } else {
+      $('giorni').innerHTML = '<li class="caricamento"><span></span></li>';
+    }
+    try {
+      const r = await DO.chiama('mieDisponibilita', { da: DO.aggiungi(DO.lunedi(DO.iso(new Date())), -7 * (SETTIMANE_INDIETRO + 1)), a: DO.aggiungi(DO.iso(new Date()), 7 * 26) });
+      const settimana = lun;
+      applica(r);
+      lun = giaVisibile ? settimana : settimanaIniziale();
+      disegna();
+      salvaCopia();
+    } catch (e) {
+      if (!giaVisibile) $('giorni').innerHTML = '<li class="griglia-vuota">' + DO.esc(e.message) + '</li>';
+      else if (DO.sessione()) DO.avviso('Non riesco ad aggiornare i dati: ' + e.message, 'errore');
+    } finally {
+      $('aggiornamento').hidden = true;
+    }
   }
 
   async function accedi(codice) {
@@ -184,11 +273,7 @@
       try { await accedi(dalLink); } catch (e) { DO.avviso(e.message, 'errore'); }
     }
     if (!DO.sessione()) await DO.chiediAccesso(() => accedi($('accesso-codice').value));
-    try {
-      await carica();
-    } catch (e) {
-      $('giorni').innerHTML = '<li class="griglia-vuota">' + DO.esc(e.message) + '</li>';
-    }
+    await carica();
   }
 
   function esci() {

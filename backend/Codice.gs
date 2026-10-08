@@ -16,6 +16,7 @@ const INTESTAZIONI = {
   Operatori: ['ID', 'Nome', 'Mansione', 'Email', 'Telefono', 'Attivo', 'CodiceHash', 'Versione', 'UltimoInvio', 'Creato'],
   Disponibilita: ['OperatoreID', 'Data', 'Stato', 'Nota', 'Aggiornato'],
   Invii: ['ID', 'Quando', 'OperatoreID', 'Nome', 'Modifiche', 'Letto'],
+  Richieste: ['ID', 'Creata', 'Da', 'A', 'Messaggio', 'Destinatari', 'Attiva'],
 };
 
 const STATI = { D: 'Disponibile', P: 'Parziale', A: 'Non disponibile' };
@@ -23,7 +24,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 const AZIONI_OPERATORE = { mieDisponibilita, inviaDisponibilita };
 const AZIONI_ADMIN = {
-  panoramica, stato, aggiornamenti, segnaLetti,
+  panoramica, stato, aggiornamenti, segnaLetti, creaRichiesta, chiudiRichiesta,
   salvaOperatore, nuovoCodice, eliminaOperatore,
   leggiImpostazioni, salvaImpostazioni, cambiaPassword,
 };
@@ -87,14 +88,20 @@ function impostaPasswordSupervisori() {
 
 // ---------------------------------------------------------------- sicurezza
 
-const proprieta = () => PropertiesService.getScriptProperties();
+// Le proprietà dello script si leggono una volta sola per richiesta: ogni lettura costa tempo.
+let cacheProprieta = null;
+const proprieta = () => cacheProprieta || (cacheProprieta = PropertiesService.getScriptProperties().getProperties());
+
+function salvaProprieta(valori) {
+  PropertiesService.getScriptProperties().setProperties(valori);
+  Object.assign(proprieta(), valori);
+}
 
 function segreto() {
-  const p = proprieta();
-  let s = p.getProperty('SEGRETO');
+  let s = proprieta().SEGRETO;
   if (!s) {
     s = Utilities.getUuid() + Utilities.getUuid();
-    p.setProperty('SEGRETO', s);
+    salvaProprieta({ SEGRETO: s });
   }
   return s;
 }
@@ -104,10 +111,10 @@ function hmac(testo) {
   return Utilities.base64EncodeWebSafe(firma).replace(/=+$/, '');
 }
 
-const versioneAdmin = () => Number(proprieta().getProperty('ADMIN_VERSIONE') || 1);
+const versioneAdmin = () => Number(proprieta().ADMIN_VERSIONE || 1);
 
 function salvaPasswordAdmin(password) {
-  proprieta().setProperties({ ADMIN_HASH: hmac('admin:' + password), ADMIN_VERSIONE: String(versioneAdmin() + 1) });
+  salvaProprieta({ ADMIN_HASH: hmac('admin:' + password), ADMIN_VERSIONE: String(versioneAdmin() + 1) });
 }
 
 function creaToken(dati) {
@@ -145,14 +152,15 @@ function accedi(r) {
   const exp = Date.now() + CONFIG.DURATA_SESSIONE_GIORNI * 864e5;
 
   if (r.ruolo === 'admin') {
-    const hash = proprieta().getProperty('ADMIN_HASH');
+    const hash = proprieta().ADMIN_HASH;
     if (!hash) throw errore('La password dei supervisori non è ancora stata impostata (menu Disponibilità Ops del Google Sheet).');
     if (hmac('admin:' + String(r.password || '')) !== hash) throw fallito('Password errata.');
     return { token: creaToken({ r: 'ad', v: versioneAdmin(), exp }) };
   }
 
   const codice = normalizzaCodice(r.codice);
-  const op = codice.length === 8 && leggiOperatori().find((o) => o.codiceHash === hmac('op:' + codice));
+  const hash = codice.length === 8 && hmac('op:' + codice);
+  const op = hash && leggiOperatori().find((o) => o.codiceHash === hash);
   if (!op) throw fallito('Codice non valido.');
   if (!op.attivo) throw errore('Il tuo accesso è disattivato: contatta i supervisori.');
   return { token: creaToken({ r: 'op', id: op.id, v: op.versione, exp }), operatore: pubblico(op) };
@@ -259,6 +267,8 @@ function mieDisponibilita(r, s) {
   return {
     giorni: leggiDisponibilita(da, a, s.op.id)[s.op.id] || {},
     operatore: pubblico(s.op),
+    richieste: leggiRichieste().filter((x) => x.attiva && x.a >= oggi() && x.destinatari.indexOf(s.op.id) >= 0)
+      .map((x) => ({ id: x.id, da: x.da, a: x.a, messaggio: x.messaggio, creata: x.creata })),
     oggi: oggi(),
     limite: limite(),
   };
@@ -339,15 +349,18 @@ function notificaEmail(op, modifiche) {
 
 // ---------------------------------------------------------------- supervisori
 
+// Tutto quello che serve alla dashboard in una sola chiamata: ogni giro verso Google costa secondi.
 function panoramica(r) {
   const [da, a] = intervallo(r);
-  return {
+  const nonLetti = righe('Invii').filter((x) => testo(x[5]).toUpperCase() !== 'SI');
+  return Object.assign(stato(), {
     operatori: leggiOperatori().map(pubblico),
     disponibilita: leggiDisponibilita(da, a),
-    nonLetti: righe('Invii').filter((x) => testo(x[5]).toUpperCase() !== 'SI').length,
+    nonLettiOperatori: nonLetti.map((x) => testo(x[2])).filter((id, i, l) => l.indexOf(id) === i),
+    richieste: statoRichieste(),
     oggi: oggi(),
     limite: limite(),
-  };
+  });
 }
 
 function stato() {
@@ -360,11 +373,99 @@ function stato() {
 
 function aggiornamenti(r) {
   const n = Math.min(Number(r.limite) || 100, 500);
-  return righe('Invii').slice(-n).reverse().map((x) => {
+  const invii = righe('Invii').slice(-n).reverse().map((x) => {
     let modifiche = [];
     try { modifiche = JSON.parse(testo(x[4]) || '[]'); } catch (e) { /* riga scritta a mano */ }
     return { id: testo(x[0]), quando: testo(x[1]), operatoreId: testo(x[2]), nome: testo(x[3]), modifiche, letto: testo(x[5]).toUpperCase() === 'SI' };
   });
+  return { invii, richieste: statoRichieste() };
+}
+
+// ---------------------------------------------------------------- richieste di disponibilità
+
+function leggiRichieste() {
+  return righe('Richieste').map((x, i) => ({
+    riga: i + 2, id: testo(x[0]), creata: testo(x[1]), da: testo(x[2]), a: testo(x[3]), messaggio: testo(x[4]),
+    destinatari: testo(x[5]).split(',').filter(Boolean), attiva: testo(x[6]).toUpperCase() !== 'NO',
+  })).filter((x) => x.id);
+}
+
+// Richieste aperte (o concluse da poco) con chi ha già compilato tutti i giorni ancora modificabili.
+function statoRichieste() {
+  const richieste = leggiRichieste().filter((x) => x.attiva && x.a >= aggiungiGiorni(oggi(), -7));
+  if (!richieste.length) return [];
+  const operatori = leggiOperatori();
+  const da = richieste.reduce((m, x) => (x.da < m ? x.da : m), richieste[0].da);
+  const a = richieste.reduce((m, x) => (x.a > m ? x.a : m), richieste[0].a);
+  const disp = leggiDisponibilita(da, a);
+  return richieste.reverse().map((x) => {
+    const inizio = x.da > oggi() ? x.da : oggi();
+    const giorni = [];
+    for (let d = inizio; d <= x.a; d = aggiungiGiorni(d, 1)) giorni.push(d);
+    const elenco = x.destinatari.map((id) => operatori.find((o) => o.id === id)).filter(Boolean).map((o) => {
+      const mancanti = giorni.filter((d) => !(disp[o.id] && disp[o.id][d] && disp[o.id][d].s)).length;
+      return { id: o.id, nome: o.nome, mancanti };
+    });
+    return { id: x.id, creata: x.creata, da: x.da, a: x.a, messaggio: x.messaggio, scaduta: x.a < oggi(), destinatari: elenco };
+  });
+}
+
+function creaRichiesta(r) {
+  const da = String(r.da || ''), a = String(r.a || '');
+  if (!ISO.test(da) || !ISO.test(a) || da > a) throw errore('Periodo non valido.');
+  if (a < oggi()) throw errore('Il periodo è già passato.');
+  if (da > limite()) throw errore('Gli operatori possono compilare solo fino al ' + limite() + '.');
+  const operatori = leggiOperatori().filter((o) => o.attivo && (r.destinatari || []).indexOf(o.id) >= 0);
+  if (!operatori.length) throw errore('Scegli almeno un operatore.');
+  const messaggio = String(r.messaggio || '').trim().slice(0, 500);
+  const id = Utilities.getUuid().slice(0, 8);
+  const sh = foglio('Richieste');
+  scrivi(sh, sh.getLastRow() + 1, 1, [[id, new Date().toISOString(), da, a, messaggio, operatori.map((o) => o.id).join(','), 'SI']]);
+
+  const esito = { id, email: 0, senzaEmail: [], nonInviate: [] };
+  if (r.email === false) return esito;
+  const sito = /^https:\/\//.test(String(r.urlSito || '')) ? String(r.urlSito) : '';
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const periodo = periodoLeggibile(da, a);
+  operatori.forEach((o) => {
+    if (!o.email) { esito.senzaEmail.push(o.nome); return; }
+    try {
+      MailApp.sendEmail({
+        to: o.email,
+        name: 'Disponibilità Ops · TGI Sport',
+        subject: 'Richiesta disponibilità ' + periodo,
+        htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p>Ciao ' + esc(o.nome.split(' ')[0]) + ',</p>'
+          + '<p>i supervisori ti chiedono di indicare le tue disponibilità <b>' + periodo + '</b>.</p>'
+          + (messaggio ? '<p style="padding:10px 14px;background:#f3f4f6;border-radius:8px">' + esc(messaggio).replace(/\n/g, '<br>') + '</p>' : '')
+          + (sito ? '<p><a href="' + esc(sito) + '" style="display:inline-block;padding:10px 18px;background:#1740f0;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">Inserisci le disponibilità</a></p>' : '')
+          + '<p style="color:#8b919c;font-size:12px">Per entrare usa il tuo codice personale.</p></div>',
+      });
+      esito.email++;
+    } catch (e) {
+      esito.nonInviate.push(o.nome);
+    }
+  });
+  esito.quotaRestante = MailApp.getRemainingDailyQuota();
+  return esito;
+}
+
+function chiudiRichiesta(r) {
+  const x = leggiRichieste().find((y) => y.id === r.id);
+  if (!x) throw errore('Richiesta non trovata.');
+  scrivi(foglio('Richieste'), x.riga, 7, [['NO']]);
+  return { chiusa: x.id };
+}
+
+// "dall'8 al 14 ottobre", "dal 28 ottobre all'11 novembre"
+function periodoLeggibile(da, a) {
+  const art = (iso, base) => ([1, 8, 11].indexOf(Number(iso.slice(8))) >= 0 ? base + "ll'" : base + 'l ');
+  const inizio = da.slice(0, 7) === a.slice(0, 7) ? String(Number(da.slice(8))) : dataLeggibile(da);
+  return art(da, 'da') + inizio + ' ' + art(a, 'a') + dataLeggibile(a);
+}
+
+function dataLeggibile(iso) {
+  const mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+  return Number(iso.slice(8)) + ' ' + mesi[Number(iso.slice(5, 7)) - 1];
 }
 
 function segnaLetti(r) {
@@ -447,7 +548,7 @@ function eliminaOperatore(r) {
 }
 
 function leggiImpostazioni() {
-  const p = proprieta().getProperties();
+  const p = proprieta();
   return {
     emailSupervisori: p.EMAIL_SUPERVISORI || '',
     emailAttive: p.EMAIL_ATTIVE !== 'NO',
@@ -459,7 +560,7 @@ function salvaImpostazioni(r) {
   const email = String(r.emailSupervisori || '').split(/[,;\s]+/).filter(Boolean);
   if (email.some((x) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) throw errore('Controlla gli indirizzi email dei supervisori.');
   const url = String(r.urlAdmin || '');
-  proprieta().setProperties({
+  salvaProprieta({
     EMAIL_SUPERVISORI: email.join(','),
     EMAIL_ATTIVE: r.emailAttive === false ? 'NO' : 'SI',
     URL_ADMIN: /^https:\/\//.test(url) ? url : '',
@@ -468,7 +569,7 @@ function salvaImpostazioni(r) {
 }
 
 function cambiaPassword(r) {
-  if (hmac('admin:' + String(r.attuale || '')) !== proprieta().getProperty('ADMIN_HASH')) throw errore('La password attuale non è corretta.');
+  if (hmac('admin:' + String(r.attuale || '')) !== proprieta().ADMIN_HASH) throw errore('La password attuale non è corretta.');
   const nuova = String(r.nuova || '');
   if (nuova.length < 8) throw errore('La nuova password deve avere almeno 8 caratteri.');
   salvaPasswordAdmin(nuova);

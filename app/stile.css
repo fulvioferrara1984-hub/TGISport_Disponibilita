@@ -97,7 +97,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---------- campi e bottoni ---------- */
 .campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .campo > span { font-size: 12.5px; color: var(--inchiostro-2); font-weight: 500; }
-input[type="text"], input[type="email"], input[type="tel"], input[type="search"], input[type="password"], select, textarea {
+input[type="text"], input[type="email"], input[type="tel"], input[type="search"], input[type="password"], input[type="date"], select, textarea {
   height: 36px; padding: 0 10px; border: 1px solid var(--linea-forte); border-radius: 8px; background: #fff; width: 100%;
   outline: none; transition: border-color .15s, box-shadow .15s;
 }
@@ -139,6 +139,10 @@ button.primario:disabled { background: #b7c3ee; cursor: not-allowed; }
 .link { border: 0; background: none; color: var(--accento); padding: 0; cursor: pointer; font-size: 12.5px; font-weight: 500; }
 .link:hover { text-decoration: underline; }
 
+.tenue { color: var(--inchiostro-3); }
+@media (min-width: 761px) { .solo-mobile { display: none !important; } }
+.icona.gira svg { animation: gira .9s linear infinite; }
+
 /* ---------- stati di disponibilità ---------- */
 .st-D { --st: var(--ok); --st-tenue: var(--ok-tenue); }
 .st-P { --st: var(--attenzione); --st-tenue: var(--attenzione-tenue); }
@@ -146,6 +150,7 @@ button.primario:disabled { background: #b7c3ee; cursor: not-allowed; }
 .pallino { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--st, var(--linea-forte)); flex: none; }
 .legenda { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--inchiostro-2); }
 .legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.pallino-nota { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--inchiostro-2); }
 
 /* ---------- impaginazione ---------- */
 .contenuto { max-width: 1240px; margin: 0 auto; padding: 22px 20px 120px; }
@@ -164,7 +169,22 @@ button.primario:disabled { background: #b7c3ee; cursor: not-allowed; }
 .navigatore .settimana small { display: block; font-weight: 500; font-size: 11.5px; color: var(--inchiostro-3); letter-spacing: 0; }
 
 /* ---------- pagina operatore ---------- */
+.azioni-box { padding-bottom: 14px; border-bottom: 1px solid var(--linea); }
 .azioni-rapide { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.aggiornamento { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--inchiostro-3); }
+.aggiornamento span { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--linea-forte); border-top-color: var(--accento); animation: gira .8s linear infinite; }
+
+.richiesta {
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin-bottom: 14px; border-radius: 12px;
+  background: var(--accento-tenue); border: 1px solid #cdd8ff; color: var(--inchiostro); line-height: 1.45;
+}
+.richiesta > svg { width: 22px; height: 22px; flex: none; color: var(--accento); }
+.richiesta-testo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.richiesta-testo q, .richiesta-admin q { display: block; quotes: none; color: var(--inchiostro-2); font-style: italic; }
+.richiesta-testo small { font-size: 12.5px; color: var(--accento); }
+.richiesta .bottone { flex: none; }
+.richiesta.fatta { background: var(--ok-tenue); border-color: #c4e7d3; }
+.richiesta.fatta > svg, .richiesta.fatta small { color: var(--ok); }
 .azioni-rapide > span { font-size: 12.5px; color: var(--inchiostro-3); margin-right: 2px; }
 .giorni { list-style: none; margin: 0; padding: 0; }
 .giorno { display: grid; grid-template-columns: 112px 1fr; gap: 10px 16px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--linea); }
@@ -172,7 +192,11 @@ button.primario:disabled { background: #b7c3ee; cursor: not-allowed; }
 .giorno-data { display: flex; flex-direction: column; line-height: 1.25; }
 .giorno-data b { font-size: 15px; font-weight: 650; }
 .giorno-data small { color: var(--inchiostro-3); font-size: 12px; }
-.giorno-data .oggi { align-self: flex-start; margin-top: 4px; padding: 1px 7px; border-radius: 10px; background: var(--accento-tenue); color: var(--accento); font-size: 11px; font-weight: 600; }
+.giorno-data .oggi, .giorno-data .richiesto { align-self: flex-start; margin-top: 4px; padding: 1px 7px; border-radius: 10px; background: var(--accento-tenue); color: var(--accento); font-size: 11px; font-weight: 600; }
+.giorno-data .richiesto { background: transparent; box-shadow: inset 0 0 0 1px currentColor; }
+.giorno.da-fare { box-shadow: inset 3px 0 0 var(--accento); }
+.aggiungi-nota { align-self: flex-start; font-size: 12.5px; color: var(--inchiostro-3); }
+.aggiungi-nota:hover { color: var(--accento); }
 .giorno-scelte { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .giorno.modificato { background: linear-gradient(90deg, var(--accento-tenue), transparent 40%); }
 .giorno.passato { opacity: .55; }
@@ -241,6 +265,23 @@ table.griglia { width: 100%; border-collapse: separate; border-spacing: 0; min-w
 .chip.vuoto { font-weight: 500; }
 .chip .con-nota { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .7; }
 .griglia-vuota { padding: 40px 20px; text-align: center; color: var(--inchiostro-2); line-height: 1.6; }
+.chip .corto { display: none; }
+.griglia td.cella { cursor: default; outline: none; }
+.griglia td.cella:hover .chip, .griglia td.cella:focus-visible .chip { box-shadow: 0 0 0 2px var(--st, var(--linea-forte)); }
+.griglia td.passato .chip, .giorno-testa.passato { opacity: .55; }
+.scheda-piede { padding: 11px 18px; border-top: 1px solid var(--linea); }
+.griglia-box + .scheda-piede { border-radius: 0 0 14px 14px; }
+
+.popup {
+  position: fixed; z-index: 40; width: 250px; padding: 12px 14px; border-radius: 12px; background: var(--pannello); pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(16, 20, 30, .08), 0 12px 32px rgba(16, 20, 30, .18); font-size: 13px; line-height: 1.45; animation: entra .12s ease;
+}
+.popup-testa { display: flex; flex-direction: column; margin-bottom: 8px; }
+.popup-testa span { color: var(--inchiostro-3); font-size: 12px; }
+.popup-stato { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--st, var(--inchiostro-2)); }
+.popup-nota { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--vuoto); white-space: pre-wrap; word-break: break-word; }
+.popup-vuota { margin: 6px 0 0; color: var(--inchiostro-3); font-size: 12.5px; }
+.popup small { display: block; margin-top: 6px; color: var(--inchiostro-3); font-size: 11.5px; }
 
 /* ---------- pannello convocazione ---------- */
 .pannello-conv { position: sticky; top: 76px; max-height: calc(100vh - 96px); display: flex; flex-direction: column; }
@@ -257,6 +298,39 @@ table.griglia { width: 100%; border-collapse: separate; border-spacing: 0; min-w
 .elenco-semplice { margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--inchiostro-2); line-height: 1.7; }
 .azioni-conv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--linea); }
 .azioni-conv .primario { grid-column: 1 / -1; }
+
+/* ---------- richieste (supervisori) ---------- */
+.richieste-sintesi { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.sintesi-richiesta {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-radius: 10px;
+  background: var(--accento-tenue); border: 1px solid #cdd8ff; font-size: 13px;
+}
+.sintesi-richiesta .pallino { background: var(--accento); }
+.sintesi-richiesta .pallino.st-D { background: var(--ok); }
+.sintesi-richiesta > span:nth-child(2) { flex: 1; min-width: 200px; }
+.barra-avanzamento { height: 6px; border-radius: 3px; background: rgba(23, 64, 240, .14); overflow: hidden; width: 120px; }
+.barra-avanzamento span { display: block; height: 100%; background: var(--marchio-gradiente); border-radius: 3px; }
+.richieste-lista { list-style: none; margin: 0; padding: 0; }
+.richiesta-admin { padding: 16px 18px; border-bottom: 1px solid var(--linea); display: flex; flex-direction: column; gap: 10px; }
+.richiesta-admin:last-child { border-bottom: 0; }
+.richiesta-admin.scaduta { opacity: .6; }
+.richiesta-admin-testa { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.richiesta-admin-testa small { display: block; color: var(--inchiostro-3); font-size: 12px; margin-top: 2px; }
+.richiesta-admin .conteggio { font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+.richiesta-admin .barra-avanzamento { width: 100%; }
+.richiesta-admin .nota { margin: 0; }
+.giorni-mancanti { color: var(--inchiostro-3); font-size: 11.5px; }
+.st-D-testo { color: var(--ok); }
+.richiesta-admin-azioni { display: flex; flex-wrap: wrap; gap: 8px; }
+
+dialog.largo { width: min(580px, calc(100vw - 32px)); }
+.periodo-rapido { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.periodo-rapido .bottone { height: 30px; font-size: 12.5px; }
+.due-campi { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.destinatari-testa { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 8px; font-size: 12.5px; color: var(--inchiostro-2); font-weight: 500; }
+.destinatari-testa select { width: auto; height: 30px; font-size: 12.5px; }
+.elenco-conv.destinatari { max-height: 240px; overflow-y: auto; padding-right: 2px; }
+.elenco-semplice small { color: var(--inchiostro-3); }
 
 /* ---------- aggiornamenti ---------- */
 .feed { list-style: none; margin: 0; padding: 0; }
@@ -327,7 +401,43 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
   .pannello-conv { position: static; max-height: none; }
 }
 @media (max-width: 760px) {
+  .solo-desktop { display: none !important; }
   .testata { gap: 12px; padding: 0 16px; }
+  .titolo-pagina > .primario { width: 100%; }
+  .titolo-pagina h1 { font-size: 20px; }
+  .richiesta { flex-wrap: wrap; }
+  .richiesta .bottone { width: 100%; }
+  .azioni-rapide > span { width: 100%; }
+
+  /* griglia compatta: tutta la settimana in larghezza, simboli al posto delle parole */
+  .griglia-box { overflow-x: visible; }
+  table.griglia { min-width: 0; table-layout: fixed; }
+  .griglia th.colonna-op, .griglia td.colonna-op { width: 104px; min-width: 0; }
+  .griglia thead th.colonna-op { padding: 8px 10px; font-size: 11.5px; }
+  .op-cella { padding: 7px 8px 7px 10px; }
+  .op-cella b { font-size: 12.5px; }
+  .op-cella b span { overflow: hidden; text-overflow: ellipsis; }
+  .op-cella small { font-size: 10.5px; }
+  .giorno-testa { padding: 7px 0 6px; gap: 2px; }
+  .giorno-testa b { font-size: 11.5px; line-height: 1.2; display: flex; flex-direction: column; align-items: center; }
+  .giorno-testa b span:first-child { font-weight: 500; color: var(--inchiostro-3); font-size: 10.5px; }
+  .giorno-testa .conti { font-size: 10.5px; }
+  .giorno-testa .conti .st-P, .giorno-testa .conti .st-A { display: none; }
+  .chip { min-width: 0; width: calc(100% - 6px); max-width: 34px; height: 30px; margin: 4px 3px; padding: 0; font-size: 14px; }
+  .chip .lungo { display: none; }
+  .chip .corto { display: inline; }
+  .chip .con-nota { position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; }
+  .scheda-piede { padding: 10px 14px; gap: 6px 12px; font-size: 11.5px; }
+  .scheda-testa { padding: 12px 14px; }
+
+  .tabella td, .tabella th { padding: 10px; }
+  .tabella td.azioni { white-space: normal; }
+  .tabella td.azioni .bottone { width: 100%; margin: 2px 0; }
+  .richiesta-admin-azioni .bottone { flex: 1 1 calc(50% - 8px); }
+  .due-campi { gap: 8px; }
+  dialog form { padding: 20px 18px; }
+  .popup { width: min(270px, calc(100vw - 16px)); }
+  .elenco-conv.destinatari { max-height: 180px; }
   .marchio-logo { height: 30px; }
   .marchio-nome { padding-left: 10px; font-size: 13.5px; }
   .testata .utente { display: none; }
@@ -335,7 +445,12 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
   .giorno { grid-template-columns: 1fr; padding: 14px 16px; }
   .giorno-data { flex-direction: row; align-items: baseline; gap: 8px; }
   .giorno-data .oggi { margin-top: 0; }
-  .stati button { font-size: 12.5px; gap: 5px; }
+  /* sul telefono "Non disponibile" va a capo invece di essere troncato */
+  .stati button { height: 46px; font-size: 13px; line-height: 1.15; white-space: normal; text-align: center; padding: 0 4px; }
+  .stati button .pallino { display: none; }
+  .stati button span:last-child { white-space: normal; overflow: visible; }
+  .barra-invio .stato-invio { font-size: 12px; }
+  .barra-invio button.primario { padding: 0 14px; }
   .barra-invio { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
   .barra-invio button.primario { min-width: 0; }
   .navigatore .settimana { min-width: 0; flex: 1; }

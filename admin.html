@@ -7,7 +7,7 @@
   <title>Supervisori · Disponibilità TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css">
+  <link rel="stylesheet" href="app/stile.css?v=2">
 </head>
 <body>
   <header class="testata con-schede">
@@ -47,15 +47,12 @@
       <div class="titolo-pagina">
         <div>
           <h1>Disponibilità del team</h1>
-          <p>Clicca su un giorno per vedere chi è disponibile e preparare la convocazione.</p>
+          <p><span class="solo-desktop">Passa sopra una casella per leggere la nota; clicca su un giorno per preparare la convocazione.</span>
+            <span class="solo-mobile">Tocca una casella per leggere la nota, tocca un giorno per la convocazione.</span></p>
         </div>
-        <div class="legenda">
-          <span class="st-D"><span class="pallino"></span>Disponibile</span>
-          <span class="st-P"><span class="pallino"></span>Parziale</span>
-          <span class="st-A"><span class="pallino"></span>Non disponibile</span>
-          <span><span class="pallino"></span>Non indicato</span>
-        </div>
+        <button type="button" class="primario" id="btn-richiedi">Richiedi disponibilità</button>
       </div>
+      <div id="richieste-sintesi" class="richieste-sintesi" hidden></div>
       <div class="dashboard" id="dashboard">
         <section class="scheda">
           <div class="scheda-testa">
@@ -76,10 +73,17 @@
               <button type="button" class="icona" id="btn-aggiorna" title="Aggiorna" aria-label="Aggiorna">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <button type="button" class="bottone" id="btn-csv">Esporta CSV</button>
+              <button type="button" class="bottone solo-desktop" id="btn-csv">Esporta CSV</button>
             </div>
           </div>
           <div class="griglia-box" id="griglia"><div class="caricamento"><span></span></div></div>
+          <div class="scheda-piede legenda">
+            <span class="st-D"><span class="pallino"></span>Disponibile</span>
+            <span class="st-P"><span class="pallino"></span>Parziale</span>
+            <span class="st-A"><span class="pallino"></span>Non disponibile</span>
+            <span><span class="pallino"></span>Non indicato</span>
+            <span><span class="pallino-nota"></span>Con nota</span>
+          </div>
         </section>
 
         <aside class="scheda pannello-conv" id="pannello-conv" hidden>
@@ -116,7 +120,18 @@
           <button type="button" class="bottone" id="btn-tutti-letti">Segna tutti come letti</button>
         </div>
       </div>
-      <section class="scheda"><ul class="feed" id="feed"></ul></section>
+      <section class="scheda" id="richieste-box" hidden style="margin-bottom: 18px;">
+        <div class="scheda-testa">
+          <h2>Richieste di disponibilità</h2>
+          <span class="spazio"></span>
+          <button type="button" class="bottone" id="btn-richiedi-2">+ Nuova richiesta</button>
+        </div>
+        <ul class="richieste-lista" id="richieste-lista"></ul>
+      </section>
+      <section class="scheda">
+        <div class="scheda-testa"><h2>Invii degli operatori</h2></div>
+        <ul class="feed" id="feed"></ul>
+      </section>
     </section>
 
     <!-- ===================== OPERATORI ===================== -->
@@ -178,6 +193,50 @@
     </form>
   </dialog>
 
+  <!-- Richiesta di disponibilità agli operatori -->
+  <dialog id="dlg-richiesta" class="largo">
+    <form method="dialog" id="form-richiesta">
+      <h2>Richiedi le disponibilità</h2>
+      <div class="periodo-rapido">
+        <button type="button" class="bottone" data-periodo="0">Questa settimana</button>
+        <button type="button" class="bottone" data-periodo="7">Prossima settimana</button>
+        <button type="button" class="bottone" data-periodo="14">Prossime 2 settimane</button>
+        <button type="button" class="bottone" data-periodo="28">Prossime 4 settimane</button>
+      </div>
+      <div class="due-campi">
+        <label class="campo"><span>Dal</span><input type="date" id="ric-da" required></label>
+        <label class="campo"><span>Al</span><input type="date" id="ric-a" required></label>
+      </div>
+      <label class="campo"><span>Messaggio (facoltativo)</span>
+        <textarea id="ric-messaggio" rows="2" maxlength="500" placeholder="es. Servono 4 operatori camera per il derby di domenica"></textarea></label>
+      <div class="destinatari-testa">
+        <span>A chi</span>
+        <select id="ric-mansione" aria-label="Mansione"><option value="">Tutte le mansioni</option></select>
+      </div>
+      <label class="spunta" style="margin: 0 0 8px;"><input type="checkbox" id="ric-mancanti" checked><span>Solo chi non ha ancora compilato tutto il periodo</span></label>
+      <ul class="elenco-conv destinatari" id="ric-destinatari"></ul>
+      <button type="button" class="link" id="ric-tutti" style="margin-top: 6px;">Seleziona / deseleziona tutti</button>
+      <label class="spunta" style="margin-top: 14px;"><input type="checkbox" id="ric-email" checked><span>Invia anche un'email a ciascuno, con il link per compilare</span></label>
+      <p class="nota" id="ric-periodo"></p>
+      <div class="errore" id="ric-errore" hidden></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" data-chiudi>Annulla</button>
+        <button type="submit" class="primario" id="ric-invia">Invia la richiesta</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-esito">
+    <form method="dialog">
+      <h2>Richiesta inviata</h2>
+      <div class="nota" id="esito-testo"></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" id="esito-whatsapp">Copia messaggio per WhatsApp</button>
+        <button type="submit" class="primario">Fatto</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Codice personale appena creato -->
   <dialog id="dlg-codice">
     <form method="dialog">
@@ -193,9 +252,9 @@
     </form>
   </dialog>
 
-  <script src="app/config.js"></script>
-  <script src="app/demo.js"></script>
-  <script src="app/comune.js"></script>
-  <script src="app/admin.js"></script>
+  <script src="app/config.js?v=2"></script>
+  <script src="app/demo.js?v=2"></script>
+  <script src="app/comune.js?v=2"></script>
+  <script src="app/admin.js?v=2"></script>
 </body>
 </html>

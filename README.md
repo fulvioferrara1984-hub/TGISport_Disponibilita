@@ -3,7 +3,7 @@
 Specchietto delle disponibilità giornaliere dei freelance, per inviare le convocazioni agli eventi in modo mirato.
 
 - **`index.html` – operatori**: ognuno entra con il proprio codice personale, indica giorno per giorno (con vista settimanale) se è *Disponibile*, *Parziale* (con gli orari nella nota) o *Non disponibile*, e preme **Invia ai supervisori**.
-- **`admin.html` – supervisori**: griglia settimanale di tutto il team, filtro per mansione, pannello **Convocazione** per ogni giorno (chi è disponibile, email in Ccn, copia telefoni/elenco, sollecito a chi non ha risposto), scheda **Aggiornamenti** con ogni invio e i giorni cambiati, gestione operatori e codici.
+- **`admin.html` – supervisori**: griglia settimanale di tutto il team (passando sopra una casella, o toccandola sul telefono, si legge la nota), filtro per mansione, pannello **Convocazione** per ogni giorno (chi è disponibile, email in Ccn, copia telefoni/elenco), **Richiedi disponibilità** per un periodo a scelta, scheda **Aggiornamenti** con ogni invio e lo stato delle richieste, gestione operatori e codici.
 
 Il sito è statico (GitHub Pages). I dati stanno in un **Google Sheet** e passano da un **Google Apps Script** che controlla codici e password: nel repository pubblico non c'è nessun dato né password.
 
@@ -42,7 +42,7 @@ window.DO_CONFIG = { API_URL: 'https://script.google.com/macros/s/…/exec' };
 
 "Chiunque" serve perché le pagine possano chiamare lo script senza login Google: ogni richiesta viene comunque rifiutata senza codice o password validi.
 
-> Se modifichi `Codice.gs`: **Gestisci deployment → ✏️ → Versione: Nuova versione**. Così l'URL resta lo stesso.
+> **Aggiornare il backend** (quando cambia `Codice.gs`): incolla il nuovo codice nell'editor di Apps Script, salva, poi **Esegui il deployment → Gestisci deployment → ✏️ → Versione: Nuova versione → Esegui il deployment**. Così l'URL resta lo stesso e `config.js` non va toccato. Se Google chiede nuove autorizzazioni, accettale.
 
 ### 3. GitHub Pages
 
@@ -60,9 +60,20 @@ Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(
 ## Uso quotidiano
 
 - **Operatori**: aprono il link, scelgono lo stato per ogni giorno (scorciatoie *Tutta la settimana* e *Copia settimana precedente*), premono **Invia ai supervisori**. Possono compilare fino a 12 settimane in avanti; i giorni passati non si modificano. Le modifiche non inviate restano salvate sul telefono.
+- **Richiedi disponibilità** (in alto nella griglia): scegli il periodo (scorciatoie per questa settimana, la prossima, le prossime 2 o 4), un messaggio facoltativo e gli operatori. Sono già selezionati quelli a cui mancano giorni nel periodo, e si può filtrare per mansione. Ogni operatore vede la richiesta in cima alla sua pagina, con i giorni richiesti evidenziati, e riceve un'email con il link (se la casella è spuntata). In **Aggiornamenti** c'è l'avanzamento di ogni richiesta, chi manca ancora, *Sollecita chi manca*, il messaggio per WhatsApp e *Chiudi*. Dal pannello Convocazione, *Chiedi a loro le disponibilità…* prepara la richiesta per chi non ha risposto quel giorno.
 - **Supervisori**: la dashboard controlla i nuovi invii ogni 45 secondi (badge su *Aggiornamenti*, avviso a schermo e, se attivate, notifiche del computer). Clic sull'intestazione di un giorno → pannello **Convocazione**: i disponibili e i parziali sono già selezionati; *Scrivi email ai selezionati* apre il programma di posta con tutti in Ccn e un testo da completare.
 - **Esporta CSV** scarica la settimana in vista (si apre con Excel).
 - Il Google Sheet è leggibile in ogni momento; meglio non modificarlo a mano, tranne per correggere un nome o una mansione.
+
+## Velocità
+
+Ogni chiamata passa da Google Apps Script, che di solito risponde in 1–2 secondi ma a volte ne impiega anche 10–30 (dipende da Google, non dal sito). Per questo:
+
+- all'apertura le pagine mostrano subito gli ultimi dati salvati sul dispositivo e intanto chiedono quelli aggiornati;
+- la dashboard carica sei settimane alla volta con una sola chiamata: spostarsi tra le settimane vicine è istantaneo;
+- se Google risponde con una pagina d'errore, la richiesta viene ripetuta da sola (fino a 3 volte) e, se l'attesa supera 6 secondi, compare un avviso.
+
+Se la lentezza diventasse un problema, il passo successivo è spostare i dati su un database dedicato (es. Firebase), con risposte sotto il mezzo secondo.
 
 ## Sicurezza
 

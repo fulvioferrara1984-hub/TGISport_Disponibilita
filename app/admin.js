@@ -1,15 +1,18 @@
-/* Disponibilità Ops — dashboard dei supervisori: griglia settimanale, convocazioni, aggiornamenti, operatori. */
+/* Disponibilità Ops — dashboard dei supervisori: griglia settimanale, convocazioni, richieste, aggiornamenti, operatori. */
 (function (DO) {
   'use strict';
 
   const $ = DO.$;
-  const OGNI_QUANTO = 45000;   // controllo dei nuovi invii (ms)
+  const OGNI_QUANTO = 45000;          // controllo dei nuovi invii (ms)
+  const DATI_FRESCHI = 60000;         // entro questo tempo cambiare settimana non richiama il server
+  const SIMBOLI = { D: '✓', P: '½', A: '✕' };
 
-  let oggi = DO.iso(new Date());
+  let oggi = DO.iso(new Date()), limite = DO.aggiungi(oggi, 83);
   let lun = DO.lunedi(oggi);
-  let operatori = [], disp = {}, feed = [];
+  let operatori = [], disp = {}, feed = [], richieste = [], nonLettiOps = new Set();
+  let caricato = { da: '', a: '', quando: 0 };
   let giornoSel = '', selezionati = new Set();
-  let nonLetti = 0, ultimoVisto = '', timer = null, vista = 'griglia';
+  let ultimoVisto = '', timer = null, vista = 'griglia', ultimaRichiesta = 0;
 
   const visibili = () => {
     const mansione = $('filtro-mansione').value, testo = $('filtro-testo').value.trim().toLowerCase();
@@ -18,11 +21,12 @@
   };
   const valore = (id, d) => (disp[id] && disp[id][d]) || { s: '', n: '' };
   const etichettaGiorno = (d) => { const g = DO.giorno(d); return g.nome + ' ' + g.num + ' ' + g.mese; };
-  const nonLettiPer = () => new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
+  const linkSito = () => new URL('index.html', location.href).href;
 
   // ---------- schede ----------
   function mostra(nome) {
     vista = nome;
+    nascondiPopup();
     document.querySelectorAll('#schede [data-vista]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.vista === nome)));
     ['griglia', 'aggiornamenti', 'operatori', 'impostazioni'].forEach((v) => { $('vista-' + v).hidden = v !== nome; });
     history.replaceState(null, '', nome === 'griglia' ? location.pathname : '#' + nome);
@@ -32,37 +36,76 @@
   }
   $('schede').addEventListener('click', (e) => { const b = e.target.closest('[data-vista]'); if (b) mostra(b.dataset.vista); });
 
-  // ---------- griglia ----------
-  async function caricaGriglia() {
-    $('sett-etichetta').textContent = DO.etichettaSettimana(lun);
+  // ---------- dati ----------
+  // Una sola chiamata porta sei settimane attorno a quella in vista, più operatori, richieste e
+  // stato delle notifiche: cambiare settimana è istantaneo e Google viene interpellato di rado.
+  function applica(r, da, a) {
+    operatori = r.operatori;
+    disp = r.disponibilita;
+    oggi = r.oggi;
+    limite = r.limite || limite;
+    caricato = { da, a, quando: Date.now() };
+    if (r.richieste) richieste = r.richieste;
+    if (r.nonLettiOperatori) nonLettiOps = new Set(r.nonLettiOperatori);
+    impostaNonLetti(r.nonLetti);
+    if (r.ultimo !== undefined && !ultimoVisto) ultimoVisto = r.ultimo || ' ';
+    aggiornaMansioni();
+    disegnaGriglia();
+    disegnaPannello();
+    disegnaSintesiRichieste();
+    if (vista === 'operatori') disegnaOperatori();
+  }
+
+  // Se si cambia settimana mentre una risposta è in viaggio, vale solo l'ultima richiesta.
+  async function carica() {
+    const n = ++ultimaRichiesta;
+    const da = DO.aggiungi(lun, -14), a = DO.aggiungi(lun, 27);
+    $('btn-aggiorna').classList.add('gira');
     try {
-      const r = await DO.chiama('panoramica', { da: lun, a: DO.aggiungi(lun, 6) });
-      operatori = r.operatori;
-      disp = r.disponibilita;
-      oggi = r.oggi;
-      impostaNonLetti(r.nonLetti);
-      aggiornaMansioni();
-      disegnaGriglia();
-    } catch (e) {
-      $('griglia').innerHTML = '<div class="griglia-vuota">' + DO.esc(e.message) + '</div>';
+      const r = await DO.chiama('panoramica', { da, a });
+      if (n !== ultimaRichiesta) return;
+      applica(r, da, a);
+      DO.salvaCopia({ r, da, a });
+    } finally {
+      if (n === ultimaRichiesta) $('btn-aggiorna').classList.remove('gira');
     }
   }
 
+  async function vaiSettimana(nuovo) {
+    lun = nuovo;
+    const dentro = lun >= caricato.da && DO.aggiungi(lun, 6) <= caricato.a;
+    if (dentro) disegnaGriglia();
+    else $('griglia').innerHTML = '<div class="caricamento"><span></span></div>';
+    $('sett-etichetta').textContent = DO.etichettaSettimana(lun);
+    if (dentro && Date.now() - caricato.quando < DATI_FRESCHI) return;
+    try { await carica(); } catch (e) { erroreGriglia(e, dentro); }
+  }
+
+  function erroreGriglia(e, giaVisibile) {
+    if (!DO.sessione()) return;
+    if (giaVisibile) DO.avviso('Non riesco ad aggiornare i dati: ' + e.message, 'errore');
+    else $('griglia').innerHTML = '<div class="griglia-vuota">' + DO.esc(e.message) + '<br><button type="button" class="link" id="riprova">Riprova</button></div>';
+  }
+
+  // ---------- griglia ----------
   function aggiornaMansioni() {
     const mansioni = [...new Set(operatori.map((o) => o.mansione).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
-    const sel = $('filtro-mansione'), attuale = sel.value;
-    sel.innerHTML = '<option value="">Tutte le mansioni</option>' + mansioni.map((m) => '<option>' + DO.esc(m) + '</option>').join('');
-    sel.value = mansioni.includes(attuale) ? attuale : '';
+    ['filtro-mansione', 'ric-mansione'].forEach((id) => {
+      const sel = $(id), attuale = sel.value;
+      sel.innerHTML = '<option value="">Tutte le mansioni</option>' + mansioni.map((m) => '<option>' + DO.esc(m) + '</option>').join('');
+      sel.value = mansioni.includes(attuale) ? attuale : '';
+    });
     $('elenco-mansioni').innerHTML = mansioni.map((m) => '<option value="' + DO.esc(m) + '">').join('');
   }
 
   function disegnaGriglia() {
-    const giorni = DO.settimana(lun), ops = visibili(), nuovi = nonLettiPer();
+    const giorni = DO.settimana(lun), ops = visibili();
     $('sett-etichetta').textContent = DO.etichettaSettimana(lun);
     const risposto = ops.filter((o) => giorni.some((d) => valore(o.id, d).s)).length;
-    $('sett-riepilogo').textContent = ops.length ? risposto + ' su ' + ops.length + ' hanno indicato le disponibilità' : '';
+    $('sett-riepilogo').textContent = ops.length ? risposto + ' su ' + ops.length + ' hanno risposto' : '';
     $('sett-oggi').disabled = lun === DO.lunedi(oggi);
     if (!giorni.includes(giornoSel)) chiudiPannello();
+    nascondiPopup();
 
     if (!operatori.some((o) => o.attivo)) {
       $('griglia').innerHTML = '<div class="griglia-vuota">Non ci sono ancora operatori attivi.<br><button type="button" class="link" data-vai="operatori">Aggiungili dalla scheda Operatori</button></div>';
@@ -73,22 +116,23 @@
     const testa = giorni.map((d) => {
       const g = DO.giorno(d), conti = { D: 0, P: 0, A: 0 };
       ops.forEach((o) => { const s = valore(o.id, d).s; if (s) conti[s]++; });
-      return '<th><button type="button" class="giorno-testa' + (d === oggi ? ' oggi' : '') + '" data-giorno="' + d + '" aria-pressed="' + (d === giornoSel) + '" title="Prepara la convocazione per ' + etichettaGiorno(d) + '">'
-        + '<b>' + g.breve + ' ' + g.num + '</b><span class="conti"><span class="st-D" title="Disponibili">' + conti.D + '</span>'
+      return '<th><button type="button" class="giorno-testa' + (d === oggi ? ' oggi' : '') + (d < oggi ? ' passato' : '') + '" data-giorno="' + d + '" aria-pressed="' + (d === giornoSel) + '" title="Prepara la convocazione per ' + etichettaGiorno(d) + '">'
+        + '<b><span>' + g.breve + '</span> <span>' + g.num + '</span></b><span class="conti"><span class="st-D" title="Disponibili">' + conti.D + '</span>'
         + '<span class="st-P" title="Parziali">' + conti.P + '</span><span class="st-A" title="Non disponibili">' + conti.A + '</span></span></button></th>';
     }).join('');
 
     const corpo = ops.map((o) => {
       const celle = giorni.map((d) => {
         const v = valore(o.id, d);
-        const titolo = DO.nomeStato(v.s) + (v.n ? ' · ' + v.n : '') + (v.t ? '\nAggiornato ' + DO.quando(v.t) : '');
-        const chip = v.s ? '<span class="chip st-' + v.s + '">' + DO.STATI[v.s].breve + (v.n ? '<span class="con-nota"></span>' : '') + '</span>'
-          : '<span class="chip vuoto">' + (v.n ? 'Nota<span class="con-nota"></span>' : '—') + '</span>';
-        return '<td class="' + (d === giornoSel ? 'selezionato' : '') + '" title="' + DO.esc(titolo) + '">' + chip + '</td>';
+        const chip = v.s
+          ? '<span class="chip st-' + v.s + '"><span class="lungo">' + DO.STATI[v.s].breve + '</span><span class="corto">' + SIMBOLI[v.s] + '</span>' + (v.n ? '<span class="con-nota"></span>' : '') + '</span>'
+          : '<span class="chip vuoto"><span class="lungo">' + (v.n ? 'Nota' : '—') + '</span><span class="corto">·</span>' + (v.n ? '<span class="con-nota"></span>' : '') + '</span>';
+        return '<td class="cella' + (d === giornoSel ? ' selezionato' : '') + (d < oggi ? ' passato' : '') + '" data-op="' + o.id + '" data-d="' + d + '" tabindex="0" aria-label="'
+          + DO.esc(o.nome + ', ' + etichettaGiorno(d) + ': ' + DO.nomeStato(v.s) + (v.n ? '. ' + v.n : '')) + '">' + chip + '</td>';
       }).join('');
       const sotto = [o.mansione, o.ultimoInvio ? 'inviato ' + DO.quando(o.ultimoInvio) : 'mai inviato'].filter(Boolean).join(' · ');
-      return '<tr><td class="colonna-op"><div class="op-cella"><b>' + (nuovi.has(o.id) ? '<span class="nuovo" title="Aggiornamento non letto"></span>' : '')
-        + DO.esc(o.nome) + '</b><small>' + DO.esc(sotto) + '</small></div></td>' + celle + '</tr>';
+      return '<tr><td class="colonna-op"><div class="op-cella"><b>' + (nonLettiOps.has(o.id) ? '<span class="nuovo" title="Aggiornamento non letto"></span>' : '')
+        + '<span>' + DO.esc(o.nome) + '</span></b><small>' + DO.esc(sotto) + '</small></div></td>' + celle + '</tr>';
     }).join('');
 
     $('griglia').innerHTML = '<table class="griglia"><thead><tr><th class="colonna-op">Operatore</th>' + testa + '</tr></thead><tbody>' + corpo + '</tbody></table>';
@@ -99,11 +143,12 @@
     if (b) apriPannello(b.dataset.giorno === giornoSel ? '' : b.dataset.giorno);
     const vai = e.target.closest('[data-vai]');
     if (vai) mostra(vai.dataset.vai);
+    if (e.target.id === 'riprova') vaiSettimana(lun);
   });
-  $('sett-prec').addEventListener('click', () => { lun = DO.aggiungi(lun, -7); caricaGriglia(); });
-  $('sett-succ').addEventListener('click', () => { lun = DO.aggiungi(lun, 7); caricaGriglia(); });
-  $('sett-oggi').addEventListener('click', () => { lun = DO.lunedi(oggi); caricaGriglia(); });
-  $('btn-aggiorna').addEventListener('click', caricaGriglia);
+  $('sett-prec').addEventListener('click', () => vaiSettimana(DO.aggiungi(lun, -7)));
+  $('sett-succ').addEventListener('click', () => vaiSettimana(DO.aggiungi(lun, 7)));
+  $('sett-oggi').addEventListener('click', () => vaiSettimana(DO.lunedi(oggi)));
+  $('btn-aggiorna').addEventListener('click', () => carica().catch((e) => erroreGriglia(e, true)));
   $('filtro-mansione').addEventListener('change', () => { disegnaGriglia(); disegnaPannello(); });
   $('filtro-testo').addEventListener('input', () => { disegnaGriglia(); disegnaPannello(); });
 
@@ -123,6 +168,56 @@
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
+
+  // ---------- popup sulle caselle: col mouse al passaggio, sul telefono al tocco ----------
+  const popup = document.createElement('div');
+  popup.className = 'popup';
+  popup.setAttribute('role', 'tooltip');
+  popup.hidden = true;
+  document.body.appendChild(popup);
+  let cellaPopup = null;
+
+  function mostraPopup(td) {
+    const o = operatori.find((x) => x.id === td.dataset.op);
+    if (!o) return;
+    const d = td.dataset.d, v = valore(o.id, d);
+    cellaPopup = td;
+    popup.innerHTML = '<div class="popup-testa"><b>' + DO.esc(o.nome) + '</b><span>' + etichettaGiorno(d) + '</span></div>'
+      + '<div class="popup-stato st-' + v.s + '"><span class="pallino"></span>' + DO.nomeStato(v.s) + '</div>'
+      + (v.n ? '<p class="popup-nota">' + DO.esc(v.n) + '</p>' : v.s ? '<p class="popup-vuota">Nessuna nota</p>' : '')
+      + (v.t ? '<small>Aggiornato ' + DO.quando(v.t) + '</small>' : '')
+      + (o.telefono ? '<small>' + DO.esc(o.telefono) + '</small>' : '');
+    popup.hidden = false;
+    const r = td.getBoundingClientRect(), w = popup.offsetWidth, h = popup.offsetHeight;
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+    const sotto = r.bottom + 8 + h < innerHeight;
+    popup.style.left = left + 'px';
+    popup.style.top = (sotto ? r.bottom + 6 : r.top - h - 6) + 'px';
+    popup.classList.toggle('sopra', !sotto);
+  }
+  function nascondiPopup() {
+    popup.hidden = true;
+    cellaPopup = null;
+  }
+  $('griglia').addEventListener('pointerover', (e) => {
+    const td = e.target.closest('td.cella');
+    if (td && e.pointerType === 'mouse' && td !== cellaPopup) mostraPopup(td);
+  });
+  $('griglia').addEventListener('pointerout', (e) => {
+    if (e.pointerType === 'mouse' && cellaPopup && !cellaPopup.contains(e.relatedTarget)) nascondiPopup();
+  });
+  $('griglia').addEventListener('click', (e) => {
+    const td = e.target.closest('td.cella');
+    if (!td) return;
+    if (td === cellaPopup && e.pointerType !== 'mouse') nascondiPopup(); else mostraPopup(td);
+  });
+  // da tastiera (Tab) il popup segue la casella; al tocco ci pensa il clic
+  $('griglia').addEventListener('focusin', (e) => { if (e.target.matches('td.cella:focus-visible')) mostraPopup(e.target); });
+  document.addEventListener('click', (e) => { if (cellaPopup && !e.target.closest('td.cella')) nascondiPopup(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') nascondiPopup(); });
+  window.addEventListener('scroll', nascondiPopup, { passive: true });
+  $('griglia').addEventListener('scroll', nascondiPopup, { passive: true });
+  window.addEventListener('resize', nascondiPopup);
 
   // ---------- convocazione ----------
   function gruppi() {
@@ -163,9 +258,10 @@
     $('conv-corpo').innerHTML =
       sezione('st-D', 'Disponibili', g.D, g.D.length ? '<ul class="elenco-conv">' + g.D.map(voce).join('') + '</ul>' : '<p class="nota">Nessuno.</p>')
       + (g.P.length ? sezione('st-P', 'Parziali', g.P, '<ul class="elenco-conv">' + g.P.map(voce).join('') + '</ul>') : '')
-      + (g.A.length ? sezione('st-A', 'Non disponibili', g.A, '<ul class="elenco-semplice">' + g.A.map((o) => '<li>' + DO.esc(o.nome) + '</li>').join('') + '</ul>') : '')
+      + (g.A.length ? sezione('st-A', 'Non disponibili', g.A, '<ul class="elenco-semplice">' + g.A.map((o) => '<li>' + DO.esc(o.nome)
+        + (valore(o.id, giornoSel).n ? ' <small>· ' + DO.esc(valore(o.id, giornoSel).n) + '</small>' : '') + '</li>').join('') + '</ul>') : '')
       + (g.vuoti.length ? sezione('', 'Senza risposta', g.vuoti, '<ul class="elenco-semplice">' + g.vuoti.map((o) => '<li>' + DO.esc(o.nome) + '</li>').join('')
-        + '</ul><button type="button" class="link" id="conv-sollecito">Copia le email per un sollecito</button>') : '');
+        + '</ul><button type="button" class="link" id="conv-sollecito">Chiedi a loro le disponibilità…</button>') : '');
     aggiornaAzioniConv();
   }
 
@@ -176,10 +272,7 @@
     aggiornaAzioniConv();
   });
   $('conv-corpo').addEventListener('click', (e) => {
-    if (e.target.id !== 'conv-sollecito') return;
-    const email = gruppi().vuoti.map((o) => o.email).filter(Boolean);
-    if (!email.length) DO.avviso('Nessuna email registrata per chi non ha risposto.');
-    else DO.copia(email.join(', '), email.length + ' email copiate.');
+    if (e.target.id === 'conv-sollecito') apriRichiesta({ da: giornoSel, a: giornoSel, soli: gruppi().vuoti.map((o) => o.id) });
   });
 
   const scelti = () => visibili().filter((o) => selezionati.has(o.id));
@@ -212,9 +305,185 @@
     DO.copia(etichettaGiorno(giornoSel) + '\n' + righe.join('\n'), 'Elenco copiato.');
   });
 
+  // ---------- richieste di disponibilità ----------
+  let anteprima = { da: '', a: '', disp: {} }, soloQuesti = null, timerAnteprima = null;
+
+  function apriRichiesta(opzioni) {
+    const o = opzioni || {};
+    const prossimo = DO.aggiungi(DO.lunedi(oggi), 7);
+    $('ric-da').min = $('ric-a').min = oggi;
+    $('ric-da').max = $('ric-a').max = limite;
+    $('ric-da').value = o.da && o.da >= oggi ? o.da : prossimo;
+    $('ric-a').value = o.a && o.a >= oggi ? o.a : DO.aggiungi(prossimo, 6);
+    $('ric-mansione').value = '';
+    $('ric-mancanti').checked = true;
+    $('ric-messaggio').value = '';
+    $('ric-email').checked = true;
+    $('ric-errore').hidden = true;
+    soloQuesti = o.soli ? new Set(o.soli) : null;
+    $('dlg-richiesta').showModal();
+    caricaAnteprima();
+  }
+  $('btn-richiedi').addEventListener('click', () => apriRichiesta());
+  $('btn-richiedi-2').addEventListener('click', () => apriRichiesta());
+
+  document.querySelectorAll('[data-periodo]').forEach((b) => b.addEventListener('click', () => {
+    const inizio = DO.aggiungi(DO.lunedi(oggi), 7);
+    const giorni = Number(b.dataset.periodo);
+    $('ric-da').value = giorni === 0 ? oggi : inizio;
+    $('ric-a').value = giorni === 0 ? DO.aggiungi(DO.lunedi(oggi), 6) : DO.aggiungi(inizio, giorni - 1);
+    soloQuesti = null;
+    caricaAnteprima();
+  }));
+  ['ric-da', 'ric-a'].forEach((id) => $(id).addEventListener('change', () => {
+    if ($('ric-da').value > $('ric-a').value) $('ric-a').value = $('ric-da').value;
+    soloQuesti = null;
+    clearTimeout(timerAnteprima);
+    timerAnteprima = setTimeout(caricaAnteprima, 300);
+  }));
+  ['ric-mansione', 'ric-mancanti'].forEach((id) => $(id).addEventListener('change', () => { soloQuesti = null; disegnaDestinatari(true); }));
+
+  // giorni del periodo ancora modificabili dagli operatori, e quanti ne mancano a ognuno
+  function giorniRichiesta() {
+    const out = [];
+    for (let d = $('ric-da').value > oggi ? $('ric-da').value : oggi; d && d <= $('ric-a').value && d <= limite; d = DO.aggiungi(d, 1)) out.push(d);
+    return out;
+  }
+  const mancanti = (id, giorni) => giorni.filter((d) => !((anteprima.disp[id] || {})[d] || {}).s).length;
+
+  async function caricaAnteprima() {
+    const da = $('ric-da').value, a = $('ric-a').value;
+    if (!da || !a) return;
+    $('ric-destinatari').innerHTML = '<li class="caricamento"><span></span></li>';
+    // se il periodo è già tra i dati caricati non serve chiamare il server
+    if (da >= caricato.da && a <= caricato.a) {
+      anteprima = { da, a, disp };
+    } else {
+      try {
+        const r = await DO.chiama('panoramica', { da, a });
+        anteprima = { da, a, disp: r.disponibilita };
+      } catch (e) {
+        anteprima = { da, a, disp: {} };
+        DO.avviso('Non riesco a leggere chi ha già risposto: ' + e.message, 'errore');
+      }
+    }
+    if ($('ric-da').value === da && $('ric-a').value === a) disegnaDestinatari(true);
+  }
+
+  function disegnaDestinatari(preseleziona) {
+    const giorni = giorniRichiesta(), mansione = $('ric-mansione').value, soloMancanti = $('ric-mancanti').checked;
+    const ops = operatori.filter((o) => o.attivo && (!mansione || o.mansione === mansione)).sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+    const spuntati = new Set([...$('ric-destinatari').querySelectorAll('input:checked')].map((x) => x.value));
+    $('ric-destinatari').innerHTML = ops.length ? ops.map((o) => {
+      const m = mancanti(o.id, giorni);
+      const si = preseleziona ? (soloQuesti ? soloQuesti.has(o.id) : !soloMancanti || m > 0) : spuntati.has(o.id);
+      return '<li><label><input type="checkbox" value="' + o.id + '"' + (si ? ' checked' : '') + '><span class="chi"><b>' + DO.esc(o.nome) + '</b><small>'
+        + DO.esc(o.mansione || '—') + ' · ' + (m ? (m === giorni.length ? 'nessun giorno compilato' : m + (m === 1 ? ' giorno mancante' : ' giorni mancanti')) : 'già tutto compilato')
+        + (o.email ? '' : ' · senza email') + '</small></span></label></li>';
+    }).join('') : '<li class="nota">Nessun operatore attivo con questa mansione.</li>';
+    aggiornaBottoneRichiesta();
+  }
+  $('ric-destinatari').addEventListener('change', aggiornaBottoneRichiesta);
+  $('ric-tutti').addEventListener('click', () => {
+    const caselle = [...$('ric-destinatari').querySelectorAll('input')];
+    const tutti = caselle.every((x) => x.checked);
+    caselle.forEach((x) => { x.checked = !tutti; });
+    aggiornaBottoneRichiesta();
+  });
+
+  function aggiornaBottoneRichiesta() {
+    const n = $('ric-destinatari').querySelectorAll('input:checked').length;
+    $('ric-invia').disabled = !n;
+    $('ric-invia').textContent = n ? 'Invia la richiesta a ' + n + (n === 1 ? ' operatore' : ' operatori') : 'Scegli gli operatori';
+    $('ric-periodo').textContent = $('ric-da').value && $('ric-a').value ? 'Periodo: ' + DO.periodo($('ric-da').value, $('ric-a').value) : '';
+  }
+
+  function messaggioWhatsApp(da, a, testo) {
+    return 'Ciao! I supervisori TGI Sport chiedono le tue disponibilità ' + DO.periodo(da, a) + '.'
+      + (testo ? '\n' + testo : '') + '\n\nInseriscile qui: ' + linkSito();
+  }
+
+  $('form-richiesta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const destinatari = [...$('ric-destinatari').querySelectorAll('input:checked')].map((x) => x.value);
+    const da = $('ric-da').value, a = $('ric-a').value, messaggio = $('ric-messaggio').value.trim(), email = $('ric-email').checked;
+    $('ric-invia').disabled = true;
+    $('ric-invia').textContent = 'Invio in corso…';
+    $('ric-errore').hidden = true;
+    try {
+      const r = await DO.chiama('creaRichiesta', { da, a, messaggio, destinatari, email, urlSito: linkSito() });
+      $('dlg-richiesta').close();
+      const righe = [];
+      if (email) righe.push(r.email ? 'Email inviata a ' + r.email + (r.email === 1 ? ' operatore.' : ' operatori.') : 'Nessuna email inviata.');
+      if (r.senzaEmail && r.senzaEmail.length) righe.push('Senza email registrata: ' + r.senzaEmail.join(', ') + '.');
+      if (r.nonInviate && r.nonInviate.length) righe.push('Email non partita per: ' + r.nonInviate.join(', ') + ' (controlla l\'indirizzo).');
+      if (r.quotaRestante !== undefined && r.quotaRestante < 20) righe.push('Attenzione: oggi Google permette ancora ' + r.quotaRestante + ' email.');
+      righe.push('La richiesta compare anche sulla pagina di ciascun operatore.');
+      $('esito-testo').innerHTML = righe.map((x) => '<p>' + DO.esc(x) + '</p>').join('');
+      $('esito-whatsapp').onclick = () => DO.copia(messaggioWhatsApp(da, a, messaggio), 'Messaggio copiato: incollalo su WhatsApp.');
+      $('dlg-esito').showModal();
+      caricaFeed(true);
+      carica().catch(() => {});
+    } catch (err) {
+      $('ric-errore').textContent = err.message;
+      $('ric-errore').hidden = false;
+      aggiornaBottoneRichiesta();
+    }
+  });
+
+  function schedaRichiesta(x, compatta) {
+    const tot = x.destinatari.length, fatti = x.destinatari.filter((o) => !o.mancanti).length;
+    const mancano = x.destinatari.filter((o) => o.mancanti);
+    const perc = tot ? Math.round(fatti / tot * 100) : 0;
+    const titolo = 'Disponibilità ' + DO.periodo(x.da, x.a);
+    if (compatta) {
+      return '<div class="sintesi-richiesta"><span class="pallino' + (fatti === tot ? ' st-D' : '') + '"></span><span><b>' + titolo + '</b>: '
+        + fatti + ' su ' + tot + ' hanno risposto</span><div class="barra-avanzamento"><span style="width:' + perc + '%"></span></div>'
+        + '<button type="button" class="link" data-vista-richieste>Dettagli</button></div>';
+    }
+    return '<li class="richiesta-admin' + (x.scaduta ? ' scaduta' : '') + '"><div class="richiesta-admin-testa"><div><b>' + titolo + '</b>'
+      + '<small>Inviata ' + DO.quando(x.creata) + (x.scaduta ? ' · periodo concluso' : '') + '</small></div>'
+      + '<span class="conteggio">' + fatti + '/' + tot + '</span></div>'
+      + '<div class="barra-avanzamento"><span style="width:' + perc + '%"></span></div>'
+      + (x.messaggio ? '<q>' + DO.esc(x.messaggio) + '</q>' : '')
+      + (mancano.length && !x.scaduta ? '<p class="nota"><b>Mancano ancora:</b> ' + mancano.map((o) => DO.esc(o.nome) + ' <span class="giorni-mancanti">(' + o.mancanti + ')</span>').join(', ') + '</p>'
+        : !x.scaduta ? '<p class="nota st-D-testo">Hanno risposto tutti.</p>' : '')
+      + '<div class="richiesta-admin-azioni">'
+      + '<button type="button" class="bottone" data-ric-vedi="' + x.id + '">Vedi nella griglia</button>'
+      + (mancano.length && !x.scaduta ? '<button type="button" class="bottone" data-ric-sollecita="' + x.id + '">Sollecita chi manca</button>' : '')
+      + '<button type="button" class="bottone" data-ric-whatsapp="' + x.id + '">Copia messaggio WhatsApp</button>'
+      + '<button type="button" class="bottone pericolo" data-ric-chiudi="' + x.id + '">Chiudi</button></div></li>';
+  }
+
+  function disegnaSintesiRichieste() {
+    const aperte = richieste.filter((x) => !x.scaduta);
+    $('richieste-sintesi').innerHTML = aperte.map((x) => schedaRichiesta(x, true)).join('');
+    $('richieste-sintesi').hidden = !aperte.length;
+    $('richieste-lista').innerHTML = richieste.map((x) => schedaRichiesta(x, false)).join('');
+    $('richieste-box').hidden = !richieste.length;
+  }
+
+  $('richieste-sintesi').addEventListener('click', (e) => { if (e.target.closest('[data-vista-richieste]')) mostra('aggiornamenti'); });
+  $('richieste-lista').addEventListener('click', async (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const x = richieste.find((y) => y.id === (b.dataset.ricVedi || b.dataset.ricSollecita || b.dataset.ricWhatsapp || b.dataset.ricChiudi));
+    if (!x) return;
+    if (b.dataset.ricVedi) { mostra('griglia'); vaiSettimana(DO.lunedi(x.da > oggi ? x.da : oggi)); }
+    if (b.dataset.ricSollecita) apriRichiesta({ da: x.da, a: x.a, soli: x.destinatari.filter((o) => o.mancanti).map((o) => o.id) });
+    if (b.dataset.ricWhatsapp) DO.copia(messaggioWhatsApp(x.da > oggi ? x.da : oggi, x.a, x.messaggio), 'Messaggio copiato: incollalo su WhatsApp.');
+    if (b.dataset.ricChiudi) {
+      if (!confirm('Chiudere la richiesta? Sparirà dalla pagina degli operatori.')) return;
+      try {
+        await DO.chiama('chiudiRichiesta', { id: x.id });
+        richieste = richieste.filter((y) => y.id !== x.id);
+        disegnaSintesiRichieste();
+      } catch (err) { DO.avviso(err.message, 'errore'); }
+    }
+  });
+
   // ---------- aggiornamenti ----------
   function impostaNonLetti(n) {
-    nonLetti = n;
     $('badge').textContent = n ? String(n) : '';
     document.title = (n ? '(' + n + ') ' : '') + 'Supervisori · Disponibilità TGI Sport';
   }
@@ -222,8 +491,11 @@
   async function caricaFeed(silenzioso) {
     if (!silenzioso && !feed.length) $('feed').innerHTML = '<li class="caricamento"><span></span></li>';
     try {
-      feed = await DO.chiama('aggiornamenti', { limite: 150 });
+      const r = await DO.chiama('aggiornamenti', { limite: 150 });
+      feed = Array.isArray(r) ? r : r.invii;
+      if (r.richieste) { richieste = r.richieste; disegnaSintesiRichieste(); }
       impostaNonLetti(feed.filter((x) => !x.letto).length);
+      nonLettiOps = new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
       disegnaFeed();
     } catch (e) {
       if (!silenzioso) $('feed').innerHTML = '<li class="griglia-vuota">' + DO.esc(e.message) + '</li>';
@@ -251,6 +523,7 @@
     try {
       const r = await DO.chiama('segnaLetti', ids ? { ids } : {});
       feed.forEach((x) => { if (!ids || ids.includes(x.id)) x.letto = true; });
+      nonLettiOps = new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
       impostaNonLetti(r.nonLetti);
       disegnaFeed();
     } catch (e) {
@@ -265,46 +538,40 @@
     if (vedi) {
       const x = feed.find((v) => v.id === vedi.dataset.vedi);
       if (!x.letto) segnaLetti([x.id]);
-      const futuro = x.modifiche.map((m) => m.d).sort()[0];
-      lun = DO.lunedi(futuro || oggi);
       $('filtro-mansione').value = '';
       $('filtro-testo').value = x.nome;
       mostra('griglia');
-      caricaGriglia();
+      vaiSettimana(DO.lunedi(x.modifiche.map((m) => m.d).sort()[0] || oggi));
     }
   });
   $('btn-tutti-letti').addEventListener('click', () => segnaLetti(null));
 
-  // Controllo periodico: se arriva un invio nuovo si aggiornano badge, griglia e feed.
+  // Controllo periodico (chiamata leggera): se arriva un invio nuovo si ricaricano i dati.
   async function controlla() {
     try {
       const s = await DO.chiama('stato');
-      const nuovo = s.ultimo && s.ultimo > ultimoVisto;
       impostaNonLetti(s.nonLetti);
-      if (!nuovo) return;
-      const primo = !ultimoVisto;
+      if (!ultimoVisto) { ultimoVisto = s.ultimo || ' '; return; }
+      if (!s.ultimo || s.ultimo <= ultimoVisto) return;
       const prima = ultimoVisto;
       ultimoVisto = s.ultimo;
-      if (primo) return;
       await caricaFeed(true);
-      const arrivati = feed.filter((x) => x.quando > prima);
-      const nomi = [...new Set(arrivati.map((x) => x.nome))].join(', ');
+      const nomi = [...new Set(feed.filter((x) => x.quando > prima).map((x) => x.nome))].join(', ');
       if (nomi) {
         DO.avviso('Nuovo aggiornamento da ' + nomi + '.', 'ok', 6000);
         if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
           new Notification('Disponibilità aggiornate', { body: nomi + ' ha inviato le disponibilità.', icon: 'app/favicon-180.png' });
         }
       }
-      if (vista === 'griglia') caricaGriglia();
+      await carica();
     } catch (e) { /* si riprova al prossimo giro */ }
   }
 
   function avviaControlli() {
     clearInterval(timer);
-    controlla();
     timer = setInterval(controlla, OGNI_QUANTO);
   }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && DO.sessione()) controlla(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && DO.sessione() && ultimoVisto) controlla(); });
 
   function aggiornaBottoneNotifiche() {
     const b = $('btn-notifiche-desktop');
@@ -325,12 +592,12 @@
       $('tabella-operatori').innerHTML = '<div class="griglia-vuota">Nessun operatore. Crea il primo con <b>+ Nuovo operatore</b>.</div>';
       return;
     }
-    $('tabella-operatori').innerHTML = '<table class="tabella"><thead><tr><th>Operatore</th><th>Contatti</th><th>Stato</th><th>Ultimo invio</th><th></th></tr></thead><tbody>'
+    $('tabella-operatori').innerHTML = '<table class="tabella"><thead><tr><th>Operatore</th><th class="solo-desktop">Contatti</th><th>Stato</th><th class="solo-desktop">Ultimo invio</th><th></th></tr></thead><tbody>'
       + elenco.map((o) => '<tr class="' + (o.attivo ? '' : 'disattivo') + '">'
-        + '<td><b>' + DO.esc(o.nome) + '</b><br><small style="color: var(--inchiostro-3)">' + DO.esc(o.mansione || '—') + '</small></td>'
-        + '<td>' + DO.esc(o.email || '—') + '<br><small style="color: var(--inchiostro-3)">' + DO.esc(o.telefono || '') + '</small></td>'
+        + '<td><b>' + DO.esc(o.nome) + '</b><br><small class="tenue">' + DO.esc(o.mansione || '—') + '</small></td>'
+        + '<td class="solo-desktop">' + DO.esc(o.email || '—') + '<br><small class="tenue">' + DO.esc(o.telefono || '') + '</small></td>'
         + '<td><span class="etichetta' + (o.attivo ? '' : ' spenta') + '">' + (o.attivo ? 'Attivo' : 'Disattivato') + '</span></td>'
-        + '<td>' + (o.ultimoInvio ? DO.quando(o.ultimoInvio) : '<span style="color: var(--inchiostro-3)">mai</span>') + '</td>'
+        + '<td class="solo-desktop">' + (o.ultimoInvio ? DO.quando(o.ultimoInvio) : '<span class="tenue">mai</span>') + '</td>'
         + '<td class="azioni"><button type="button" class="bottone" data-modifica="' + o.id + '">Modifica</button> '
         + '<button type="button" class="bottone" data-codice="' + o.id + '">Nuovo codice</button> '
         + '<button type="button" class="bottone pericolo" data-elimina="' + o.id + '">Elimina</button></td></tr>').join('')
@@ -379,7 +646,7 @@
   });
 
   function mostraCodice(o, codice) {
-    const link = new URL('index.html', location.href).href + '#codice=' + codice;
+    const link = linkSito() + '#codice=' + codice;
     $('cod-nome').textContent = o.nome;
     $('cod-codice').textContent = codice;
     $('cod-link').value = link;
@@ -461,9 +728,18 @@
     $('btn-esci').hidden = false;
     aggiornaBottoneNotifiche();
     const iniziale = location.hash.slice(1);
-    await caricaGriglia();
     mostra(['aggiornamenti', 'operatori', 'impostazioni'].includes(iniziale) ? iniziale : 'griglia');
-    if (vista !== 'aggiornamenti') caricaFeed(true);
+    // si parte dagli ultimi dati visti su questo computer, poi arrivano quelli aggiornati
+    const copia = DO.leggiCopia();
+    const giaVisibile = !!(copia && copia.r && lun >= copia.da && DO.aggiungi(lun, 6) <= copia.a);
+    if (giaVisibile) {
+      applica(copia.r, copia.da, copia.a);
+      caricato.quando = 0;
+      ultimoVisto = '';
+    } else {
+      $('griglia').innerHTML = '<div class="caricamento"><span></span></div>';
+    }
+    try { await carica(); } catch (e) { erroreGriglia(e, giaVisibile); }
     avviaControlli();
   }
 

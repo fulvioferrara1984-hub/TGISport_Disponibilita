@@ -26,6 +26,14 @@
     return { nome: GIORNI[indiceGiorno(s)], breve: GIORNI_BREVI[indiceGiorno(s)], num: d.getDate(), mese: MESI[d.getMonth()], meseBreve: MESI[d.getMonth()].slice(0, 3), anno: d.getFullYear() };
   }
 
+  // "dall'8 al 14 ottobre", "dal 28 ottobre all'11 novembre"
+  function periodo(da, a) {
+    const art = (s, base) => ([1, 8, 11].includes(giorno(s).num) ? base + "ll'" : base + 'l ');
+    const x = giorno(da), y = giorno(a);
+    if (da === a) return 'il ' + x.nome.toLowerCase() + ' ' + x.num + ' ' + x.mese;
+    return art(da, 'da') + x.num + (x.mese === y.mese ? '' : ' ' + x.mese) + ' ' + art(a, 'a') + y.num + ' ' + y.mese;
+  }
+
   function etichettaSettimana(lun) {
     const a = giorno(lun), b = giorno(aggiungi(lun, 6));
     if (a.mese === b.mese) return a.num + ' – ' + b.num + ' ' + b.mese + ' ' + b.anno;
@@ -78,16 +86,22 @@
     sessione = s;
     scrivi(chiaveSessione, s, ricorda);
   }
+  function ricordata() {
+    try { return !!localStorage.getItem(chiaveSessione); } catch (e) { return false; }
+  }
   function aggiornaToken(token) {
-    if (!sessione) return;
-    let ricorda = false;
-    try { ricorda = !!localStorage.getItem(chiaveSessione); } catch (e) { /* niente */ }
-    salvaSessione(Object.assign({}, sessione, { token }), ricorda);
+    if (sessione) salvaSessione(Object.assign({}, sessione, { token }), ricordata());
   }
   function chiudiSessione() {
     sessione = null;
     scrivi(chiaveSessione, null);
+    scrivi(chiaveSessione + '-dati', null);
   }
+
+  // Ultimi dati ricevuti: si mostrano subito all'apertura mentre Google prepara quelli nuovi.
+  // Stanno dove sta la sessione (dispositivo o sola scheda) e si cancellano con Esci.
+  const leggiCopia = () => (sessione && leggi(chiaveSessione + '-dati')) || null;
+  const salvaCopia = (dati) => { if (sessione) scrivi(chiaveSessione + '-dati', dati, ricordata()); };
 
   async function chiama(azione, dati) {
     const richiesta = Object.assign({ azione, token: sessione && sessione.token }, dati || {});
@@ -189,8 +203,8 @@
   }
 
   Object.assign(DO, {
-    $, esc, iniziali, iso, daIso, aggiungi, lunedi, settimana, giorno, etichettaSettimana, quando, indiceGiorno,
-    STATI, nomeStato, leggi, scrivi, avviaSessione, salvaSessione, aggiornaToken, chiudiSessione,
+    $, esc, iniziali, iso, daIso, aggiungi, lunedi, settimana, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
+    STATI, nomeStato, leggi, scrivi, avviaSessione, salvaSessione, aggiornaToken, chiudiSessione, leggiCopia, salvaCopia,
     sessione: () => sessione, chiama, avviso, copia, chiediAccesso, mostraDemo, inDemo: !API_URL,
   });
 })(window.DO = window.DO || {});
