@@ -95,14 +95,27 @@
     if (!API_URL) {
       risposta = await DO.demo.chiama(richiesta);
     } else {
-      let r;
+      // Google a volte risponde lentamente o con una sua pagina d'errore invece del risultato:
+      // si avvisa chi aspetta e si riprova. Ripetere è sicuro: il backend salva solo le differenze.
+      const lento = setTimeout(() => avviso('Il server di Google risponde lentamente, attendi qualche secondo…', '', 8000), 6000);
       try {
-        // text/plain evita la richiesta preliminare CORS, che Apps Script non gestisce
-        r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(richiesta), redirect: 'follow' });
-      } catch (e) {
-        throw new Error('Connessione non riuscita: controlla la rete e riprova.');
+        for (let tentativo = 1; !risposta; tentativo++) {
+          let motivo;
+          try {
+            // text/plain evita la richiesta preliminare CORS, che Apps Script non gestisce
+            const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(richiesta), redirect: 'follow' });
+            const testo = await r.text();
+            try { risposta = JSON.parse(testo); } catch (e) { motivo = 'Il server non ha risposto correttamente (' + r.status + '). Riprova tra poco.'; }
+          } catch (e) {
+            motivo = 'Connessione non riuscita: controlla la rete e riprova.';
+          }
+          if (risposta) break;
+          if (tentativo === 3) throw new Error(motivo);
+          await new Promise((fatto) => setTimeout(fatto, 700 * tentativo));
+        }
+      } finally {
+        clearTimeout(lento);
       }
-      try { risposta = await r.json(); } catch (e) { throw new Error('Il server non ha risposto correttamente (' + r.status + ').'); }
     }
     if (!risposta.ok) {
       // più chiamate possono scadere insieme: si torna all'accesso una volta sola

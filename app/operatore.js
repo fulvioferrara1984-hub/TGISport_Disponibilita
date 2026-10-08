@@ -117,6 +117,8 @@
     const giorni = {};
     DO.settimana(lun).filter(modificabile).forEach((d) => { giorni[d] = valore(d); });
     Object.keys(bozza).forEach((d) => { if (modificabile(d)) giorni[d] = bozza[d]; });
+    // contate qui: se Google perde la prima risposta e l'invio viene ripetuto, il server vede zero differenze
+    const cambiati = Object.keys(bozza).filter(modificabile).length;
     invio = true;
     disegnaBarra();
     try {
@@ -125,7 +127,8 @@
       bozza = {};
       salvaBozza();
       operatore.ultimoInvio = r.inviatoIl;
-      $('conferma-testo').textContent = (r.modifiche ? r.modifiche + (r.modifiche === 1 ? ' giorno aggiornato. ' : ' giorni aggiornati. ') : 'Nessuna modifica: hai confermato le disponibilità. ')
+      const n = Math.max(r.modifiche, cambiati);
+      $('conferma-testo').textContent = (n ? n + (n === 1 ? ' giorno aggiornato. ' : ' giorni aggiornati. ') : 'Nessuna modifica: hai confermato le disponibilità. ')
         + 'I supervisori hanno ricevuto la notifica.';
       $('conferma').hidden = false;
       window.scrollTo({ top: 0, behavior: 'smooth' });
