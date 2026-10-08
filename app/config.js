@@ -14,7 +14,7 @@ window.DO_CONFIG = {
   // email dei supervisori: le stesse di firebase/firestore.rules (aggiungerne una va fatto in entrambi i posti)
   SUPERVISORI: ['fferrara@tgisport.com', 'spedatella@tgisport.com', 'fgennaro@tgisport.com', 'ssolera@tgisport.com'],
   // app web di Google Apps Script che spedisce le email (backend/Codice.gs)
-  EMAIL_URL: 'https://script.google.com/macros/s/AKfycbzG8Niw0btd24rbKsCsqFbPSdFi3HafWXd2BJKs_VRqD-CAxEGGEfvjiJJV8C5ksjq4AA/exec',
+  EMAIL_URL: 'https://script.google.com/macros/s/AKfycbxs_SZqLk8OiIkxqxgXOkK7MVrNMDEBHRTXeSszl-4UiwUYG2lsVupwlUcwP4fsPyM-/exec',
   // solo per le prove in locale con l'emulatore di Firebase
   EMULATORI: false,
 };
