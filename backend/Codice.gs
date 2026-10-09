@@ -655,3 +655,91 @@ function notificaRispostaEvento(r) {
   MailApp.sendEmail({ to: imp.emailSupervisori, name: CONFIG.MITTENTE, subject: testo.subject, htmlBody: testo.htmlBody });
   return { inviata: true };
 }
+
+// ---------------------------------------------------------------- backup settimanale in Excel
+// Ogni venerdì (attivatore inviaBackup) lo script legge gli eventi della stagione e manda ai supervisori un .xlsx
+// nel formato del file della stagione, con in più le colonne che servono al ripristino (ID, stato, tipo…).
+
+// La stagione sportiva parte il 1° agosto
+function stagioneDa(oggi) {
+  const anno = Number(String(oggi).slice(0, 4)), mese = Number(String(oggi).slice(5, 7));
+  return (mese >= 8 ? anno : anno - 1) + '-08-01';
+}
+// giorni dal 30/12/1899, come conta Excel
+function giornoExcel(iso) {
+  return Math.round(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 864e5) + 25569;
+}
+
+const STATI_BACKUP = { 'da-assegnare': 'Da assegnare', assegnato: 'Da inviare', convocato: 'In attesa di risposta', confermato: 'Confermato', rifiutato: 'Rifiutato', annullato: 'Annullato' };
+const RUOLI_BACKUP = { OP: 'Remote OP', SUP: 'Remote Support', TL: 'Remote TL' };
+const COMPENSI_BACKUP = { diurno: 'Diurno', notturno: 'Notturno', maggiorato: 'Maggiorato', dimezzato: 'Dimezzato' };
+const TARIFFE_INIZIALI = { 'P.IVA': { diurno: 140, notturno: 210, maggiorato: 210 }, Coop: { diurno: 175, notturno: 262.5, maggiorato: 262.5 } };
+
+// Righe dei quattro fogli. Le date sono { data: 'aaaa-mm-gg' } (diventano date di Excel), il resto testo o numeri.
+function righeBackup(d, adesso) {
+  const oggi = Utilities.formatDate(adesso, 'Europe/Rome', 'yyyy-MM-dd');
+  const inizio = Number(stagioneDa(oggi).slice(0, 4));
+  const titolo = 'Backup eventi · Disponibilità Ops TGI Sport · ' + giornoLungo(oggi) + ' alle ' + Utilities.formatDate(adesso, 'Europe/Rome', 'HH:mm')
+    + ' · stagione ' + inizio + '/' + String(inizio + 1).slice(2);
+  const lista = (x) => (Array.isArray(x) ? x : []);
+  const t = (v) => (v == null ? '' : String(v));
+  const perId = {};
+  lista(d.operatori).forEach((o) => { perId[o.id] = o; });
+  const nome = (id) => (perId[id] ? t(perId[id].nome) : '');
+  const ritrovo = (e) => t(e.convocazione || e.convocazioneCalcolata);
+
+  const eventi = lista(d.eventi).slice().sort((a, b) => t(a.data).localeCompare(t(b.data)) || ritrovo(a).localeCompare(ritrovo(b)));
+  const convocazioni = [[titolo], ['Competizione', 'Round', 'Sport', 'Data', 'Partita / turno', 'Orario evento', 'Ritrovo', 'Operatore', 'Fine turno', 'Conferma',
+    'Note', 'Stato', 'Gettone maggiorato', 'Da sostituire', 'Tipo', 'ID evento', 'Ritrovo scritto a mano', 'Fine scritta a mano']]
+    .concat(eventi.map((e) => {
+      const turno = eTurno(e), nomeTurno = turno ? TURNI_REMOTI[e.tipo] : '';
+      return [turno ? nomeTurno : t(e.competizione), turno ? '' : t(e.round), turno ? '' : t(e.sport), { data: t(e.data) }, turno ? nomeTurno : t(e.titolo),
+        turno ? '' : t(e.orario), ritrovo(e), nome(e.operatoreId), t(e.fine || e.fineCalcolata), e.stato === 'confermato' ? 'SI' : '', t(e.note),
+        STATI_BACKUP[e.stato] || t(e.stato), e.gettone === 'maggiorato' ? 'SI' : '', e.daSostituire ? 'SI' : '', turno ? nomeTurno : 'Partita', t(e.id),
+        t(e.convocazione), t(e.fine)];
+    }));
+
+  const statiOnsite = { aperta: 'Aperta', chiusa: 'Chiusa', annullata: 'Annullata' };
+  const onsite = [['Luogo', 'Sport', 'Titolo', 'Dal', 'Al', 'Giorno', 'Attività', 'Partita', 'Posti TL', 'Posti OP', 'On-site TL', 'On-site OP', 'Stato', 'Compenso']];
+  lista(d.onsite).slice().sort((a, b) => t(a.da).localeCompare(t(b.da))).forEach((x) => {
+    const posti = x.posti || {}, compensi = d.compensi || {};
+    lista(x.giorni).forEach((g) => onsite.push([t(x.luogo), t(x.sport), t(x.titolo), { data: t(x.da) }, { data: t(x.a) }, { data: t(g.data) }, t(g.attivita), t(g.partita),
+      Number(posti.TL || 0), Number(posti.OP || 0), lista(x.accettatiTL).map(nome).join(', '), lista(x.accettatiOP).map(nome).join(', '),
+      statiOnsite[x.stato] || t(x.stato), Number(compensi[x.id] || 0)]));
+  });
+
+  const ops = lista(d.operatori).slice().sort((a, b) => t(a.nome).localeCompare(t(b.nome), 'it'));
+  const operatori = [['Nome', 'Mansione', 'Ruolo', 'Contratto', 'Email', 'Telefono', 'On-site', 'Attivo']]
+    .concat(ops.map((o) => [t(o.nome), t(o.mansione), RUOLI_BACKUP[o.ruolo] || 'Remote OP', t(o.contratto), t(o.email), t(o.telefono), t(o.onsite), o.attivo === false ? 'NO' : 'SI']));
+
+  // Impostazioni: stesse colonne del file della stagione (A/B voci, D/E operatori, G sport, I competizioni) più compenso, ore e colore
+  const r = d.regole || {};
+  const tariffa = (contratto, tipo) => {
+    const v = ((r.tariffe || {})[contratto] || {})[tipo];
+    return typeof v === 'number' ? v : TARIFFE_INIZIALI[contratto][tipo];
+  };
+  const voci = [];
+  ['P.IVA', 'Coop'].forEach((c) => ['diurno', 'notturno', 'maggiorato'].forEach((tipo) => voci.push(['Netto ' + c + ' ' + tipo, tariffa(c, tipo)])));
+  voci.push(['Tariffa on-site (€ al giorno)', typeof r.tariffaOnsite === 'number' ? r.tariffaOnsite : 150]);
+  voci.push(['Notturno dalle', t(r.notteDa || '22:00')], ['Notturno alle', t(r.notteA || '06:00')]);
+  const ore = (v, generale) => (typeof v === 'number' && isFinite(v) ? v : generale);
+  const anticipo = ore(r.anticipoOre, 4), dopo = ore(r.fineOre, 2);
+  const salvate = lista(r.competizioni);
+  const durataTL = typeof r.durataSupervisioneOre === 'number' && r.durataSupervisioneOre >= 0.5 && r.durataSupervisioneOre <= 16 ? r.durataSupervisioneOre : 6;
+  const mansioni = ['Remote TL', 'Remote Support'].map((n) => {
+    const s = salvate.find((c) => c.nome === n) || {};
+    return [n, COMPENSI_BACKUP[s.compenso] || 'Diurno', 0, ore(s.dopo, n === 'Remote TL' ? durataTL : 6) || (n === 'Remote TL' ? durataTL : 6), t(s.colore)];
+  });
+  const competizioni = mansioni.concat(salvate.filter((c) => ['Remote TL', 'Remote Support'].indexOf(c.nome) < 0).map((c) => [t(c.nome),
+    COMPENSI_BACKUP[c.compenso] || (c.uefa ? 'Dimezzato' : 'Diurno'), ore(c.prima, anticipo), ore(c.dopo, dopo), t(c.colore)]));
+  const sport = lista(r.sport);
+  const n = Math.max(voci.length, ops.length, sport.length, competizioni.length);
+  const impostazioni = [['Voce', 'Valore', '', 'Operatore', 'Contratto', '', 'Sport', '', 'Competizione / mansione', 'Compenso', 'Ore prima', 'Ore dopo', 'Colore']];
+  for (let i = 0; i < n; i++) {
+    const v = voci[i] || ['', ''], o = ops[i], c = competizioni[i] || ['', '', '', '', ''];
+    impostazioni.push([v[0], v[1], '', o ? t(o.nome) : '', o ? t(o.contratto) : '', '', t(sport[i] || ''), ''].concat(c));
+  }
+
+  return { titolo, convocazioni, onsite, operatori, impostazioni,
+    conteggi: { eventi: eventi.length, annullati: eventi.filter((e) => e.stato === 'annullato').length, deployment: lista(d.onsite).length } };
+}
