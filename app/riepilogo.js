@@ -74,6 +74,7 @@
     const ons = righeOnsite(p), totOn = sommaOnsite(ons);
     const futuri = A.eventi.filter((e) => e.data >= DO.oggi() && e.data <= p.a && e.stato === 'da-assegnare').length;
     const senzaContratto = [...new Set(lista.filter((r) => r.g.senzaContratto).map((r) => r.op.nome))];
+    const onsiteSenzaContratto = [...new Set(ons.filter((r) => !r.op.contratto).map((r) => r.op.nome))];
 
     // per operatore
     const ops = A.operatori.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'it'))
@@ -99,7 +100,7 @@
           + '<td>' + eur(piva) + '</td><td>' + eur(coop) + '</td><td><b>' + eur(piva + coop) + '</b></td></tr>';
       }).join('')
       + (ons.length ? '<tr><td><b>On-site</b> <span class="tag">giorni-persona</span></td><td><b>' + num(totOn.giorni) + '</b></td><td></td><td></td><td></td>'
-        + '<td>' + eur(onPiva) + '</td><td>' + eur(onCoop) + '</td><td><b>' + eur(onPiva + onCoop) + '</b></td></tr>' : '')
+        + '<td>' + eur(onPiva) + '</td><td>' + eur(onCoop) + '</td><td><b>' + eur(totOn.euro) + '</b></td></tr>' : '')
       + '</tbody><tfoot><tr><td>Totale</td><td>' + (tot.n + totOn.giorni) + '</td><td>' + tot.sup + '</td><td></td><td></td>'
       + '<td>' + R.euro(lista.filter((r) => r.op.contratto === 'P.IVA').reduce((s, r) => s + r.g.importo, 0) + onPiva) + '</td><td>' + R.euro(lista.filter((r) => r.op.contratto === 'Coop').reduce((s, r) => s + r.g.importo, 0) + onCoop) + '</td><td>' + R.euro(tot.euro + totOn.euro) + '</td></tr></tfoot></table>';
 
@@ -134,6 +135,8 @@
       + '<div><span>Netto totale</span><b>' + R.euro(tot.euro + totOn.euro) + '</b></div>'
       + '<div><span>Ancora da assegnare</span><b>' + futuri + '</b></div></div>'
       + (senzaContratto.length ? '<p class="errore">Contratto non indicato per ' + senzaContratto.map(DO.esc).join(', ') + ': i loro eventi non hanno compenso. Indicalo nella scheda Operatori.</p>' : '')
+      + (onsiteSenzaContratto.length ? '<p class="errore">Contratto non indicato per ' + onsiteSenzaContratto.map(DO.esc).join(', ')
+        + ': il loro compenso on-site è nel totale ma non nelle colonne P.IVA e Coop. Indicalo nella scheda Operatori.</p>' : '')
       + '<section class="scheda"><div class="scheda-testa"><h2>Per operatore</h2></div><div class="tabella-box">' + tabOp + '</div></section>'
       + '<section class="scheda"><div class="scheda-testa"><h2>Per competizione</h2></div><div class="tabella-box">' + tabComp + '</div></section>'
       + tabMese + tabIncrocio;

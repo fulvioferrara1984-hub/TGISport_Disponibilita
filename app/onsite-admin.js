@@ -21,7 +21,7 @@
   // ---------- richiesta ----------
   function dateScelte() {
     const da = $('ons-da').value, a = $('ons-a').value;
-    return da && a && a >= da ? O.giorniDa(da, a).slice(0, 31).filter((d) => !tolti.has(d)) : [];
+    return da && a && a >= da ? O.giorniDa(da, a).filter((d) => !tolti.has(d)) : [];
   }
 
   function righeAttuali() {
@@ -42,6 +42,12 @@
   // proponi = true dopo un cambio di date: attività ricalcolate; altrimenti resta quanto scritto
   function disegnaGiorni(proponi) {
     const prima = righeAttuali(), giorni = dateScelte(), proposte = O.attivitaProposte(giorni.length);
+    if (giorni.length > 31) {
+      $('ons-giorni').innerHTML = '<li class="nota testo-errore">Al massimo 31 giorni: accorcia il periodo (' + giorni.length + ' giorni scelti).</li>';
+      aggiornaCompenso();
+      disegnaDestinatari(false);
+      return;
+    }
     $('ons-giorni').innerHTML = giorni.map((d, i) => {
       const v = !proponi && prima[d] ? prima[d] : { attivita: proposte[i], altro: false, partita: (prima[d] || {}).partita || '' };
       const scelta = v.altro ? ALTRO : v.attivita;
@@ -95,6 +101,7 @@
     $('ons-da').min = $('ons-a').min = domani;
     $('ons-da').value = domani;
     $('ons-a').value = DO.aggiungi(domani, 3);
+    $('ons-a').max = DO.aggiungi(domani, 30);
     $('ons-tl').value = 1;
     $('ons-op').value = 1;
     $('ons-sport-elenco').innerHTML = (A.regole.sport || []).map((s) => '<option value="' + DO.esc(s) + '">').join('');
@@ -120,6 +127,7 @@
   $('ev-onsite').addEventListener('click', apriRichiesta);
   $('ons-da').addEventListener('change', () => {
     if (!$('ons-a').value || $('ons-a').value < $('ons-da').value) $('ons-a').value = $('ons-da').value;
+    $('ons-a').max = $('ons-da').value ? DO.aggiungi($('ons-da').value, 30) : '';
     tolti = new Set();
     disegnaGiorni(true);
   });
@@ -253,6 +261,13 @@
       : '<li class="nota">Tutti gli operatori abilitati hanno già ricevuto la richiesta.</li>';
     $('onsm-email').checked = true;
     $('onss-modifica').hidden = false;
+  });
+
+  // la scheda è un form di dialogo: Invio in un campo della modifica la chiuderebbe perdendo le modifiche
+  $('onss-modifica').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.target.tagName === 'TEXTAREA' || e.target.type === 'checkbox') return;
+    e.preventDefault();
+    $('onsm-salva').click();
   });
 
   $('onsm-salva').addEventListener('click', () => {
