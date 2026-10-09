@@ -34,6 +34,8 @@
   };
 
   const ore = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+  // solo i quattro tipi (un valore come «toString» non conta)
+  const tipoValido = (t) => Object.prototype.hasOwnProperty.call(TIPI, t);
   // Remote TL e Remote Support: righe fisse in cima a «Competizioni e sport», da cui i turni prendono colore,
   // compenso e durata (ore dopo il ritrovo); «ore prima» per loro vale sempre 0
   const RIGHE_MANSIONE = ['Remote TL', 'Remote Support'];
@@ -53,11 +55,11 @@
     const mansioni = RIGHE_MANSIONE.map((nome) => {
       const s = salvate.find((c) => c.nome === nome) || {};
       const predefinita = nome === 'Remote TL' ? durataValida(x.durataSupervisioneOre) || 6 : 6;
-      const compenso = TIPI[s.compenso] ? s.compenso : 'diurno';
+      const compenso = tipoValido(s.compenso) ? s.compenso : 'diurno';
       return { nome, mansione: true, sport: '', prima: 0, dopo: durataValida(s.dopo) || predefinita, compenso, colore: coloreValido(s.colore), uefa: compenso === 'dimezzato' };
     });
     x.competizioni = mansioni.concat(salvate.filter((c) => !RIGHE_MANSIONE.includes(c.nome)).map(({ uefa, mansione, ...c }) => {
-      const compenso = TIPI[c.compenso] ? c.compenso : uefa && c.compenso === undefined ? 'dimezzato' : 'diurno';
+      const compenso = tipoValido(c.compenso) ? c.compenso : uefa && c.compenso === undefined ? 'dimezzato' : 'diurno';
       const prima = ore(c.prima), dopo = ore(c.dopo);
       return Object.assign({}, c, { prima: prima === null ? anticipo : prima, dopo: dopo === null ? dopoGenerale : dopo, colore: coloreValido(c.colore), compenso, uefa: compenso === 'dimezzato' });
     }));
@@ -167,7 +169,7 @@
   const conta = (e) => !!e.operatoreId && e.stato !== 'annullato';
 
   // Gettone di un evento: il maggiorato deciso dal supervisore vale su tutto;
-  // poi le competizioni UEFA (metà del diurno); poi notturno o diurno secondo l'orario di convocazione.
+  // poi il tipo della competizione (o della mansione per i turni remoti).
   function gettone(e, operatore, regole) {
     const r = complete(regole);
     const t = r.tariffe[operatore && operatore.contratto] || null;
@@ -181,7 +183,6 @@
     return { tipo, etichetta: TIPI[tipo], importo: Math.round(importo * 100) / 100, senzaContratto: !t };
   }
 
-  // sempre col separatore delle migliaia (in italiano di norma manca sotto 10.000)
   // Modifica di un evento: orari da salvare e se la convocazione già inviata va rimandata.
   // Conta solo ciò che vede l'operatore (data, orario della partita, ritrovo, fine) calcolato prima e
   // dopo la modifica con le stesse regole: una nota non tocca gli orari salvati all'invio.
@@ -241,6 +242,7 @@
     return { convocazioni, presenze };
   }
 
+  // importo in euro, sempre col separatore delle migliaia (in italiano di norma manca sotto 10.000)
   const euro = (n) => (Math.round(n * 100) / 100).toLocaleString('it-IT', { style: 'currency', currency: 'EUR', useGrouping: 'always' });
 
   // stagione sportiva: da agosto a luglio

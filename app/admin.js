@@ -109,8 +109,8 @@
   // Avanzamento di ogni richiesta: chi ha già compilato tutti i giorni ancora modificabili.
   function statoRichieste(elenco) {
     return elenco.filter((x) => x.a >= DO.aggiungi(oggi, -7)).map((x) => {
-      const giorni = [];
-      for (let d = x.da > oggi ? x.da : oggi; d <= x.a && d <= limite; d = DO.aggiungi(d, 1)) giorni.push(d);
+      // gli stessi giorni che conta la pagina operatori (fuori dalla finestra di blocco)
+      const giorni = DO.giorniDaCompilare(x.da, x.a, oggi, limite, operativo.giorniBlocco);
       const destinatari = (x.destinatari || []).map((id) => operatori.find((o) => o.id === id)).filter(Boolean)
         .map((o) => ({ id: o.id, nome: o.nome, mancanti: giorni.filter((d) => !valore(o.id, d).s).length }));
       return { id: x.id, creata: x.creata, da: x.da, a: x.a, messaggio: x.messaggio || '', scaduta: x.a < oggi, destinatari };

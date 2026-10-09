@@ -333,3 +333,23 @@ test('riga dell\'ultimo backup', () => {
   assert.equal(s({ backupAttivo: false, backupProgrammato: true, ultimoBackup: { quando: '2026-10-16T16:04:00.000Z', errore: 'Nessun indirizzo dei supervisori.' } }),
     'Ultimo backup non riuscito: Nessun indirizzo dei supervisori.');
 });
+
+test('compenso con un nome di Object.prototype vale Diurno', () => {
+  const r = R.complete({ competizioni: [{ nome: 'Strana', compenso: 'toString' }, { nome: 'Remote TL', mansione: true, compenso: 'constructor' }] });
+  assert.equal(r.competizioni.find((c) => c.nome === 'Strana').compenso, 'diurno');
+  assert.equal(r.competizioni.find((c) => c.nome === 'Remote TL').compenso, 'diurno');
+});
+
+test('compensi: Dimezzato di giorno, Notturno di notte, Maggiorato di notte', () => {
+  const r = R.complete({ competizioni: [{ nome: 'Coppa D', compenso: 'dimezzato', prima: 4, dopo: 2 }, { nome: 'Coppa N', compenso: 'notturno', prima: 4, dopo: 2 },
+    { nome: 'Coppa M', compenso: 'maggiorato', prima: 4, dopo: 2 }] });
+  const g = (comp, orario) => { const x = R.gettone({ competizione: comp, orario }, { contratto: 'P.IVA' }, r); return [x.tipo, x.importo]; };
+  assert.deepEqual(g('Coppa D', '15:00'), ['dimezzato', 70]);
+  assert.deepEqual(g('Coppa N', '02:00'), ['notturno', 210]);
+  assert.deepEqual(g('Coppa M', '02:00'), ['maggiorato', 210]);
+});
+
+test('calendario: assegnato e da sostituire', () => {
+  assert.equal(R.statoCalendario({ operatoreId: 'a', stato: 'assegnato', daSostituire: true, data: '2026-10-30' }, '2026-10-09', 3), 'arancione');
+  assert.equal(R.statoCalendario({ operatoreId: 'a', stato: 'assegnato', daSostituire: true, data: '2026-10-10' }, '2026-10-09', 3), 'rosso');
+});

@@ -44,7 +44,8 @@
   }
   function controllaVisualizzatore(email, elenco, supervisori) {
     const e = normalizzaEmail(email);
-    if (!EMAIL.test(e)) return { errore: 'Scrivi un\'email valida.' };
+    // niente «/»: l'email è anche l'id del documento in Firestore
+    if (!EMAIL.test(e) || e.includes('/')) return { errore: 'Scrivi un\'email valida.' };
     if ((supervisori || []).map(normalizzaEmail).includes(e)) return { errore: 'È già un supervisore.' };
     if ((elenco || []).map(normalizzaEmail).includes(e)) return { errore: 'È già nell\'elenco.' };
     return { email: e };
@@ -52,6 +53,12 @@
   const invitoVisualizzatore = (email, link) => mailto(email, 'TGI Sport · accesso alla dashboard in sola visualizzazione',
     'Ciao, puoi consultare la dashboard di TGI Sport (Convocazioni, Riepilogo, Operatori) qui:\n' + link
     + '\n\nAl primo accesso premi "Crea account" con questa email (' + email + '), conferma l\'indirizzo con il link che ricevi e poi entra con la tua password.');
+
+  // testo per chi non può più rinunciare da sé (N = giorni di blocco)
+  const testoBlocco = (n) => (Number(n) === 0 ? 'È il giorno dell\'evento' : Number(n) === 1 ? 'Manca 1 giorno o meno' : 'Mancano ' + n + ' giorni o meno')
+    + ': per rinunciare chiama il supervisore.';
+  // numero di reperibilità: vuoto oppure cifre con i soliti separatori (almeno 6 cifre)
+  const telefonoValido = (t) => { const s = String(t || '').trim(); return !s || (/^[0-9+\-/.() ]+$/.test(s) && (s.match(/\d/g) || []).length >= 6); };
 
   // il calendario si apre sul mese di oggi se la settimana mostrata contiene oggi (a inizio mese il martedì è ancora nel mese prima)
   const giornoDiRiferimento = (inizio, oggiIso) => (oggiIso >= inizio && oggiIso <= aggiungi(inizio, 6) ? oggiIso : inizio);
@@ -73,6 +80,12 @@
   const giorniA = (data, oggiIso) => Math.round((daIso(data) - daIso(oggiIso)) / 864e5);
   // Finestra di blocco: mancano N giorni o meno (N = 3: evento lunedì → bloccato da venerdì)
   const bloccato = (data, oggiIso, giorniBlocco) => giorniA(data, oggiIso) <= giorniBlocco;
+  // giorni di una richiesta che l'operatore può ancora compilare: da oggi al limite, fuori dalla finestra di blocco
+  function giorniDaCompilare(da, a, oggiIso, limiteIso, giorniBlocco) {
+    const out = [];
+    for (let d = da > oggiIso ? da : oggiIso; d <= a && d <= limiteIso; d = aggiungi(d, 1)) if (!bloccato(d, oggiIso, giorniBlocco)) out.push(d);
+    return out;
+  }
   const OPERATIVO_PREDEFINITO = Object.freeze({ telefono: '', giorniBlocco: 3 });
   const NON_PIU_RINUNCIABILE = 'Non è più possibile rinunciare da qui: chiama il supervisore.';
 
@@ -281,5 +294,6 @@
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
     versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno, tipoEvento, normalizzaEmail, tipoAccesso, controllaVisualizzatore, invitoVisualizzatore,
+    testoBlocco, telefonoValido, giorniDaCompilare,
   });
 })(window.DO = window.DO || {});

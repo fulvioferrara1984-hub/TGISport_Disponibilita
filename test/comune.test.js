@@ -137,3 +137,33 @@ test('invito in sola visualizzazione', () => {
   ['TGI Sport · accesso alla dashboard in sola visualizzazione', 'Convocazioni, Riepilogo, Operatori', 'https://x.github.io/sito/admin.html',
     '"Crea account" con questa email (mario.rossi@tgisport.com)', 'entra con la tua password'].forEach((x) => assert.ok(testo.includes(x), x));
 });
+
+// ---------------------------------------------------------------- piccoli miglioramenti
+test('testo del blocco', () => {
+  assert.equal(DO.testoBlocco(0), 'È il giorno dell\'evento: per rinunciare chiama il supervisore.');
+  assert.equal(DO.testoBlocco(1), 'Manca 1 giorno o meno: per rinunciare chiama il supervisore.');
+  assert.equal(DO.testoBlocco(3), 'Mancano 3 giorni o meno: per rinunciare chiama il supervisore.');
+});
+
+test('giorni da compilare in una richiesta: come la pagina operatori, senza i giorni bloccati', () => {
+  // oggi venerdì 9, blocco 3: bloccati fino a lunedì 12 compreso
+  assert.deepEqual(DO.giorniDaCompilare('2026-10-08', '2026-10-15', '2026-10-09', '2026-12-31', 3), ['2026-10-13', '2026-10-14', '2026-10-15']);
+  assert.deepEqual(DO.giorniDaCompilare('2026-10-10', '2026-10-12', '2026-10-09', '2026-12-31', 3), []);
+  assert.deepEqual(DO.giorniDaCompilare('2026-12-30', '2027-01-03', '2026-10-09', '2026-12-31', 3), ['2026-12-30', '2026-12-31']);
+});
+
+test('numero di reperibilità valido', () => {
+  ['', '+39 333 000 0000', '02/1234567', '(06) 123-4567'].forEach((t) => assert.equal(DO.telefonoValido(t), true, t));
+  ['ciao', '123', '+39 333 abc', '<script>'].forEach((t) => assert.equal(DO.telefonoValido(t), false, t));
+});
+
+test('email con la barra non è valida', () => {
+  assert.deepEqual(DO.controllaVisualizzatore('mario/rossi@x.it', [], []), { errore: 'Scrivi un\'email valida.' });
+});
+
+test('martedì della settimana col cambio d\'ora di marzo', () => {
+  // domenica 29 marzo 2026 si passa all'ora legale: la settimana resta da martedì 24 a lunedì 30
+  ['2026-03-24', '2026-03-28', '2026-03-29', '2026-03-30'].forEach((d) => assert.equal(DO.martedi(d), '2026-03-24', d));
+  assert.equal(DO.martedi('2026-03-31'), '2026-03-31');
+});
+
