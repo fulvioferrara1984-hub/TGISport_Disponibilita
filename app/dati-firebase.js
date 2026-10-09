@@ -13,6 +13,8 @@
   let ruolo = '', alloScadere = null;
   let F = null, app = null, auth = null, db = null, cachePersistente = false;
   let operatoreCorrente = null, secondaria = null;
+  let accessoSola = false;   // dashboard di un collega in sola visualizzazione
+  const NO_ACCESSO = 'Questa email non ha accesso alla dashboard: chiedi a un supervisore.';
 
   function configura(r, scaduta) {
     ruolo = r;
@@ -108,7 +110,8 @@
     const u = auth.currentUser;
     if (!u) return null;
     if (ruolo === 'admin') {
-      if (eSupervisore(u.email) && u.emailVerified) return { admin: true };
+      const accesso = await accessoDashboard(u);
+      if (accesso) return accesso;
       await F.signOut(auth);
       return null;
     }
@@ -163,9 +166,27 @@
   // un messaggio che non è un errore (es. "controlla la posta"): la scheda di accesso lo mostra in blu
   const informa = (testo) => Object.assign(new Error(testo), { info: true });
 
+  // l'accesso si decide dopo l'ingresso (supervisori nel codice, colleghi nell'elenco): qui solo il formato
   function controllaEmail(email) {
-    if (!eSupervisore(email)) throw new Error('Questa email non è tra quelle dei supervisori.');
-    return normalizzaEmail(email);
+    const e = normalizzaEmail(email);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw new Error('Scrivi un\'email valida.');
+    return e;
+  }
+
+  // Supervisore, collega in sola visualizzazione (visualizzatori/{email}) o nessun accesso
+  async function accessoDashboard(u) {
+    const email = normalizzaEmail(u.email);
+    let inElenco = false;
+    if (u.emailVerified && !eSupervisore(email)) {
+      try {
+        inElenco = (await F.getDoc(F.doc(db, 'visualizzatori', email))).exists();
+      } catch (e) {
+        if (e.code !== 'permission-denied') throw traduci(e);
+      }
+    }
+    const tipo = DO.tipoAccesso({ email, verificata: u.emailVerified, supervisori: DO.CONFIG.SUPERVISORI, inElenco });
+    accessoSola = tipo === 'sola';
+    return tipo === 'supervisore' ? { admin: true } : tipo === 'sola' ? { admin: true, sola: true, email } : null;
   }
 
   // Si entra solo dopo aver confermato l'indirizzo: nessuno può spacciarsi per un supervisore
@@ -185,8 +206,10 @@
       throw informa('Prima di entrare conferma il tuo indirizzo: ti abbiamo mandato un\'email con il link (guarda anche nello spam), poi entra di nuovo.');
     }
     await auth.currentUser.getIdToken(true);
+    const accesso = await accessoDashboard(auth.currentUser);
+    if (!accesso) { await F.signOut(auth); throw new Error(NO_ACCESSO); }
     DO.ricorda(ricorda);
-    return { admin: true };
+    return accesso;
   }
 
   async function creaSupervisore(email, password) {
@@ -212,6 +235,7 @@
 
   async function esci() {
     await avvia();
+    accessoSola = false;
     await F.signOut(auth).catch(() => {});
     // la copia dei dati sul computer se ne va con l'uscita
     if (cachePersistente) {
@@ -282,7 +306,9 @@
   // ---------- supervisori ----------
   // Ascolto in tempo reale: alla prima lettura arrivano tutti i dati, poi solo ciò che cambia.
   function ascolta(cb) {
-    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null, operativo: null, onsite: null, compensiOnsite: null, richiesteEvento: null };
+    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null, operativo: null, onsite: null, compensiOnsite: null, richiesteEvento: null, visualizzatori: null };
+    // un collega in sola visualizzazione non legge Aggiornamenti, richieste per periodo e l'elenco dei colleghi
+    if (accessoSola) Object.assign(stato, { invii: [], richieste: [], visualizzatori: [] });
     // eventi e richieste per evento arrivati dal server (non solo dalla copia sul computer): solo allora la dashboard le allinea
     // (anche le regole: ritrovo e fine della copia per gli operatori si calcolano da lì)
     const dalServer = { eventi: false, richiesteEvento: false, regole: false };
@@ -291,14 +317,15 @@
     let fermo = false;
     const errore = (e) => {
       if (fermo) return;
-      if (e.code === 'permission-denied') negato(e, 'Sessione scaduta: accedi di nuovo.').catch(() => {});
+      if (e.code === 'permission-denied') negato(e, accessoSola ? NO_ACCESSO : 'Sessione scaduta: accedi di nuovo.').catch(() => {});
       else DO.avviso('Aggiornamento in tempo reale interrotto: ' + traduci(e).message, 'errore');
     };
     // Eventi e regole sono arrivati dopo: se le regole di Firestore non sono ancora aggiornate
     // il resto della dashboard funziona lo stesso, con un avviso invece di far uscire.
     const erroreNuovo = (chiave, vuoto, messaggio = 'Convocazioni non disponibili: pubblica le nuove regole di Firestore (vedi README).') => (e) => {
       if (fermo) return;
-      if (e.code !== 'permission-denied') { errore(e); return; }
+      // per un collega una lettura negata vuol dire accesso tolto: esce
+      if (e.code !== 'permission-denied' || accessoSola) { errore(e); return; }
       stato[chiave] = vuoto;
       pronto();
       if (!avvisati.has(messaggio)) { avvisati.add(messaggio); DO.avviso(messaggio, 'errore', 12000); }
@@ -316,14 +343,20 @@
         stato.disponibilita = m;
         pronto();
       }, errore),
-      F.onSnapshot(F.query(F.collection(db, 'invii'), F.orderBy('quando', 'desc'), F.limit(60)), (s) => {
-        stato.invii = s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
-        pronto();
-      }, errore),
-      F.onSnapshot(F.query(F.collection(db, 'richieste'), F.where('attiva', '==', true)), (s) => {
-        stato.richieste = s.docs.map((d) => Object.assign({ id: d.id }, d.data())).sort((a, b) => (a.creata < b.creata ? 1 : -1));
-        pronto();
-      }, errore),
+      ...(accessoSola ? [] : [
+        F.onSnapshot(F.query(F.collection(db, 'invii'), F.orderBy('quando', 'desc'), F.limit(60)), (s) => {
+          stato.invii = s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+          pronto();
+        }, errore),
+        F.onSnapshot(F.query(F.collection(db, 'richieste'), F.where('attiva', '==', true)), (s) => {
+          stato.richieste = s.docs.map((d) => Object.assign({ id: d.id }, d.data())).sort((a, b) => (a.creata < b.creata ? 1 : -1));
+          pronto();
+        }, errore),
+        F.onSnapshot(F.collection(db, 'visualizzatori'), (s) => {
+          stato.visualizzatori = s.docs.map((d) => d.data()).sort((a, b) => String(a.email).localeCompare(String(b.email)));
+          pronto();
+        }, erroreNuovo('visualizzatori', [], 'Accessi in sola visualizzazione non disponibili: pubblica le nuove regole di Firestore (vedi README).')),
+      ]),
       // eventi e turni della stagione in corso (da agosto): calendario e riepilogo senza altre letture
       F.onSnapshot(F.query(F.collection(db, 'eventi'), F.where('data', '>=', DO.regole.stagione(DO.oggi()).da)), { includeMetadataChanges: true }, (s) => {
         if (stato.eventi !== null && DO.soloMetadati(s, dalServer.eventi)) return;
@@ -815,6 +848,28 @@
     if (risposta === 'si') email('notificaRispostaEvento', { id }).catch((e) => console.warn('Email ai supervisori non inviata:', e.message));
   }
 
+  // ---------- accessi in sola visualizzazione (solo supervisori) ----------
+  async function scriviElenco(lavoro) {
+    try { return await lavoro(); } catch (e) {
+      // regole non ancora pubblicate (le impostazioni si leggono ancora) oppure sessione davvero scaduta
+      if (e && e.code === 'permission-denied' && await F.getDoc(F.doc(db, 'impostazioni', 'regole')).then(() => true, () => false)) throw new Error(SENZA_REGOLE_EVENTO);
+      return negato(e, 'Sessione scaduta: accedi di nuovo.');
+    }
+  }
+
+  async function aggiungiVisualizzatore(email) {
+    const r = DO.controllaVisualizzatore(email, [], DO.CONFIG.SUPERVISORI);
+    if (r.errore) throw new Error(r.errore);
+    const rif = F.doc(db, 'visualizzatori', r.email);
+    await scriviElenco(async () => {
+      if ((await F.getDoc(rif)).exists()) throw new Error('È già nell\'elenco.');
+      await F.setDoc(rif, { email: r.email, aggiunto: new Date().toISOString(), da: normalizzaEmail(auth.currentUser.email) });
+    });
+    return r.email;
+  }
+
+  const togliVisualizzatore = (email) => scriviElenco(() => F.deleteDoc(F.doc(db, 'visualizzatori', normalizzaEmail(email))));
+
   const leggiImpostazioni = () => email('leggiImpostazioni');
   const salvaImpostazioni = (x) => email('salvaImpostazioni', x);
 
@@ -840,5 +895,6 @@
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
+    aggiungiVisualizzatore, togliVisualizzatore,
   };
 })(window.DO = window.DO || {});

@@ -46,14 +46,14 @@
     eventi.push({ id: 'evc1', tipo: 'partita', competizione: 'Champions League', round: 'League Phase', sport: 'Calcio', data: DO.aggiungi(lun, 2), titolo: 'Feyenoord-Como',
       orario: '18:45', convocazione: '', convocazioneCalcolata: '14:45', operatoreId: 'op-demo2', stato: 'confermato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
     return { operatori, disponibilita, invii, richieste: [], eventi, regole: null, operativo: null, password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true },
-      onsite: [], onsiteRiservato: {}, richiesteEvento: [] };
+      onsite: [], onsiteRiservato: {}, richiesteEvento: [], visualizzatori: COLLEGHI_DEMO() };
   }
 
   let dati = null, ruolo = '', alloScadere = null, utenteDemo = null;
   const ascoltatori = new Set();
 
   function carica() {
-    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.eventi) { dati = Object.assign({ onsite: [], onsiteRiservato: {}, richiesteEvento: [] }, d); return; } } catch (e) { /* si riparte */ }
+    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.eventi) { dati = Object.assign({ onsite: [], onsiteRiservato: {}, richiesteEvento: [], visualizzatori: COLLEGHI_DEMO() }, d); return; } } catch (e) { /* si riparte */ }
     dati = iniziali();
   }
   function salva() {
@@ -79,7 +79,12 @@
   async function utente() {
     const s = DO.leggi(chiaveSessione());
     if (!s) return null;
-    if (ruolo === 'admin') return { admin: true };
+    if (ruolo === 'admin') {
+      if (!s.sola) return { admin: true };
+      carica();
+      if (!inElenco(s.email)) { DO.scrivi(chiaveSessione(), null); return null; }
+      return { admin: true, sola: true, email: s.email };
+    }
     const op = dati.operatori.find((o) => o.id === s.id && o.attivo);
     if (!op) { DO.scrivi(chiaveSessione(), null); return null; }
     utenteDemo = op;
@@ -101,9 +106,14 @@
   async function accediSupervisore(email, password, ricorda) {
     await pausa(150);
     if (password !== dati.password) throw new Error('Email o password errata.');
-    DO.scrivi(chiaveSessione(), { admin: true }, ricorda);
+    carica();
+    // nella demo un'email qualsiasi entra da supervisore; quelle dell'elenco in sola visualizzazione
+    const e = DO.normalizzaEmail(email);
+    const sola = DO.tipoAccesso({ email: e, verificata: true, supervisori: SUPERVISORI(), inElenco: inElenco(e) }) === 'sola';
+    const accesso = sola ? { admin: true, sola: true, email: e } : { admin: true };
+    DO.scrivi(chiaveSessione(), accesso, ricorda);
     DO.ricorda(ricorda);
-    return { admin: true };
+    return accesso;
   }
 
   async function esci() { DO.scrivi(chiaveSessione(), null); }
@@ -146,12 +156,24 @@
   }
 
   function ascolta(cb) {
-    const invia = () => cb({
+    const invia = () => {
+      const sola = solaLettura();
+      // collega tolto dall'elenco mentre è collegato: esce come in Firebase
+      if (sola && !inElenco(DO.leggi(chiaveSessione()).email)) {
+        DO.scrivi(chiaveSessione(), null);
+        if (alloScadere) alloScadere(NO_ACCESSO);
+        return;
+      }
+      inviaStato(sola);
+    };
+    const inviaStato = (sola) => cb({
       sincronizzato: true,
       operatori: dati.operatori.map(pubblico),
       disponibilita: JSON.parse(JSON.stringify(dati.disponibilita)),
-      invii: dati.invii.slice(-60).reverse(),
-      richieste: dati.richieste.filter((x) => x.attiva).slice().reverse(),
+      // un collega in sola visualizzazione non legge Aggiornamenti, richieste per periodo e l'elenco dei colleghi
+      invii: sola ? [] : dati.invii.slice(-60).reverse(),
+      richieste: sola ? [] : dati.richieste.filter((x) => x.attiva).slice().reverse(),
+      visualizzatori: sola ? [] : copia(dati.visualizzatori).sort((a, b) => a.email.localeCompare(b.email)),
       eventi: JSON.parse(JSON.stringify(dati.eventi)),
       regole: DO.regole.complete(dati.regole),
       operativo: Object.assign({}, DO.OPERATIVO_PREDEFINITO, dati.operativo || {}),
@@ -413,6 +435,32 @@
     salva();
   }
 
+  // ---------- accessi in sola visualizzazione ----------
+  const NO_ACCESSO = 'Questa email non ha accesso alla dashboard: chiedi a un supervisore.';
+  function COLLEGHI_DEMO() { return [{ email: 'collega@esempio.it', aggiunto: new Date().toISOString(), da: 'demo' }]; }
+  const SUPERVISORI = () => (DO.CONFIG && DO.CONFIG.SUPERVISORI) || [];
+  const inElenco = (email) => (dati.visualizzatori || []).some((v) => v.email === DO.normalizzaEmail(email));
+  const solaLettura = () => { const s = DO.leggi(chiaveSessione()); return !!(s && s.sola); };
+  // come le regole di Firestore: l'elenco lo cambiano solo i supervisori
+  const soloSupervisori = () => { if (solaLettura()) throw new Error('Operazione non consentita.'); };
+
+  async function aggiungiVisualizzatore(email) {
+    await pausa(100);
+    soloSupervisori();
+    const r = DO.controllaVisualizzatore(email, dati.visualizzatori.map((v) => v.email), SUPERVISORI());
+    if (r.errore) throw new Error(r.errore);
+    dati.visualizzatori.push({ email: r.email, aggiunto: new Date().toISOString(), da: 'demo' });
+    salva();
+    return r.email;
+  }
+
+  async function togliVisualizzatore(email) {
+    await pausa(100);
+    soloSupervisori();
+    dati.visualizzatori = dati.visualizzatori.filter((v) => v.email !== DO.normalizzaEmail(email));
+    salva();
+  }
+
   async function cambiaPassword(attuale, nuova) {
     if (attuale !== dati.password) throw new Error('La password attuale non è corretta.');
     if (String(nuova).length < 8) throw new Error('La nuova password deve avere almeno 8 caratteri.');
@@ -428,6 +476,7 @@
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
+    aggiungiVisualizzatore, togliVisualizzatore,
     azzera: () => { try { localStorage.removeItem(CHIAVE); } catch (e) { /* niente */ } },
   };
 })(window.DO = window.DO || {});

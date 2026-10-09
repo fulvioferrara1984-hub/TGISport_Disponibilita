@@ -18,6 +18,15 @@ service cloud.firestore {
           'ssolera@tgisport.com'
         ];
     }
+    // Colleghi in sola visualizzazione: email confermata e presente in visualizzatori/{email} (lo gestiscono i supervisori).
+    // Leggono solo ciò che serve a Convocazioni, Riepilogo e Operatori; non scrivono nulla.
+    function visualizzatore() {
+      return request.auth != null && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/visualizzatori/$(request.auth.token.email));
+    }
+    function lettore() {
+      return supervisore() || visualizzatore();
+    }
     function abbinamento() {
       return /databases/$(database)/documents/utenti/$(request.auth.uid);
     }
@@ -93,7 +102,7 @@ service cloud.firestore {
     }
 
     match /operatori/{id} {
-      allow read: if supervisore() || operatoreAttivo(id);
+      allow read: if lettore() || operatoreAttivo(id);
       allow create, delete: if supervisore();
       // l'operatore può aggiornare solo la data del suo ultimo invio
       allow update: if supervisore()
@@ -101,7 +110,7 @@ service cloud.firestore {
     }
 
     match /disponibilita/{id} {
-      allow read: if supervisore() || operatoreAttivo(id);
+      allow read: if lettore() || operatoreAttivo(id);
       allow create, update: if (supervisore() || operatoreAttivo(id))
         && request.resource.data.keys().hasOnly(['giorni']) && request.resource.data.giorni is map;
       allow delete: if supervisore();
@@ -127,7 +136,7 @@ service cloud.firestore {
     // e può soltanto confermarle o rifiutarle. Rifiutare si può solo una convocazione in attesa
     // e fuori dalla finestra di blocco; dopo, si telefona al supervisore.
     match /eventi/{evento} {
-      allow read: if supervisore()
+      allow read: if lettore()
         || (operatore() && resource.data.operatoreId == mioOperatore() && resource.data.inviata == true);
       allow create, delete: if supervisore();
       allow update: if supervisore()
@@ -142,25 +151,35 @@ service cloud.firestore {
     // Tariffe, competizioni e regole: solo i supervisori (gli operatori non vedono i compensi).
     // "operativo" (telefono di reperibilità e giorni di blocco) lo leggono anche gli operatori attivi.
     match /onsite/{id} {
-      allow read: if supervisore() || (operatore() && mioOperatore() in resource.data.destinatari);
+      allow read: if lettore() || (operatore() && mioOperatore() in resource.data.destinatari);
       allow create, delete: if supervisore();
       allow update: if supervisore() || accettaOnsite() || nonPossoOnsite();
     }
 
     // compenso del deployment: solo i supervisori
     match /onsiteRiservato/{id} {
-      allow read, write: if supervisore();
+      allow read: if lettore();
+      allow write: if supervisore();
     }
 
     // l'operatore vede solo le richieste mandate a lui (le letture filtrano per destinatari)
     match /richiesteEvento/{id} {
-      allow read: if supervisore() || (operatore() && mioOperatore() in resource.data.destinatari);
+      allow read: if lettore() || (operatore() && mioOperatore() in resource.data.destinatari);
       allow create, delete: if supervisore();
       allow update: if supervisore() || rispostaEvento();
     }
 
+    // elenco dei colleghi in sola visualizzazione: id = email in minuscolo
+    match /visualizzatori/{email} {
+      allow read: if supervisore() || (request.auth != null && request.auth.token.email == email);
+      allow create, update: if supervisore() && request.resource.data.keys().hasOnly(['email', 'aggiunto', 'da'])
+        && request.resource.data.email == email;
+      allow delete: if supervisore();
+    }
+
     match /impostazioni/{documento} {
-      allow read: if supervisore() || (documento == 'operativo' && operatore());
+      allow read: if supervisore() || (documento == 'operativo' && operatore())
+        || (visualizzatore() && documento in ['regole', 'operativo']);
       allow write: if supervisore();
     }
   }

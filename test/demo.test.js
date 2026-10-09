@@ -349,3 +349,39 @@ test('risposta a un vecchio turno di supervisione: in Aggiornamenti si chiama Re
   const voce = (await statoDemo()).invii.find((x) => x.tipo === 'convocazione' && x.evento.id === e.id);
   assert.deepEqual([voce.evento.titolo, voce.evento.tipo], ['Remote TL', 'supervisione']);
 });
+
+// ---------------------------------------------------------------- accessi in sola visualizzazione
+test('sola visualizzazione: elenco dei colleghi', async () => {
+  comeSupervisore();
+  assert.equal(await D.aggiungiVisualizzatore(' Mario.Rossi@TGIsport.com '), 'mario.rossi@tgisport.com');
+  await assert.rejects(D.aggiungiVisualizzatore('mario.rossi@tgisport.com'), /È già nell'elenco\./);
+  await assert.rejects(D.aggiungiVisualizzatore('mario'), /Scrivi un'email valida\./);
+  let s = await statoDemo();
+  const v = s.visualizzatori.find((x) => x.email === 'mario.rossi@tgisport.com');
+  assert.ok(v && v.aggiunto && 'da' in v);
+  await D.togliVisualizzatore('mario.rossi@tgisport.com');
+  s = await statoDemo();
+  assert.ok(!s.visualizzatori.some((x) => x.email === 'mario.rossi@tgisport.com'));
+  assert.ok(s.visualizzatori.some((x) => x.email === 'collega@esempio.it'));
+});
+
+test('sola visualizzazione: accesso del collega', async () => {
+  comeSupervisore();
+  assert.deepEqual(await D.accediSupervisore('Collega@Esempio.it', 'demo', false), { admin: true, sola: true, email: 'collega@esempio.it' });
+  assert.deepEqual(await D.utente(), { admin: true, sola: true, email: 'collega@esempio.it' });
+  const s = await statoDemo();
+  assert.deepEqual([s.invii, s.richieste, s.visualizzatori], [[], [], []]);
+  assert.ok(s.eventi.length && s.operatori.length);
+  await assert.rejects(D.aggiungiVisualizzatore('altro@x.it'), /Operazione non consentita\./);
+  // un supervisore lo toglie: l'accesso non vale più
+  const sessione = DO.leggi('do-demo-sessione-admin');
+  DO.scrivi('do-demo-sessione-admin', { admin: true });
+  await D.togliVisualizzatore('collega@esempio.it');
+  DO.scrivi('do-demo-sessione-admin', sessione);
+  assert.equal(await D.utente(), null);
+  // rimesso per le altre prove; un'email qualsiasi entra da supervisore come sempre nella demo
+  DO.scrivi('do-demo-sessione-admin', { admin: true });
+  await D.aggiungiVisualizzatore('collega@esempio.it');
+  assert.deepEqual(await D.accediSupervisore('chiunque@x.it', 'demo', false), { admin: true });
+  assert.ok((await statoDemo()).visualizzatori.some((x) => x.email === 'collega@esempio.it'));
+});
