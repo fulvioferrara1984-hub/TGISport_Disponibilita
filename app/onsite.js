@@ -99,6 +99,18 @@
     return lista(d.giorni).map((g) => g.data).filter((x) => giorni[x]).sort();
   }
 
+  // colore fisso dell'on-site nelle Convocazioni (fuori dalla tavolozza delle competizioni)
+  const COLORE = '#5b34c9';
+
+  // colore di stato nel calendario mensile: posti tutti presi, in parte, nessuno (rosso a ridosso, arancione prima)
+  function statoCalendarioOnsite(d, oggi, giorniBlocco) {
+    if (d.stato === 'annullata') return '';
+    const liberi = postiLiberi(d);
+    if (!liberi.TL && !liberi.OP) return 'verde';
+    if (RUOLI.some((r) => accettati(d, r).length)) return 'blu';
+    return DO.bloccato(d.da, oggi, giorniBlocco) ? 'rosso' : 'arancione';
+  }
+
   // Cosa vede l'operatore della richiesta (le stesse condizioni delle regole di Firestore)
   function statoPerOperatore(d, op, oggi) {
     if (ruoloAccettato(d, op.id)) return d.stato === 'annullata' ? 'annullato' : 'accettato';
@@ -176,5 +188,6 @@
   DO.onsite = {
     ATTIVITA, MESSAGGI, attivitaProposte, giorniDa, normalizza, compensoProposto, compensoValido, modifiche, postiLiberi, etichettaPosti,
     ruoloAccettato, giorniOnsite, conflittiRemoti, conflittiOnsite, statoPerOperatore, quoteMese, periodoBreve,
+    COLORE, statoCalendarioOnsite,
   };
 })(window.DO = window.DO || {});

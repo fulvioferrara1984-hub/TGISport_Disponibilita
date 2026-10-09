@@ -157,3 +157,13 @@ test('conflitti con altri deployment on-site già accettati', () => {
   assert.deepEqual(O.conflittiOnsite(primo, [primo, secondo], 'a'), []);          // il deployment stesso non conta
   assert.deepEqual(O.conflittiOnsite(secondo, [primo, secondo], 'b'), []);
 });
+
+test('stato dell\'on-site nel calendario', () => {
+  const s = (campi) => O.statoCalendarioOnsite(dep(Object.assign({ posti: { TL: 1, OP: 1 } }, campi)), OGGI, 3);
+  assert.equal(s({ accettatiTL: ['a'], accettatiOP: ['b'] }), 'verde');
+  assert.equal(s({ accettatiTL: ['a'] }), 'blu');
+  assert.equal(s({ da: '2026-10-12' }), 'rosso');
+  assert.equal(s({ da: '2026-10-20' }), 'arancione');
+  assert.equal(s({ stato: 'annullata', accettatiTL: ['a'] }), '');
+  assert.equal(O.COLORE, '#5b34c9');
+});

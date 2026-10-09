@@ -191,3 +191,30 @@ test('esportazione mensile con on-site', () => {
   assert.equal(annullato.convocazioni.length, 1);
   assert.equal(annullato.presenze.length, 1);
 });
+
+test('colore delle competizioni', () => {
+  const r = R.complete({ competizioni: [{ nome: 'Serie A', colore: '#FF0000' }, { nome: 'Ligue 1', colore: 'rosso' }, { nome: 'Liga' }] });
+  assert.equal(r.competizioni[0].colore, '#ff0000');
+  assert.equal(r.competizioni[1].colore, '');
+  assert.equal(r.competizioni[2].colore, '');
+  assert.equal(R.coloreCompetizione('Serie A', r), '#ff0000');
+  const auto = R.coloreCompetizione('Ligue 1', r);
+  assert.ok(R.PALETTE.includes(auto));
+  assert.equal(R.coloreCompetizione('Ligue 1', r), auto);
+  assert.ok(R.PALETTE.includes(R.coloreCompetizione('Coppa sconosciuta', r)));
+  assert.equal(R.coloreCompetizione('', r), '#94a3b8');
+  assert.equal(R.PALETTE.length, 12);
+});
+
+test('stato degli eventi nel calendario', () => {
+  const s = (campi) => R.statoCalendario(Object.assign({ data: '2026-10-20', operatoreId: 'a', stato: 'confermato' }, campi), '2026-10-09', 3);
+  assert.equal(s({}), 'verde');
+  assert.equal(s({ daSostituire: true, data: '2026-10-10' }), 'rosso');
+  assert.equal(s({ stato: 'assegnato' }), 'blu');
+  assert.equal(s({ stato: 'convocato' }), 'blu');
+  assert.equal(s({ stato: 'da-assegnare', operatoreId: '', data: '2026-10-12' }), 'rosso');
+  assert.equal(s({ stato: 'da-assegnare', operatoreId: '', data: '2026-10-13' }), 'arancione');
+  assert.equal(s({ stato: 'rifiutato' }), 'arancione');
+  assert.equal(s({ stato: 'annullato' }), '');
+  assert.equal(s({ stato: 'da-assegnare', operatoreId: '', data: '2026-10-01' }), 'rosso');
+});

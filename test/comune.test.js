@@ -41,3 +41,25 @@ test('tasti della convocazione secondo stato e finestra di blocco (spec §2)', (
   assert.deepEqual(az('rifiutato', true), { azioni: [], spiegazione: false });
   assert.deepEqual(az('annullato', false), { azioni: [], spiegazione: false });
 });
+
+test('inizio settimana martedì (scheda Convocazioni)', () => {
+  assert.equal(DO.martedi('2026-10-12'), '2026-10-06');   // lunedì → martedì prima
+  assert.equal(DO.martedi('2026-10-13'), '2026-10-13');   // martedì → sé stesso
+  assert.equal(DO.martedi('2026-10-11'), '2026-10-06');   // domenica
+  assert.equal(DO.martedi('2027-01-04'), '2026-12-29');   // a cavallo d'anno
+  assert.equal(DO.martedi('2026-10-26'), '2026-10-20');   // dopo il cambio d'ora
+});
+
+test('griglia del mese: settimane da lunedì a domenica', () => {
+  const ottobre = DO.grigliaMese('2026-10');
+  assert.equal(ottobre.length, 5);
+  assert.ok(ottobre.every((s) => s.length === 7));
+  assert.deepEqual(ottobre[0][0], { data: '2026-09-28', delMese: false });
+  assert.deepEqual(ottobre[0][3], { data: '2026-10-01', delMese: true });
+  assert.deepEqual(ottobre[4][6], { data: '2026-11-01', delMese: false });
+  const marzo = DO.grigliaMese('2026-03');
+  assert.deepEqual([marzo.length, marzo[0][0].data, marzo[5][6].data], [6, '2026-02-23', '2026-04-05']);
+  const febbraio = DO.grigliaMese('2027-02');
+  assert.deepEqual([febbraio.length, febbraio[0][0].data, febbraio[3][6].data], [4, '2027-02-01', '2027-02-28']);
+  assert.ok(febbraio.flat().every((g) => g.delMese));
+});

@@ -17,6 +17,16 @@
   const aggiungi = (s, n) => { const d = daIso(s); d.setDate(d.getDate() + n); return iso(d); };
   const lunedi = (s) => aggiungi(s, -((daIso(s).getDay() + 6) % 7));
   const settimana = (lun) => Array.from({ length: 7 }, (_, i) => aggiungi(lun, i));
+  // scheda Convocazioni: la settimana parte di martedì, così una giornata di campionato (venerdì–lunedì) sta tutta insieme
+  const martedi = (s) => aggiungi(s, -((daIso(s).getDay() + 5) % 7));
+  // calendario mensile: settimane da lunedì a domenica che coprono tutto il mese "aaaa-mm" (da 4 a 6)
+  function grigliaMese(mese) {
+    const primo = mese + '-01', d = daIso(primo);
+    const fine = aggiungi(lunedi(iso(new Date(d.getFullYear(), d.getMonth() + 1, 0))), 6);
+    const settimane = [];
+    for (let g = lunedi(primo); g <= fine; g = aggiungi(g, 7)) settimane.push(settimana(g).map((x) => ({ data: x, delMese: x.slice(0, 7) === mese })));
+    return settimane;
+  }
   const oggi = () => iso(new Date());
   const limite = () => aggiungi(lunedi(oggi()), SETTIMANE_AVANTI * 7 - 1);
   const GIORNI = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
@@ -197,7 +207,7 @@
   }
 
   Object.assign(DO, {
-    $, esc, iniziali, iso, daIso, aggiungi, lunedi, settimana, oggi, limite, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
+    $, esc, iniziali, iso, daIso, aggiungi, lunedi, martedi, grigliaMese, settimana, oggi, limite, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
     giorniA, bloccato, OPERATIVO_PREDEFINITO, NON_PIU_RINUNCIABILE, azioniConvocazione,
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,

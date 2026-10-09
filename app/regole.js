@@ -39,7 +39,7 @@
   function complete(r) {
     const x = Object.assign({}, PREDEFINITE, r || {});
     // prima/dopo per competizione: vuoti = valori generali
-    x.competizioni = x.competizioni.map((c) => Object.assign({}, c, { prima: ore(c.prima), dopo: ore(c.dopo) }));
+    x.competizioni = x.competizioni.map((c) => Object.assign({}, c, { prima: ore(c.prima), dopo: ore(c.dopo), colore: coloreValido(c.colore) }));
     x.tariffe = {
       'P.IVA': Object.assign({}, PREDEFINITE.tariffe['P.IVA'], (r && r.tariffe && r.tariffe['P.IVA']) || {}),
       Coop: Object.assign({}, PREDEFINITE.tariffe.Coop, (r && r.tariffe && r.tariffe.Coop) || {}),
@@ -105,6 +105,26 @@
 
   const competizione = (nome, regole) => complete(regole).competizioni.find((c) => c.nome === nome) || null;
   const uefa = (nome, regole) => !!(competizione(nome, regole) || {}).uefa;
+
+  // Colori delle competizioni: quello scelto nelle impostazioni, altrimenti uno della tavolozza ricavato dal nome
+  const PALETTE = ['#2563eb', '#0d9488', '#c2410c', '#be185d', '#4d7c0f', '#0369a1', '#a16207', '#7c2d12', '#b91c1c', '#15803d', '#475569', '#0891b2'];
+  function coloreValido(c) { return /^#[0-9a-f]{6}$/i.test(String(c || '')) ? String(c).toLowerCase() : ''; }
+  function coloreCompetizione(nome, regole) {
+    if (!nome) return '#94a3b8';
+    const scelto = coloreValido((competizione(nome, regole) || {}).colore);
+    if (scelto) return scelto;
+    let h = 0;
+    for (const ch of String(nome)) h = (h * 31 + ch.charCodeAt(0)) % 1000003;
+    return PALETTE[h % PALETTE.length];
+  }
+
+  // Colore di stato nel calendario mensile ('' = non si mostra)
+  function statoCalendario(e, oggi, giorniBlocco) {
+    if (e.stato === 'annullato') return '';
+    if (e.stato === 'confermato' && !e.daSostituire) return 'verde';
+    if (e.operatoreId && (e.stato === 'assegnato' || e.stato === 'convocato') && !e.daSostituire) return 'blu';
+    return DO.bloccato(e.data, oggi, giorniBlocco) ? 'rosso' : 'arancione';
+  }
 
   // Un evento conta se ha un operatore e non è annullato.
   const conta = (e) => !!e.operatoreId && e.stato !== 'annullato';
@@ -209,5 +229,6 @@
       + (fermo >= 2 ? ' · ⚠ nessun giro da ' + fermo + ' giorni: controlla lo script delle email' : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria };
+  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria,
+    PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});
