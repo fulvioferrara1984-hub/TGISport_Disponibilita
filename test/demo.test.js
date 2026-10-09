@@ -283,3 +283,14 @@ test('richiesta per evento: l\'operatore vede solo le sue', async () => {
   await comeOperatore('DEMO-0003');
   assert.ok(!(await D.mieRichiesteEvento()).some((r) => r.id === e.id));
 });
+
+test('richiesta per evento: richiederla di nuovo senza cambi non segna le risposte come vecchie', async () => {
+  const e = await nuovoEvento('Richiesta-Di-Nuovo');
+  await chiedi(e, ['op-demo1']);
+  const prima = (await richiestaDi(e.id)).aggiornata;
+  await new Promise((r) => setTimeout(r, 5));
+  comeSupervisore();
+  const copia = DO.richiesteEvento.copiaEvento(e, DO.regole.complete(null));
+  await D.chiediPerEvento(e, Object.fromEntries(Object.entries(copia).reverse()), ['op-demo3'], { messaggio: '', email: false, contatti: [] });
+  assert.equal((await richiestaDi(e.id)).aggiornata, prima);
+});

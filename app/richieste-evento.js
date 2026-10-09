@@ -35,14 +35,16 @@
     return '';
   }
 
+  // Confronto campo per campo: Firestore restituisce le mappe con le chiavi in ordine alfabetico
+  const copiaDiversa = (prima, copia) => CAMPI.some((k) => ((prima || {})[k] || '') !== ((copia || {})[k] || ''));
+
   // Campi da scrivere perché la richiesta torni con l'evento, oppure null se è già allineata
   function allineamento(richiesta, evento, copia, oggi) {
     const aperta = !!evento && evento.stato !== 'annullato' && evento.data >= oggi && scoperto(evento);
     const assegnato = evento && !aperta && evento.stato !== 'annullato' && evento.data >= oggi ? (evento.operatoreId || '') : '';
     const out = {};
     if (richiesta.aperta !== aperta || (richiesta.assegnato || '') !== assegnato) Object.assign(out, { aperta, assegnato });
-    const prima = richiesta.evento || {};
-    if (evento && copia && CAMPI.some((k) => (prima[k] || '') !== (copia[k] || ''))) {
+    if (evento && copia && copiaDiversa(richiesta.evento, copia)) {
       Object.assign(out, { aperta, assegnato, evento: copia, aggiornata: true });
     }
     return Object.keys(out).length ? out : null;
@@ -68,8 +70,28 @@
     return { si: con('si'), no: con('no'), attesa: dest.filter((id) => !risposta(richiesta, id)).length };
   }
 
-  const preselezione = ({ disponibilita, impegnato, onsite, giaChiesto }) =>
-    (disponibilita === 'D' || disponibilita === 'P') && !impegnato && !onsite && !giaChiesto;
+  // assegnato: l'operatore ha rifiutato questo evento o va sostituito proprio qui
+  const preselezione = ({ disponibilita, impegnato, onsite, giaChiesto, assegnato }) =>
+    (disponibilita === 'D' || disponibilita === 'P') && !impegnato && !onsite && !giaChiesto && !assegnato;
 
-  DO.richiesteEvento = { ms, copiaEvento, chiedibile, allineamento, statoPerOperatore, primaDellaModifica, riassunto, preselezione };
+  // Allineamento eseguito dalla dashboard a ogni aggiornamento: scrive le correzioni con scrivi(id, campi) → Promise.
+  // Una correzione in corso non si riscrive; una fallita non si ripete (resta in console), una riuscita libera il posto
+  // per i passaggi successivi dell'evento (assegnato → rifiutato → riassegnato…).
+  function allineatore(scrivi) {
+    const bloccate = new Set();
+    return (richieste, eventi, regole, oggi) => {
+      lista(richieste).forEach((r) => {
+        const e = lista(eventi).find((x) => x.id === r.id) || null;
+        const campi = allineamento(r, e, e ? copiaEvento(e, regole) : null, oggi);
+        if (!campi) return;
+        const chiave = r.id + JSON.stringify(campi);
+        if (bloccate.has(chiave)) return;
+        bloccate.add(chiave);
+        Promise.resolve().then(() => scrivi(r.id, campi))
+          .then(() => bloccate.delete(chiave), (err) => console.warn('Richiesta per evento non allineata:', r.id, err && err.message));
+      });
+    };
+  }
+
+  DO.richiesteEvento = { ms, copiaEvento, copiaDiversa, chiedibile, allineamento, allineatore, statoPerOperatore, primaDellaModifica, riassunto, preselezione };
 })(window.DO = window.DO || {});

@@ -97,6 +97,7 @@ test('preselezione dei destinatari', () => {
   assert.equal(p({ impegnato: true }), false);
   assert.equal(p({ onsite: true }), false);
   assert.equal(p({ giaChiesto: true }), false);
+  assert.equal(p({ assegnato: true }), false);   // chi ha rifiutato o va sostituito su questo evento
 });
 
 test('eventi per cui si può chiedere', () => {
@@ -108,4 +109,52 @@ test('eventi per cui si può chiedere', () => {
   assert.equal(c({ operatoreId: 'a', stato: 'assegnato' }), 'L\'evento ha già un operatore: segnalo «da sostituire» per chiedere ad altri.');
   assert.equal(c({ stato: 'annullato' }), 'L\'evento è annullato.');
   assert.equal(c({ data: '2026-10-08' }), 'La partita è già passata.');
+});
+
+test('copia diversa solo nei campi della partita', () => {
+  const c = Q.copiaEvento(partita(), regole);
+  const rovesciata = Object.fromEntries(Object.entries(c).reverse());   // Firestore restituisce i campi in ordine alfabetico
+  assert.equal(Q.copiaDiversa(c, rovesciata), false);
+  assert.equal(Q.copiaDiversa(Object.assign({}, c, { round: undefined }), Object.assign({}, c, { round: '' })), false);
+  assert.equal(Q.copiaDiversa(c, Object.assign({}, c, { orario: '18:00' })), true);
+  assert.equal(Q.copiaDiversa(undefined, c), true);
+  assert.equal(Q.allineamento(richiesta({ evento: rovesciata }), partita(), c, OGGI), null);
+});
+
+test('allineamento ripetuto: ogni passaggio dell\'evento si riflette sulla richiesta', async () => {
+  const archivio = { e1: richiesta() };
+  const scritture = [];
+  const allinea = Q.allineatore(async (id, campi) => { scritture.push(campi); Object.assign(archivio[id], campi); });
+  const passo = async (campi) => {
+    allinea([archivio.e1], [partita(campi)], regole, OGGI);
+    await new Promise((r) => setImmediate(r));
+    return [archivio.e1.aperta, archivio.e1.assegnato];
+  };
+  assert.deepEqual(await passo({ operatoreId: 'a', stato: 'assegnato' }), [false, 'a']);
+  assert.deepEqual(await passo({ operatoreId: 'a', stato: 'rifiutato' }), [true, '']);
+  assert.deepEqual(await passo({ operatoreId: 'b', stato: 'assegnato' }), [false, 'b']);
+  assert.deepEqual(await passo({ operatoreId: 'b', stato: 'rifiutato' }), [true, '']);
+  assert.deepEqual(await passo({ operatoreId: 'a', stato: 'assegnato' }), [false, 'a']);
+  assert.deepEqual(await passo({ operatoreId: 'a', stato: 'assegnato' }), [false, 'a']);   // già allineata: nessuna scrittura
+  assert.equal(scritture.length, 5);
+  // orario avanti e indietro: la copia segue ogni cambio
+  await passo({ operatoreId: '', orario: '18:00' });
+  await passo({ operatoreId: '', orario: '20:45' });
+  await passo({ operatoreId: '', orario: '18:00' });
+  assert.equal(archivio.e1.evento.orario, '18:00');
+  assert.equal(scritture.length, 8);
+});
+
+test('allineamento: una correzione che fallisce non si ripete a ogni aggiornamento', async () => {
+  let tentativi = 0;
+  const allinea = Q.allineatore(async () => { tentativi++; throw new Error('negato'); });
+  const avvisi = console.warn;
+  console.warn = () => {};
+  try {
+    for (let i = 0; i < 3; i++) {
+      allinea([richiesta()], [partita({ operatoreId: 'a', stato: 'assegnato' })], regole, OGGI);
+      await new Promise((r) => setImmediate(r));
+    }
+  } finally { console.warn = avvisi; }
+  assert.equal(tentativi, 1);
 });

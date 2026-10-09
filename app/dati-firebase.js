@@ -714,7 +714,7 @@
       if (!d.exists()) {
         await F.setDoc(rif, { destinatari: dest, messaggio, evento: copia, aggiornata: F.serverTimestamp(), risposte: {}, aperta: true, assegnato: '', creata: new Date().toISOString() });
       } else {
-        const cambiata = JSON.stringify(d.data().evento || {}) !== JSON.stringify(copia);
+        const cambiata = DO.richiesteEvento.copiaDiversa(d.data().evento, copia);
         await F.updateDoc(rif, Object.assign({ destinatari: F.arrayUnion(...dest), evento: copia, aperta: true, assegnato: '' },
           messaggio ? { messaggio } : {}, cambiata ? { aggiornata: F.serverTimestamp() } : {}));
       }

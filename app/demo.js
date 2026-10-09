@@ -370,7 +370,7 @@
     const adesso = new Date().toISOString();
     const r = dati.richiesteEvento.find((x) => x.id === evento.id);
     if (r) {
-      const cambiata = JSON.stringify(r.evento) !== JSON.stringify(copiaEv);
+      const cambiata = DO.richiesteEvento.copiaDiversa(r.evento, copiaEv);
       Object.assign(r, { destinatari: Array.from(new Set(r.destinatari.concat(dest))), evento: copiaEv, aperta: true, assegnato: '' },
         messaggio ? { messaggio } : {}, cambiata ? { aggiornata: adesso } : {});
     } else {

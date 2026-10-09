@@ -314,9 +314,11 @@
       if (v.onsite) segni[0] = '⛔ on-site a ' + v.onsite.luogo;
       else if (livello === 'sovrapposto') segni.push('⛔ sovrapposto');
       else if (livello === 'doppio') segni.push('ha già un turno');
+      const qui = o.id === e.operatoreId;   // ha rifiutato questo evento o va sostituito proprio qui
+      if (qui) segni.push(e.stato === 'rifiutato' ? 'ha rifiutato questo evento' : 'da sostituire su questo evento');
       if (chiesto) segni.push('già chiesto' + (risposta ? ': ha risposto ' + (risposta.r === 'si' ? 'sì' : 'no') : ''));
       if (!o.email) segni.push('senza email');
-      const spunta = Q.preselezione({ disponibilita: v.s, impegnato: altriImpegni(e, o.id).length > 0, onsite: !!v.onsite, giaChiesto: chiesto });
+      const spunta = Q.preselezione({ disponibilita: v.s, impegnato: altriImpegni(e, o.id).length > 0, onsite: !!v.onsite, giaChiesto: chiesto, assegnato: qui });
       return '<li><label><input type="checkbox" value="' + o.id + '"' + (spunta ? ' checked' : '') + '><span class="chi"><b>' + DO.esc(o.nome) + '</b><small>'
         + DO.esc(segni.join(' · ')) + '</small></span></label></li>';
     }).join('') : '<li class="nota">' + (sup ? 'Nessun Remote TL attivo.' : 'Nessun operatore attivo.') + '</li>';
