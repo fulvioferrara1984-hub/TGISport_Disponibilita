@@ -440,26 +440,53 @@
   $('ev-esporta').addEventListener('click', () => esportaMese($('ev-mese').value || inizio.slice(0, 7)));
 
   // ---------- invio delle convocazioni ----------
+  // Invio: tutte le convocazioni pronte, raggruppate per operatore; si può togliere la spunta a quelle da tenere per dopo.
   let daInviare = [];
+  const rigaInvio = (e) => {
+    const g = DO.giorno(e.data);
+    return g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (e.competizione ? ' · ' + e.competizione : '') + ' · ritrovo ' + (R.convocazione(e, A.regole) || '—');
+  };
+  function contaScelte() {
+    const n = $('evi-elenco').querySelectorAll('input[data-evento]:checked').length;
+    $('evi-conferma').disabled = !n;
+    $('evi-conferma').textContent = n ? 'Invia ' + n + (n === 1 ? ' convocazione' : ' convocazioni') : 'Scegli le convocazioni';
+    $('evi-elenco').querySelectorAll('input[data-gruppo]').forEach((g) => {
+      const suoi = [...$('evi-elenco').querySelectorAll('input[data-evento][data-op="' + g.dataset.gruppo + '"]')];
+      const scelti = suoi.filter((x) => x.checked).length;
+      g.checked = scelti === suoi.length;
+      g.indeterminate = scelti > 0 && scelti < suoi.length;
+    });
+  }
   $('ev-invia').addEventListener('click', () => {
     daInviare = A.eventi.filter((e) => e.stato === 'assegnato' && e.data >= DO.oggi()).sort((a, b) => a.data.localeCompare(b.data));
     const perOp = {};
     daInviare.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });
-    $('evi-elenco').innerHTML = '<p style="margin: 0 0 10px;">Le convocazioni compaiono sulla pagina di ciascun operatore, che potrà confermare. Chi ha un\'email la riceve anche per posta.</p><ul class="elenco-semplice">'
+    $('evi-elenco').innerHTML = '<p style="margin: 0 0 10px;">Le convocazioni compaiono sulla pagina di ciascun operatore, che potrà confermare. Chi ha un\'email la riceve anche per posta. Togli la spunta a quelle da inviare più tardi.</p>'
       + Object.keys(perOp).map((id) => {
         const o = operatore(id) || {};
-        return '<li><b>' + DO.esc(o.nome || '?') + '</b>: ' + perOp[id].length + (perOp[id].length === 1 ? ' convocazione' : ' convocazioni')
-          + (o.email ? '' : ' <span class="testo-errore">(senza email)</span>') + (o.uid === '' ? ' <span class="testo-errore">(senza codice: non può ancora vederle)</span>' : '') + '</li>';
-      }).join('') + '</ul>';
-    $('evi-conferma').textContent = 'Invia ' + daInviare.length + (daInviare.length === 1 ? ' convocazione' : ' convocazioni');
+        return '<div class="invio-gruppo"><label class="spunta invio-op"><input type="checkbox" data-gruppo="' + id + '" checked><span><b>' + DO.esc(o.nome || '?') + '</b>'
+          + (o.email ? '' : ' <span class="testo-errore">(senza email)</span>') + (o.uid === '' ? ' <span class="testo-errore">(senza codice: non può ancora vederle)</span>' : '') + '</span></label>'
+          + '<ul class="elenco-invio">' + perOp[id].map((e) => '<li><label class="spunta"><input type="checkbox" data-evento="' + e.id + '" data-op="' + id + '" checked><span>'
+            + DO.esc(rigaInvio(e)) + '</span></label></li>').join('') + '</ul></div>';
+      }).join('');
+    contaScelte();
     $('dlg-invia').showModal();
+  });
+  $('evi-elenco').addEventListener('change', (e) => {
+    if (e.target.dataset.gruppo) {
+      $('evi-elenco').querySelectorAll('input[data-evento][data-op="' + e.target.dataset.gruppo + '"]').forEach((x) => { x.checked = e.target.checked; });
+    }
+    contaScelte();
   });
   $('form-invia').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const b = $('evi-conferma');
     b.disabled = true;
     const perOp = {};
-    const eventi = daInviare.map((e) => Object.assign({}, e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) }));
+    const scelti = new Set([...$('evi-elenco').querySelectorAll('input[data-evento]:checked')].map((x) => x.dataset.evento));
+    const eventi = daInviare.filter((e) => scelti.has(e.id))
+      .map((e) => Object.assign({}, e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) }));
+    if (!eventi.length) { b.disabled = false; return; }
     eventi.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });
     const contatti = Object.keys(perOp).map((id) => {
       const o = operatore(id) || {};
