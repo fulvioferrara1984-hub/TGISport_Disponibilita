@@ -108,6 +108,8 @@
   }
 
   const competizione = (nome, regole) => complete(regole).competizioni.find((c) => c.nome === nome) || null;
+  // ruoli remoti come si mostrano (i dati restano 'TL' / 'OP')
+  const nomeRuolo = (ruolo) => (ruolo === 'TL' ? 'Remote TL' : 'Remote OP');
   const compensoCompetizione = (nome, regole) => (competizione(nome, regole) || {}).compenso || 'diurno';
 
   // Colori delle competizioni: quello scelto nelle impostazioni, altrimenti uno della tavolozza ricavato dal nome
@@ -181,7 +183,7 @@
     const righe = delMese.map((e) => {
       const o = op(e.operatoreId), sup = e.tipo === 'supervisione';
       return { chiave: e.data + convocazione(e, regole), riga: [data(e.data), sup ? 'Supervisione' : 'Partita', e.competizione || '', e.round || '', e.sport || '',
-        sup ? 'Supervisione' : e.titolo || '', e.orario || '', convocazione(e, regole), fine(e, regole), o ? o.nome : '', o ? o.ruolo : '', NOMI_STATO[e.stato] || e.stato] };
+        sup ? 'Supervisione' : e.titolo || '', e.orario || '', convocazione(e, regole), fine(e, regole), o ? o.nome : '', o ? nomeRuolo(o.ruolo) : '', NOMI_STATO[e.stato] || e.stato] };
     });
     const conta = {};
     const contatore = (id) => (conta[id] = conta[id] || [0, 0, 0, 0]);
@@ -236,6 +238,6 @@
       + (fermo >= 2 ? ' · ⚠ nessun giro da ' + fermo + ' giorni: controlla lo script delle email' : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria,
+  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, nomeRuolo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});

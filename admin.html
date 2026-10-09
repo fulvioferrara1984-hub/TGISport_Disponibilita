@@ -315,7 +315,7 @@
       <label class="campo"><span>Email</span><input type="email" id="op-email" maxlength="120"></label>
       <label class="campo"><span>Telefono</span><input type="tel" id="op-telefono" maxlength="30"></label>
       <div class="due-campi">
-        <label class="campo"><span>Ruolo</span><select id="op-ruolo"><option value="OP">OP – operatore</option><option value="TL">TL – team leader (anche supervisione)</option></select></label>
+        <label class="campo"><span>Ruolo</span><select id="op-ruolo"><option value="OP">Remote OP – operatore</option><option value="TL">Remote TL – team leader (anche supervisione)</option></select></label>
         <label class="campo"><span>Contratto</span><select id="op-contratto"><option>P.IVA</option><option>Coop</option></select></label>
       </div>
       <label class="campo"><span>On-site</span><select id="op-onsite"><option value="">No</option><option value="TL">On-site TL</option><option value="OP">On-site OP</option></select></label>
@@ -521,7 +521,7 @@
   <dialog id="dlg-supervisione">
     <form method="dialog" id="form-supervisione">
       <h2>Turni di supervisione</h2>
-      <p class="nota" style="margin: -6px 0 14px;">Un turno per ogni giorno del periodo. Si possono assegnare solo operatori con ruolo TL.</p>
+      <p class="nota" style="margin: -6px 0 14px;">Un turno per ogni giorno del periodo. Si possono assegnare solo operatori con ruolo Remote TL.</p>
       <div class="due-campi">
         <label class="campo"><span>Dal</span><input type="date" id="evs-da" required></label>
         <label class="campo"><span>Al</span><input type="date" id="evs-a" required></label>
@@ -530,7 +530,7 @@
         <label class="campo"><span>Competizione</span><select id="evs-competizione" data-elenco="competizioni"></select></label>
         <label class="campo"><span>Inizio turno (ritrovo)</span><input type="time" id="evs-ritrovo" value="10:00" required></label>
       </div>
-      <label class="campo"><span>TL (facoltativo)</span><select id="evs-tl"></select></label>
+      <label class="campo"><span>Remote TL (facoltativo)</span><select id="evs-tl"></select></label>
       <div class="errore" id="evs-errore" hidden></div>
       <div class="dialog-azioni">
         <button type="button" class="bottone" data-chiudi>Annulla</button>

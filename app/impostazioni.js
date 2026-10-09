@@ -261,10 +261,10 @@
           + conta((x) => x.stato === 'confermato') + ' confermati, ' + conta((x) => x.stato === 'convocato') + ' in attesa di conferma, '
           + conta((x) => x.stato === 'da-assegnare') + ' da assegnare, ' + conta((x) => x.stato === 'annullato') + ' annullati'
           + (giaPresenti ? ' · <b>' + giaPresenti + '</b> già importati verranno aggiornati' : '') + '</li>'
-        + '<li><b>' + nuoviOp.length + '</b> operatori nuovi' + (nuoviOp.length ? ': ' + nuoviOp.map((o) => DO.esc(o.nome) + ' (' + o.ruolo + ', ' + (o.contratto || 'contratto ?') + ')').join(', ') : '') + '</li>'
+        + '<li><b>' + nuoviOp.length + '</b> operatori nuovi' + (nuoviOp.length ? ': ' + nuoviOp.map((o) => DO.esc(o.nome) + ' (' + R.nomeRuolo(o.ruolo) + ', ' + (o.contratto || 'contratto ?') + ')').join(', ') : '') + '</li>'
         + (Object.keys(pacchetto.esistenti).length ? '<li>Operatori già presenti aggiornati: ' + Object.keys(pacchetto.esistenti).map((id) => {
           const o = A.operatori.find((x) => x.id === id), m = pacchetto.esistenti[id];
-          return DO.esc(o.nome) + ' (' + [m.ruolo && 'ruolo TL', m.contratto && 'contratto ' + m.contratto].filter(Boolean).join(', ') + ')';
+          return DO.esc(o.nome) + ' (' + [m.ruolo && 'ruolo Remote TL', m.contratto && 'contratto ' + m.contratto].filter(Boolean).join(', ') + ')';
         }).join(', ') + '</li>' : '')
         + '<li><b>' + pacchetto.assenze + '</b> giorni di assenza da segnare come "Non disponibile"</li>'
         + '<li>Tariffe, sport e competizioni (Europa League e Conference League con compenso dimezzato)</li></ul>'

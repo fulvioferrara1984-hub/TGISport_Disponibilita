@@ -608,7 +608,7 @@
     $('tabella-operatori').innerHTML = '<table class="tabella"><thead><tr><th>Operatore</th><th>Ruolo</th><th class="solo-desktop">Contratto</th><th class="solo-desktop">Contatti</th><th>Stato</th><th class="solo-desktop">Ultimo invio</th><th></th></tr></thead><tbody>'
       + elenco.map((o) => '<tr class="' + (o.attivo ? '' : 'disattivo') + '">'
         + '<td><b>' + DO.esc(o.nome) + '</b><br><small class="tenue">' + DO.esc(o.mansione || '—') + '</small></td>'
-        + '<td><span class="etichetta ruolo-' + o.ruolo + '">' + o.ruolo + '</span>'
+        + '<td><span class="etichetta ruolo-' + o.ruolo + '">' + DO.regole.nomeRuolo(o.ruolo) + '</span>'
         + (o.onsite ? ' <span class="etichetta etichetta-onsite">on-site ' + o.onsite + '</span>' : '') + '</td>'
         + '<td class="solo-desktop">' + (o.contratto ? DO.esc(o.contratto) : '<span class="testo-errore">da indicare</span>') + '</td>'
         + '<td class="solo-desktop">' + DO.esc(o.email || '—') + '<br><small class="tenue">' + DO.esc(o.telefono || '') + '</small></td>'

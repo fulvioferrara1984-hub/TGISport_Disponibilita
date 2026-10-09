@@ -95,8 +95,8 @@ test('esportazione mensile: due fogli, solo presenze, annullati esclusi dalle pr
   const { convocazioni, presenze } = R.righeMese(ev, ops, regole, '2026-10');
   assert.deepEqual(convocazioni[0], ['Data', 'Tipo', 'Competizione', 'Round', 'Sport', 'Evento', 'Orario', 'Ritrovo', 'Fine turno', 'Operatore', 'Ruolo', 'Stato']);
   assert.equal(convocazioni.length, 5);   // intestazione + 4 eventi di ottobre, annullato compreso
-  assert.deepEqual(convocazioni[1], ['05/10/2026', 'Partita', 'Serie A', '', '', 'Inter-Monza', '18:00', '14:00', '20:00', 'Bruno Blu', 'OP', 'Annullato']);
-  assert.deepEqual(convocazioni[2].slice(0, 2).concat(convocazioni[2].slice(7)), ['18/10/2026', 'Supervisione', '10:00', '16:00', 'Anna Neri', 'TL', 'Confermato']);
+  assert.deepEqual(convocazioni[1], ['05/10/2026', 'Partita', 'Serie A', '', '', 'Inter-Monza', '18:00', '14:00', '20:00', 'Bruno Blu', 'Remote OP', 'Annullato']);
+  assert.deepEqual(convocazioni[2].slice(0, 2).concat(convocazioni[2].slice(7)), ['18/10/2026', 'Supervisione', '10:00', '16:00', 'Anna Neri', 'Remote TL', 'Confermato']);
   assert.deepEqual(presenze, [
     ['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa', 'Giorni on-site'],
     ['Anna Neri', 0, 1, 0, 0],
@@ -252,4 +252,10 @@ test('migrazione da UEFA ½ al tipo di compenso', () => {
   assert.equal(R.TIPI.uefa, undefined);
   assert.equal(R.uefa, undefined);
   assert.equal(R.compensoCompetizione('Champions League', R.complete(null)), 'dimezzato');
+});
+
+test('nome dei ruoli remoti', () => {
+  assert.equal(R.nomeRuolo('TL'), 'Remote TL');
+  assert.equal(R.nomeRuolo('OP'), 'Remote OP');
+  assert.equal(R.nomeRuolo(''), 'Remote OP');
 });

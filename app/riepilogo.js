@@ -81,7 +81,7 @@
       .map((o) => ({ o, t: somma(lista.filter((r) => r.operatoreId === o.id)), on: sommaOnsite(ons.filter((r) => r.operatoreId === o.id)) }))
       .filter((x) => x.t.n || x.on.giorni || x.o.attivo);
     const tabOp = '<table class="tabella numeri"><thead><tr><th>Operatore</th><th class="sx">Ruolo</th><th class="sx">Contratto</th><th>Diurni</th><th>Notturni</th><th>Maggiorati</th><th>Dimezzati</th><th>di cui supervisione</th><th>Totale eventi</th><th>Giorni on-site</th><th>€ on-site</th><th>Netto</th></tr></thead><tbody>'
-      + ops.map(({ o, t, on }) => '<tr><td><b>' + DO.esc(o.nome) + '</b></td><td class="sx">' + o.ruolo + '</td><td class="sx">' + (o.contratto || '<span class="testo-errore">da indicare</span>') + '</td>'
+      + ops.map(({ o, t, on }) => '<tr><td><b>' + DO.esc(o.nome) + '</b></td><td class="sx">' + R.nomeRuolo(o.ruolo) + '</td><td class="sx">' + (o.contratto || '<span class="testo-errore">da indicare</span>') + '</td>'
         + TIPI.map((k) => '<td>' + num(t[k]) + '</td>').join('') + '<td>' + num(t.sup) + '</td><td><b>' + num(t.n) + '</b></td>'
         + '<td>' + num(on.giorni) + '</td><td>' + eur(on.euro) + '</td><td><b>' + eur(t.euro + on.euro) + '</b></td></tr>').join('')
       + '</tbody><tfoot><tr><td>Totale</td><td></td><td></td>' + TIPI.map((k) => '<td>' + tot[k] + '</td>').join('') + '<td>' + tot.sup + '</td><td>' + tot.n + '</td>'
@@ -171,7 +171,7 @@
         const o = A.operatori.find((x) => x.id === e.operatoreId);
         const g = R.conta(e) && o ? R.gettone(e, o, A.regole) : null;
         return [e.data, e.tipo === 'supervisione' ? 'Supervisione' : 'Partita', e.competizione, e.round, e.sport, e.tipo === 'supervisione' ? 'Supervisione' : e.titolo,
-          e.orario, R.convocazione(e, A.regole), o ? o.nome : '', o ? o.ruolo : '', o ? o.contratto : '', e.stato, g ? g.etichetta : '', g ? g.importo : 0, e.note || ''];
+          e.orario, R.convocazione(e, A.regole), o ? o.nome : '', o ? R.nomeRuolo(o.ruolo) : '', o ? o.contratto : '', e.stato, g ? g.etichetta : '', g ? g.importo : 0, e.note || ''];
       }));
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(conv), 'Convocazioni');
     const ons = righeOnsite(p);
@@ -183,7 +183,7 @@
     const perOp = [['Operatore', 'Ruolo', 'Contratto', 'Diurni', 'Notturni', 'Maggiorati', 'Dimezzati', 'di cui supervisione', 'Totale eventi', 'Giorni on-site', '€ on-site', 'Netto']];
     A.operatori.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'it')).forEach((o) => {
       const t = somma(lista.filter((r) => r.operatoreId === o.id)), on = sommaOnsite(ons.filter((r) => r.operatoreId === o.id));
-      if (t.n || on.giorni) perOp.push([o.nome, o.ruolo, o.contratto, t.diurno, t.notturno, t.maggiorato, t.dimezzato, t.sup, t.n, on.giorni, Math.round(on.euro * 100) / 100, Math.round((t.euro + on.euro) * 100) / 100]);
+      if (t.n || on.giorni) perOp.push([o.nome, R.nomeRuolo(o.ruolo), o.contratto, t.diurno, t.notturno, t.maggiorato, t.dimezzato, t.sup, t.n, on.giorni, Math.round(on.euro * 100) / 100, Math.round((t.euro + on.euro) * 100) / 100]);
     });
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(perOp), 'Per operatore');
     const perComp = [['Competizione', 'Eventi coperti', 'Netto P.IVA', 'Netto Coop', 'Totale netto']];

@@ -129,7 +129,7 @@
       return { o, peso: peso[v.s || ''] + (v.onsite ? 0.9 : livello === 'sovrapposto' ? 0.8 : livello ? 0.5 : 0), testo: segno + ' ' + o.nome + extra };
     }).sort((a, b) => a.peso - b.peso || a.o.nome.localeCompare(b.o.nome, 'it'));
     return '<select data-assegna="' + e.id + '"' + (e.stato === 'annullato' ? ' disabled' : '') + ' aria-label="Operatore">'
-      + '<option value="">— ' + (e.tipo === 'supervisione' ? 'Scegli un TL' : 'Scegli operatore') + ' —</option>'
+      + '<option value="">— ' + (e.tipo === 'supervisione' ? 'Scegli un Remote TL' : 'Scegli operatore') + ' —</option>'
       + voci.map((x) => '<option value="' + x.o.id + '"' + (x.o.id === e.operatoreId ? ' selected' : '') + '>' + DO.esc(x.testo) + '</option>').join('')
       + '</select>';
   }
