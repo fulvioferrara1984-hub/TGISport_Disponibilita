@@ -86,6 +86,13 @@
     return x.inizio < y.fine && y.inizio < x.fine;
   }
 
+  // Altri impegni dello stesso giorno: 'doppio' se gli orari non si toccano, 'sovrapposto' se sì.
+  function conflitto(e, altri, regole) {
+    const stessoGiorno = altri.filter((x) => x.data === e.data);
+    if (!stessoGiorno.length) return { livello: '', con: [] };
+    return { livello: stessoGiorno.some((x) => sovrapposti(e, x, regole)) ? 'sovrapposto' : 'doppio', con: stessoGiorno };
+  }
+
   function notturno(e, regole) {
     const r = complete(regole), c = minuti(convocazione(e, r));
     if (c === null) return false;
@@ -122,5 +129,5 @@
     return { da: inizio + '-08-01', a: (inizio + 1) + '-07-31', nome: inizio + '/' + String(inizio + 1).slice(2) };
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm };
+  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm };
 })(window.DO = window.DO || {});

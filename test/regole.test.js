@@ -67,3 +67,16 @@ test('competizioni salvate senza orari restano valide', () => {
   assert.equal(r.fineOre, 2);
   assert.equal(r.durataSupervisioneOre, 6);
 });
+
+test('conflitto: doppio turno o turni sovrapposti nello stesso giorno', () => {
+  const g = '2026-10-17';
+  const partita = { competizione: 'Serie A', orario: '20:45', data: g };
+  const supMattina = { tipo: 'supervisione', convocazione: '10:00', data: g };
+  const supPomeriggio = { tipo: 'supervisione', convocazione: '14:00', data: g };
+  assert.deepEqual(R.conflitto(partita, [], regole), { livello: '', con: [] });
+  assert.equal(R.conflitto(partita, [supMattina], regole).livello, 'doppio');
+  assert.equal(R.conflitto(partita, [supPomeriggio], regole).livello, 'sovrapposto');
+  const due = R.conflitto(partita, [supMattina, supPomeriggio], regole);
+  assert.equal(due.livello, 'sovrapposto');
+  assert.equal(due.con.length, 2);
+});
