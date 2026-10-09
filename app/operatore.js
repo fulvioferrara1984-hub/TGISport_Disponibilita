@@ -334,14 +334,17 @@
       applica(Object.assign({}, copia, { oggi: adesso > copia.oggi ? adesso : copia.oggi }));
       lun = settimanaIniziale();
       disegna();
+      DO.segna('pagina mostrata con la copia salvata');
       $('aggiornamento').hidden = false;
     } else {
       $('giorni').innerHTML = '<li class="caricamento"><span></span></li>';
     }
     try {
+      DO.segna('carico i dati…');
+      const misura = (nome, p) => p.then((x) => { DO.segna(nome + ' arrivate'); return x; });
       const [r, conv, op] = await Promise.all([
-        DO.dati.mieDisponibilita(), DO.dati.mieConvocazioni().catch(() => null),
-        DO.dati.leggiOperativo().catch(() => Object.assign({}, DO.OPERATIVO_PREDEFINITO)),
+        misura('disponibilità', DO.dati.mieDisponibilita()), misura('convocazioni', DO.dati.mieConvocazioni().catch(() => null)),
+        misura('regole operative', DO.dati.leggiOperativo().catch(() => Object.assign({}, DO.OPERATIVO_PREDEFINITO))),
       ]);
       if (conv) r.convocazioni = conv;
       r.operativo = op;
@@ -349,6 +352,7 @@
       applica(r);
       lun = giaVisibile ? settimana : settimanaIniziale();
       disegna();
+      DO.segna('pagina aggiornata con i dati nuovi');
       salvaCopia();
     } catch (e) {
       if (!giaVisibile) $('giorni').innerHTML = '<li class="griglia-vuota">' + DO.esc(e.message) + '</li>';
@@ -361,6 +365,7 @@
   const accedi = (codice) => DO.dati.accediOperatore(codice, $('accesso-ricorda').checked);
 
   async function entra() {
+    DO.segna('script della pagina avviato');
     $('pagina').hidden = true;
     $('barra-invio').hidden = true;
     $('accesso-demo').hidden = !DO.inDemo;
@@ -379,7 +384,7 @@
       history.replaceState(null, '', location.pathname + location.search);
       try { op = await accedi(dalLink); } catch (e) { DO.avviso(e.message, 'errore'); }
     }
-    if (!op) op = await DO.chiediAccesso(() => accedi($('accesso-codice').value));
+    if (!op) { DO.segna('richiesta del codice mostrata'); op = await DO.chiediAccesso(() => accedi($('accesso-codice').value)); }
     await carica(op.id);
   }
 
