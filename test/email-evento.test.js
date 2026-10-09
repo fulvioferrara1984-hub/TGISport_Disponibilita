@@ -31,7 +31,11 @@ test('email di richiesta per evento', () => {
     'Rispondi sulla piattaforma', 'href="https://x.github.io/sito/"', 'Per entrare usa il tuo codice personale.'].forEach((t) => assert.ok(m.htmlBody.includes(t), t));
   const sup = gs.testoEmailRichiestaEvento({ nome: 'Marco', email: 'm@x.it' },
     { titolo: 'Supervisione', tipo: 'supervisione', competizione: 'Serie A', round: '', data: '2026-10-11', orario: '', ritrovo: '10:00', fine: '16:00' }, '', '');
-  assert.equal(sup.subject, 'Sei disponibile? Turno di supervisione · domenica 11 ottobre');
+  assert.equal(sup.subject, 'Sei disponibile? Turno Remote TL · domenica 11 ottobre');
+  const support = gs.testoEmailRichiestaEvento({ nome: 'Marco', email: 'm@x.it' },
+    { titolo: 'Remote Support', tipo: 'support', competizione: '', round: '', data: '2026-10-11', orario: '', ritrovo: '12:00', fine: '18:00' }, '', '');
+  assert.equal(support.subject, 'Sei disponibile? Turno Remote Support · domenica 11 ottobre');
+  assert.ok(support.htmlBody.includes('turno 12:00 – 18:00'));
   assert.ok(sup.htmlBody.includes('turno 10:00 – 16:00'));
   assert.ok(!sup.htmlBody.includes('Rispondi sulla piattaforma'));
   const strano = gs.testoEmailRichiestaEvento({ nome: 'Marco', email: 'm@x.it' }, Object.assign({}, partita, { titolo: '<b>A&B</b>' }), '"x" < y', '');

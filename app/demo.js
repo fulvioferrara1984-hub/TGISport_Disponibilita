@@ -15,7 +15,7 @@
     const operatori = nomi.map(([nome, mansione], i) => ({
       id: 'op-demo' + (i + 1), nome, mansione, email: nome.toLowerCase().replace(' ', '.') + '@esempio.it',
       telefono: '+39 333 000 00' + due(i + 1), attivo: true, codice: 'DEMO000' + (i + 1), ultimoInvio: '',
-      contratto: i % 4 === 3 ? 'Coop' : 'P.IVA', ruolo: i < 2 ? 'TL' : 'OP', onsite: ['TL', '', 'OP', '', 'OP'][i] || '',
+      contratto: i % 4 === 3 ? 'Coop' : 'P.IVA', ruolo: i < 2 ? 'TL' : i === 2 ? 'SUP' : 'OP', onsite: ['TL', '', 'OP', '', 'OP'][i] || '',
     }));
     const disponibilita = {}, invii = [];
     const lun = DO.lunedi(DO.oggi());
@@ -31,7 +31,7 @@
         modifiche: [{ d: DO.aggiungi(lun, 2 + k), da: '', a: 'D', n: '' }, { d: DO.aggiungi(lun, 4 + k), da: 'D', a: 'A', n: '' }] });
     });
     invii.sort((a, b) => (a.quando < b.quando ? -1 : 1));
-    // qualche evento: una giornata di Serie A con supervisione, una partita di Champions
+    // qualche evento: una giornata di Serie A con i turni Remote TL e Remote Support, una partita di Champions
     const partite = [[5, '15:00', 'Venezia-Napoli', 'op-demo3'], [5, '18:00', 'Bologna-Inter', 'op-demo4'], [5, '20:45', 'Roma-Genoa', 'op-demo5'],
       [6, '12:30', 'Udinese-Lecce', 'op-demo7'], [6, '15:00', 'Fiorentina-Como', ''], [6, '20:45', 'Juventus-Lazio', '']];
     const eventi = partite.map(([g, orario, titolo, op], i) => ({
@@ -39,8 +39,10 @@
       convocazione: '', operatoreId: op, stato: op ? (i < 2 ? 'confermato' : 'assegnato') : 'da-assegnare', inviata: op && i < 2, gettone: '', note: '',
       daSostituire: false, risposta: '', storico: [],
     }));
-    eventi.push({ id: 'evs1', tipo: 'supervisione', competizione: 'Serie A', round: '7', sport: 'Calcio', data: DO.aggiungi(lun, 5), titolo: 'Supervisione',
-      orario: '14:00', convocazione: '', convocazioneCalcolata: '10:00', operatoreId: 'op-demo1', stato: 'convocato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
+    eventi.push({ id: 'evs1', tipo: 'supervisione', competizione: 'Remote TL', round: '', sport: '', data: DO.aggiungi(lun, 5), titolo: 'Remote TL',
+      orario: '', convocazione: '10:00', convocazioneCalcolata: '10:00', operatoreId: 'op-demo1', stato: 'convocato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
+    eventi.push({ id: 'evs2', tipo: 'support', competizione: 'Remote Support', round: '', sport: '', data: DO.aggiungi(lun, 6), titolo: 'Remote Support',
+      orario: '', convocazione: '12:00', convocazioneCalcolata: '12:00', operatoreId: '', stato: 'da-assegnare', inviata: false, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
     eventi.push({ id: 'evc1', tipo: 'partita', competizione: 'Champions League', round: 'League Phase', sport: 'Calcio', data: DO.aggiungi(lun, 2), titolo: 'Feyenoord-Como',
       orario: '18:45', convocazione: '', convocazioneCalcolata: '14:45', operatoreId: 'op-demo2', stato: 'confermato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
     return { operatori, disponibilita, invii, richieste: [], eventi, regole: null, operativo: null, password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true },

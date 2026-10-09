@@ -17,10 +17,11 @@
 
   // Dati della partita che vedono gli operatori (niente compensi né note interne)
   function copiaEvento(e, regole) {
-    const t = (v) => String(v == null ? '' : v);
+    const t = (v) => String(v == null ? '' : v), turno = DO.turnoRemoto(e.tipo);
+    // turni remoti: il nome della mansione, nessuna competizione (i vecchi turni di supervisione ne avevano una)
     return {
-      titolo: t(e.titolo) || (e.tipo === 'supervisione' ? 'Supervisione' : ''),
-      tipo: t(e.tipo), competizione: t(e.competizione), round: t(e.round), data: t(e.data), orario: t(e.orario),
+      titolo: turno ? DO.mansione(e.tipo) : t(e.titolo),
+      tipo: t(e.tipo), competizione: turno ? '' : t(e.competizione), round: turno ? '' : t(e.round), data: t(e.data), orario: t(e.orario),
       ritrovo: t(DO.regole.convocazione(e, regole)), fine: t(DO.regole.fine(e, regole)),
     };
   }

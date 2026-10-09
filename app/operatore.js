@@ -9,7 +9,7 @@
   let salvati = {};               // ultima versione inviata, data → { s, n }
   let bozza = {};                 // modifiche non ancora inviate, data → { s, n }
   let richieste = [];             // richieste aperte dei supervisori: { id, da, a, messaggio }
-  let convocazioni = [];          // convocazioni ricevute (partite e turni di supervisione)
+  let convocazioni = [];          // convocazioni ricevute (partite e turni Remote TL / Remote Support)
   let oggi = DO.iso(new Date()), limite = DO.aggiungi(oggi, 83);
   let lun = DO.lunedi(oggi);
   let invio = false;
@@ -150,7 +150,7 @@
   }
 
   function rigaConvocazione(c) {
-    const g = DO.giorno(c.data), sup = c.tipo === 'supervisione';
+    const g = DO.giorno(c.data), sup = DO.turnoRemoto(c.tipo);
     const fine = DO.esc(fineTurno(c)), inizio = DO.esc(ritrovo(c) || '—');
     const orari = sup ? (fine ? 'Turno <span class="ritrovo">' + inizio + ' – ' + fine + '</span>' : 'Inizio turno <span class="ritrovo">' + inizio + '</span>')
       : (c.orario ? 'Evento alle ' + DO.esc(c.orario) + ' · ' : '') + '<span class="ritrovo">Ritrovo ' + inizio + (fine ? ' – fine turno ' + fine : '') + '</span>';
@@ -159,8 +159,8 @@
     const azioni = etichetta + elenco.map((a) => tasto(a, c)).join('');
     return '<div class="convocazione' + (c.stato === 'annullato' ? ' annullata' : '') + '">'
       + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
-      + '<div class="conv-info"><b>' + DO.esc(sup ? 'Turno di supervisione' : c.titolo) + '</b>'
-      + '<span>' + DO.esc([c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · ')) + '</span>'
+      + '<div class="conv-info"><b>' + DO.esc(sup ? DO.nomeTurno(c.tipo) : c.titolo) + '</b>'
+      + (sup ? '' : '<span>' + DO.esc([c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · ')) + '</span>')
       + '<span>' + orari + '</span>'
       + (spiegazione ? '<small class="conv-spiegazione">Mancano ' + operativo.giorniBlocco + ' giorni o meno: per rinunciare chiama il supervisore.</small>' : '') + '</div>'
       + '<div class="conv-azioni">' + azioni + '</div></div>';
@@ -264,7 +264,7 @@
     if (!visibili.length) { box.innerHTML = ''; return; }
     const chiave = (r) => r.evento.data + (r.evento.ritrovo || '');
     box.innerHTML = '<div class="scheda-testa"><h2>Ti chiediamo se sei disponibile</h2></div>' + visibili.sort((a, b) => chiave(a).localeCompare(chiave(b))).map((r) => {
-      const e = r.evento, g = DO.giorno(e.data), st = stato(r), sup = e.tipo === 'supervisione';
+      const e = r.evento, g = DO.giorno(e.data), st = stato(r), sup = DO.turnoRemoto(e.tipo);
       const rispondi = (v, testo, cls) => '<button type="button" class="' + cls + '" data-evento-risposta="' + v + '" data-id="' + DO.esc(r.id) + '">' + testo + '</button>';
       const orari = sup ? 'turno ' + (e.ritrovo || '—') + (e.fine ? ' – ' + e.fine : '')
         : (e.orario ? 'evento ' + e.orario + ' · ' : '') + 'ritrovo ' + (e.ritrovo || '—') + (e.fine ? ' – fine ' + e.fine : '');
@@ -276,7 +276,7 @@
       }[st];
       return '<div class="convocazione richiesta-evento' + (st === 'coperto' ? ' coperta' : '') + '">'
         + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
-        + '<div class="conv-info"><b>' + DO.esc(sup ? 'Turno di supervisione' : e.titolo) + '</b>'
+        + '<div class="conv-info"><b>' + DO.esc(sup ? DO.nomeTurno(e.tipo) : e.titolo) + '</b>'
         + '<span>' + DO.esc([e.competizione, e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(', ')) + '</span>'
         + '<span>' + g.breve + ' ' + g.num + ' ' + g.mese + ' · <span class="ritrovo">' + DO.esc(orari) + '</span></span>'
         + (r.messaggio ? '<span class="onsite-nota">' + DO.esc(r.messaggio) + '</span>' : '') + '</div>'

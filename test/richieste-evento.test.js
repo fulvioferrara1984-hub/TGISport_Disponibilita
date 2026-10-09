@@ -25,9 +25,12 @@ test('copia dell\'evento', () => {
     titolo: 'Roma-Lazio', tipo: 'partita', competizione: 'Serie A', round: '9', data: '2026-10-18', orario: '20:45', ritrovo: '16:45', fine: '22:45',
   });
   assert.deepEqual(Q.copiaEvento({ tipo: 'supervisione', competizione: 'Serie A', data: '2026-10-18', titolo: 'Supervisione', convocazione: '10:00' }, regole), {
-    titolo: 'Supervisione', tipo: 'supervisione', competizione: 'Serie A', round: '', data: '2026-10-18', orario: '', ritrovo: '10:00', fine: '16:00',
+    titolo: 'Remote TL', tipo: 'supervisione', competizione: '', round: '', data: '2026-10-18', orario: '', ritrovo: '10:00', fine: '16:00',
   });
-  assert.equal(Q.copiaEvento({ tipo: 'supervisione', data: '2026-10-18', convocazione: '10:00' }, regole).titolo, 'Supervisione');
+  assert.equal(Q.copiaEvento({ tipo: 'supervisione', data: '2026-10-18', convocazione: '10:00' }, regole).titolo, 'Remote TL');
+  assert.deepEqual(Q.copiaEvento({ tipo: 'support', competizione: 'Remote Support', data: '2026-10-18', titolo: 'Remote Support', convocazione: '12:00' }, regole), {
+    titolo: 'Remote Support', tipo: 'support', competizione: '', round: '', data: '2026-10-18', orario: '', ritrovo: '12:00', fine: '18:00',
+  });
 });
 
 test('allineamento con l\'evento', () => {

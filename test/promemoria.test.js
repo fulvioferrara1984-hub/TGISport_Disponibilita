@@ -32,9 +32,10 @@ test('solo remoti e non annullati', () => {
     ev({ tipo: 'onsite', titolo: 'on-site' }),
     ev({ tipo: undefined, titolo: 'senza tipo' }),
     ev({ tipo: 'supervisione', titolo: 'supervisione', orario: '', convocazione: '10:00' }),
+    ev({ tipo: 'support', titolo: 'support', orario: '', convocazione: '12:00' }),
     ev({ stato: 'annullato', titolo: 'annullata' }),
   ]);
-  assert.deepEqual(titoli(r.gruppi.inAttesa), ['supervisione', 'senza tipo']);
+  assert.deepEqual(titoli(r.gruppi.inAttesa), ['supervisione', 'support', 'senza tipo']);
 });
 
 test('un solo gruppo per evento', () => {
@@ -119,10 +120,24 @@ test('email operatore', () => {
   assert.ok(gs.emailOperatore(marco, [sassuolo({ data: OGGI })], CTX_OP).htmlBody.includes('(oggi)'));
 });
 
-test('supervisione nell\'email operatore', () => {
-  const m = gs.emailOperatore(marco, [ev({ tipo: 'supervisione', titolo: 'Supervisione', orario: '', convocazione: '10:00' })], CTX_OP);
+test('turni remoti nell\'email operatore', () => {
+  // un vecchio turno di supervisione: titolo e competizione salvati prima non si vedono più
+  const m = gs.emailOperatore(marco, [ev({ tipo: 'supervisione', titolo: 'Supervisione', competizione: 'Serie A', orario: '', convocazione: '10:00' })], CTX_OP);
   assert.ok(m.htmlBody.includes('inizio turno <b>10:00</b>'));
   assert.ok(!m.htmlBody.includes('fine'));
+  assert.ok(m.htmlBody.includes('Remote TL'));
+  assert.ok(!/Supervisione|Serie A/.test(m.htmlBody));
+  const s = gs.emailOperatore(marco, [ev({ tipo: 'support', titolo: 'Remote Support', competizione: 'Remote Support', orario: '', convocazione: '12:00', fineCalcolata: '18:00' })], CTX_OP);
+  assert.ok(s.htmlBody.includes('inizio turno <b>12:00</b> – fine <b>18:00</b>'));
+  assert.equal(s.htmlBody.split('Remote Support').length - 1, 1);   // una volta: niente riga della competizione
+});
+
+test('turni remoti nell\'email dei supervisori', () => {
+  const vuoti = { sostituire: [], senzaOperatore: [], daInviare: [], inAttesa: [] };
+  const gruppi = Object.assign({}, vuoti, { senzaOperatore: [{ evento: ev({ tipo: 'support', titolo: 'Remote Support', orario: '', convocazione: '12:00', operatoreId: '' }), operatore: null, nota: '' }] });
+  const s = gs.emailSupervisori(gruppi, { oggi: OGGI, giorni: 3, a: 's@x.it', convocazioni: '' });
+  assert.ok(s.htmlBody.includes('Remote Support'));
+  assert.ok(s.htmlBody.includes('dalle 12:00'));
 });
 
 test('caratteri HTML resi come testo', () => {

@@ -19,6 +19,9 @@ const CONFIG = {
 };
 
 const STATI = { D: 'Disponibile', P: 'Parziale', A: 'Non disponibile' };
+// turni remoti: nei dati il turno Remote TL si chiama ancora 'supervisione'
+const TURNI_REMOTI = { supervisione: 'Remote TL', support: 'Remote Support' };
+const eTurno = (e) => Object.prototype.hasOwnProperty.call(TURNI_REMOTI, e.tipo);
 
 // ---------------------------------------------------------------- ingresso
 
@@ -156,8 +159,9 @@ function emailConvocazioni(r) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(c.email || ''))) { esito.nonInviate.push(c.nome); return; }
     const eventi = (Array.isArray(c.eventi) ? c.eventi : []).slice(0, 60);
     const righe = eventi.map((e) => '<tr><td style="padding:6px 14px 6px 0;white-space:nowrap"><b>' + esc(giornoLungo(String(e.data))) + '</b></td>'
-      + '<td style="padding:6px 14px 6px 0">' + esc(e.titolo || '') + '<br><span style="color:#8b919c;font-size:12px">' + esc([e.competizione, e.round].filter(Boolean).join(' · ')) + '</span></td>'
-      + '<td style="padding:6px 0;white-space:nowrap">' + (e.tipo === 'supervisione' ? 'inizio turno' : (e.orario ? 'evento ' + esc(e.orario) + '<br>' : '') + 'ritrovo')
+      + '<td style="padding:6px 14px 6px 0">' + esc(eTurno(e) ? TURNI_REMOTI[e.tipo] : e.titolo || '')
+      + (eTurno(e) ? '' : '<br><span style="color:#8b919c;font-size:12px">' + esc([e.competizione, e.round].filter(Boolean).join(' · ')) + '</span>') + '</td>'
+      + '<td style="padding:6px 0;white-space:nowrap">' + (eTurno(e) ? 'inizio turno' : (e.orario ? 'evento ' + esc(e.orario) + '<br>' : '') + 'ritrovo')
       + ' <b>' + esc(e.convocazione || '') + '</b>' + (e.fine ? ' – fine <b>' + esc(e.fine) + '</b>' : '') + '</td></tr>').join('');
     try {
       MailApp.sendEmail({
@@ -289,7 +293,7 @@ function selezionaPromemoria(eventi, operatori, oggi, giorni) {
   const gruppi = { sostituire: [], senzaOperatore: [], daInviare: [], inAttesa: [] };
   const avvisati = {};
   eventi
-    .filter((e) => e.data >= oggi && e.data <= fine && ['partita', 'supervisione'].indexOf(e.tipo || 'partita') >= 0 && e.stato !== 'annullato')
+    .filter((e) => e.data >= oggi && e.data <= fine && ['partita', 'supervisione', 'support'].indexOf(e.tipo || 'partita') >= 0 && e.stato !== 'annullato')
     .sort((a, b) => a.data.localeCompare(b.data) || ora(a).localeCompare(ora(b)))
     .forEach((e) => {
       const op = perId[e.operatoreId] || null;
@@ -322,18 +326,19 @@ function indirizzi(urlAdmin) {
 
 const relativo = (data, oggi) => (data === oggi ? ' (oggi)' : data === aggiungiGiorni(oggi, 1) ? ' (domani)' : '');
 
-// "evento 18:30 · ritrovo 14:30 – fine 20:30", per la supervisione "inizio turno 10:00 – fine 16:00"
+// "evento 18:30 · ritrovo 14:30 – fine 20:30", per i turni remoti "inizio turno 10:00 – fine 16:00"
 function orariTurno(e) {
   const ritrovo = e.convocazione || e.convocazioneCalcolata || '';
   const fine = e.fine || e.fineCalcolata || '';
-  const turno = [ritrovo ? (e.tipo === 'supervisione' ? 'inizio turno' : 'ritrovo') + ' <b>' + esc(ritrovo) + '</b>' : '', fine ? 'fine <b>' + esc(fine) + '</b>' : '']
+  const turno = [ritrovo ? (eTurno(e) ? 'inizio turno' : 'ritrovo') + ' <b>' + esc(ritrovo) + '</b>' : '', fine ? 'fine <b>' + esc(fine) + '</b>' : '']
     .filter(Boolean).join(' – ');
-  return [e.tipo !== 'supervisione' && e.orario ? 'evento ' + esc(e.orario) : '', turno].filter(Boolean).join(' · ');
+  return [!eTurno(e) && e.orario ? 'evento ' + esc(e.orario) : '', turno].filter(Boolean).join(' · ');
 }
 
 function rigaEvento(e, oggi, ultimaColonna) {
   return '<tr><td style="padding:6px 14px 6px 0;white-space:nowrap;vertical-align:top"><b>' + esc(giornoLungo(String(e.data))) + '</b>' + relativo(e.data, oggi) + '</td>'
-    + '<td style="padding:6px 14px 6px 0">' + esc(e.titolo || '') + '<br><span style="color:#8b919c;font-size:12px">' + esc([e.competizione, e.round].filter(Boolean).join(' · ')) + '</span></td>'
+    + '<td style="padding:6px 14px 6px 0">' + esc(eTurno(e) ? TURNI_REMOTI[e.tipo] : e.titolo || '')
+      + (eTurno(e) ? '' : '<br><span style="color:#8b919c;font-size:12px">' + esc([e.competizione, e.round].filter(Boolean).join(' · ')) + '</span>') + '</td>'
     + '<td style="padding:6px 0;white-space:nowrap">' + ultimaColonna + '</td></tr>';
 }
 
@@ -362,7 +367,7 @@ const GRUPPI_PROMEMORIA = [
 
 function emailSupervisori(gruppi, ctx) {
   const pieni = GRUPPI_PROMEMORIA.filter(([chiave]) => gruppi[chiave].length);
-  const orario = (e) => (e.tipo === 'supervisione' ? 'dalle ' + esc(e.convocazione || e.convocazioneCalcolata || '') : 'ore ' + esc(e.orario || ''));
+  const orario = (e) => (eTurno(e) ? 'dalle ' + esc(e.convocazione || e.convocazioneCalcolata || '') : 'ore ' + esc(e.orario || ''));
   const chi = (r) => (r.operatore ? esc(r.operatore.nome) + (r.nota ? ' ' + r.nota : '') : '—');
   const sezioni = pieni.map(([chiave, titolo]) => '<h3 style="font-size:15px;margin:18px 0 6px">' + titolo + ' (' + gruppi[chiave].length + ')</h3>'
     + '<table style="border-collapse:collapse">' + gruppi[chiave].map((r) => rigaEvento(r.evento, ctx.oggi, orario(r.evento) + ' · ' + chi(r))).join('') + '</table>');
@@ -581,11 +586,11 @@ function notificaOnsite(r) {
 
 // ---------------------------------------------------------------- richiesta di disponibilità per un evento
 
-// "Roma-Lazio" / "Turno di supervisione"; "Serie A, giornata 9"; "evento 20:45 · ritrovo 16:45 – fine 22:45" / "turno 10:00 – 16:00"
-const nomeEvento = (e) => (e.tipo === 'supervisione' ? 'Turno di supervisione' : String(e.titolo || 'Partita'));
-const gareEvento = (e) => [e.competizione, e.round && (/^\d+$/.test(String(e.round)) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(', ');
+// "Roma-Lazio" / "Turno Remote TL"; "Serie A, giornata 9"; "evento 20:45 · ritrovo 16:45 – fine 22:45" / "turno 10:00 – 16:00"
+const nomeEvento = (e) => (eTurno(e) ? 'Turno ' + TURNI_REMOTI[e.tipo] : String(e.titolo || 'Partita'));
+const gareEvento = (e) => (eTurno(e) ? '' : [e.competizione, e.round && (/^\d+$/.test(String(e.round)) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(', '));
 function orariEvento(e) {
-  if (e.tipo === 'supervisione') return 'turno ' + (e.ritrovo || '—') + (e.fine ? ' – ' + e.fine : '');
+  if (eTurno(e)) return 'turno ' + (e.ritrovo || '—') + (e.fine ? ' – ' + e.fine : '');
   return (e.orario ? 'evento ' + e.orario + ' · ' : '') + 'ritrovo ' + (e.ritrovo || '—') + (e.fine ? ' – fine ' + e.fine : '');
 }
 

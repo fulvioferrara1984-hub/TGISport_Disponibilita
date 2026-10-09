@@ -4,28 +4,29 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 
 - **`index.html` – operatori**: ognuno entra con il proprio codice personale, indica giorno per giorno se è *Disponibile*, *Parziale* (con gli orari) o *Non disponibile* e preme **Invia ai supervisori**. In alto trova **Le tue convocazioni** e le conferma (o dice che non può) con un tasto. Non vede compensi né note interne.
 - **`admin.html` – supervisori**:
-  - **Convocazioni**: partite e turni di supervisione della settimana; per ogni evento si sceglie l'operatore da un menu che mostra chi è disponibile, parziale, non disponibile o già impegnato; avviso di **doppio turno**; stati *da assegnare → da inviare → in attesa → confermato / rifiutato*, più *da sostituire* e *annullato*; **Invia convocazioni** le rende visibili agli operatori e manda le email.
+  - **Convocazioni**: partite e turni Remote TL e Remote Support della settimana; per ogni evento si sceglie l'operatore da un menu che mostra chi è disponibile, parziale, non disponibile o già impegnato; avviso di **doppio turno**; stati *da assegnare → da inviare → in attesa → confermato / rifiutato*, più *da sostituire* e *annullato*; **Invia convocazioni** le rende visibili agli operatori e manda le email.
   - **Disponibilità**: griglia settimanale del team in tempo reale (passando su una casella si leggono nota e impegni del giorno), pannello per ogni giorno, **Richiedi disponibilità** per un periodo.
   - **Aggiornamenti**: invii delle disponibilità, conferme e rifiuti delle convocazioni, stato delle richieste.
   - **Riepilogo**: eventi coperti e compensi netti per operatore, competizione e mese; esportazione in Excel.
-  - **Operatori** (ruolo Remote TL/OP, on-site TL/OP, contratto P.IVA/Coop, codici) e **Impostazioni** (tariffe, competizioni, importazione dal file Excel, email, password).
+  - **Operatori** (ruolo Remote OP / Remote Support / Remote TL, on-site TL/OP, contratto P.IVA/Coop, codici) e **Impostazioni** (tariffe, competizioni, importazione dal file Excel, email, password).
 
 ## Regole
 
 | | |
 |---|---|
-| Ritrovo | orario dell'evento meno le ore della competizione (generale: 4); modificabile sul singolo evento |
-| Fine turno | orario dell'evento più le ore della competizione (generale: 2); supervisione: ritrovo + 6 ore; modificabile sul singolo evento |
+| Ritrovo | orario dell'evento meno le ore della competizione (una competizione nuova parte da 4); modificabile sul singolo evento |
+| Fine turno | orario dell'evento più le ore della competizione (una nuova parte da 2); turni Remote TL e Remote Support: ritrovo + la durata della loro riga (6 ore); modificabile sul singolo evento |
 | Doppio turno | stesso operatore due volte nello stesso giorno: avviso giallo se gli orari non si toccano, rosso "turni sovrapposti" se si sovrappongono |
 | Blocco | quando all'evento mancano N giorni o meno (generale: 3; evento lunedì → da venerdì) l'operatore non cambia più disponibilità né rinuncia: telefona al numero di reperibilità |
 | Notturno | ritrovo dalle 22:00 alle 6:00 |
 | Gettoni netti | P.IVA: diurno 140, notturno 210, maggiorato 210 · Coop: diurno 175, notturno 262,50, maggiorato 262,50 |
 | Compenso per competizione | Diurno (notturno se il ritrovo è di notte), Notturno, Maggiorato o Dimezzato (metà del diurno); Champions, Europa e Conference League partono come Dimezzato |
 | Maggiorato | si sceglie anche sul singolo evento e prevale su tutto |
-| Supervisione | un turno per giorno, solo operatori con ruolo **Remote TL**; le partite vanno a Remote TL o Remote OP |
+| Ruoli | un ruolo per operatore, ognuno comprende quelli sotto: **Remote OP** (partite), **Remote Support** (partite e turni Remote Support), **Remote TL** (partite e tutti i turni) |
+| Turni remoti | **Remote TL** (l'ex supervisione) e **Remote Support**: un turno per giorno, con ora di ritrovo; colore, compenso e durata dalla loro riga fissa in *Competizioni e sport* (i vecchi turni di supervisione contano come Remote TL anche nei riepiloghi dei mesi passati) |
 | Annullati | non contano mai nei riepiloghi |
 | On-site | richiesta con date, attività per giorno (Travel Day, MD-1, MD…), luogo, sport e posti TL/OP, solo agli operatori abilitati; chi accetta per primo occupa il posto, è on-site in quei giorni (non assegnabile al remoto) e non si ritira dal sito; compenso di trasferta = giorni × tariffa on-site (generale: 150 € al giorno), modificabile, visibile solo ai supervisori |
-| Disponibilità per evento | dal menu ⋯ di una partita o di un turno di supervisione remoto ancora scoperto: gli operatori scelti rispondono Sì o No per quell'evento (anche dentro la finestra di blocco, fino al giorno stesso); il Sì è solo una segnalazione, l'assegnazione resta del supervisore; la richiesta si chiude da sola quando l'evento ha un operatore e si riapre se viene rifiutato o segnato da sostituire |
+| Disponibilità per evento | dal menu ⋯ di una partita o di un turno Remote TL / Remote Support ancora scoperto: gli operatori scelti rispondono Sì o No per quell'evento (anche dentro la finestra di blocco, fino al giorno stesso); il Sì è solo una segnalazione, l'assegnazione resta del supervisore; la richiesta si chiude da sola quando l'evento ha un operatore e si riapre se viene rifiutato o segnato da sostituire |
 | Promemoria | ogni mattina tra le 8 e le 9 (nuovo tentativo alle 11 se il primo non riesce), per gli eventi remoti da oggi a X giorni dopo (generale: 3): agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto (da sostituire, senza operatore, da inviare, in attesa) |
 
 Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco), **Competizioni e sport** (ore prima/dopo, colore e menu *Compenso* per competizione) , **Notifiche email** (promemoria automatici e giorni) e **Tariffe e regole → Tariffa on-site**; l'abilitazione on-site di ciascuno si imposta nella scheda dell'operatore.
@@ -136,6 +137,14 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 4. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste per evento non partono e la dashboard lo segnala dopo l'invio.
 5. **Dashboard**: ricaricala su ogni computer dei supervisori.
 
+### Turni Remote TL e Remote Support
+
+Ordine **sito → script**, nessuna regola di Firestore da cambiare:
+
+1. **Sito**: le pagine aperte mostrano *È uscita una nuova versione del sito*: premere **Ricarica**.
+2. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, i promemoria ignorano i turni Remote Support e le email dei turni usano ancora i nomi vecchi.
+3. **Dashboard**: in **Operatori → Modifica** scegli *Remote Support* per chi fa quei turni; in **Impostazioni → Competizioni e sport** controlla colore, compenso e durata delle righe *Remote TL* e *Remote Support*.
+
 ### Outlook come app di posta
 
 Il tasto **Invia mail** (codice personale di un operatore) apre una nuova email nell'app di posta predefinita del computer, già compilata. Perché sia Outlook:
@@ -163,8 +172,8 @@ Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(
 
 **Impostazioni → Importa dal file Excel** → scegli `Convocazioni_Operatori_2026-27.xlsx`. Il file viene letto solo nel browser; prima di importare compare un'anteprima.
 
-- operatori (ruolo TL a chi ha fatto turni di *Supporto*, contratto dal foglio Impostazioni), tariffe, sport e competizioni;
-- ogni riga del foglio Convocazioni diventa un evento: *Supporto* → turno di supervisione; *Deleted* → annullato (con lo storico di chi è stato tolto); *Cambiare …* → da sostituire; *Gettone maggiorato* → maggiorato; le partite di Europa e Conference League segnate come Champions passano alla loro competizione; con operatore e CONFERMA = SI → confermato, altrimenti in attesa di conferma;
+- operatori (ruolo Remote TL a chi ha fatto turni *Supporto* o *Remote TL*, Remote Support a chi ha fatto turni *Remote Support*; il ruolo si alza soltanto; contratto dal foglio Impostazioni), tariffe, sport e competizioni;
+- ogni riga del foglio Convocazioni diventa un evento: *Supporto* o *Remote TL* → turno Remote TL (ritrovo 4 ore prima dell'orario della riga); *Remote Support* → turno Remote Support; *Deleted* → annullato (con lo storico di chi è stato tolto); *Cambiare …* → da sostituire; *Gettone maggiorato* → maggiorato; le partite di Europa e Conference League segnate come Champions passano alla loro competizione; con operatore e CONFERMA = SI → confermato, altrimenti in attesa di conferma;
 - le assenze diventano giorni *Non disponibile* (senza toccare ciò che l'operatore ha già indicato).
 
 Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operatori importati arrivano **senza codice**: crealo dalla scheda Operatori (*Crea codice*) quando li inviti.
@@ -175,9 +184,9 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 - **Supervisori**: la dashboard si aggiorna da sola appena un operatore invia (badge su *Aggiornamenti*, avviso a schermo e, se attivate, notifiche del computer). Clic sull'intestazione di un giorno → pannello **Convocazione**; *Scrivi email ai selezionati* apre il programma di posta con tutti in Ccn.
 - **Richiedi disponibilità**: periodo (scorciatoie per questa settimana, la prossima, le prossime 2 o 4), messaggio facoltativo e operatori (già selezionati quelli a cui mancano giorni). Ogni operatore vede la richiesta in cima alla sua pagina, con i giorni richiesti evidenziati, e riceve un'email con il link. In **Aggiornamenti** c'è l'avanzamento, *Sollecita chi manca*, il messaggio per WhatsApp e *Chiudi*.
 - **Esporta CSV** scarica la settimana in vista (si apre con Excel).
-- **Convocazioni**: la settimana va da martedì a lunedì (una giornata di campionato in una sola vista); ogni competizione ha il suo colore (automatico, modificabile in *Impostazioni → Competizioni e sport*), l'on-site è sempre viola. *Invia convocazioni* elenca quelle pronte per operatore: si tolgono le spunte a quelle da tenere per dopo. **Calendario** apre il mese a schermo intero: verde confermato, blu in attesa di conferma, arancione senza operatore, rosso senza operatore a ridosso (finestra di blocco); passando col mouse (o toccando) si vedono i dettagli, un clic porta alla settimana o alla scheda on-site.
+- **Convocazioni**: la settimana va da martedì a lunedì (una giornata di campionato in una sola vista); ogni competizione ha il suo colore (automatico, modificabile in *Impostazioni → Competizioni e sport*), l'on-site è sempre viola. Ogni giorno ha *+ Remote TL*, *+ Remote Support* e *+ partite*; il menu dell'operatore mostra solo chi ha il ruolo adatto. *Invia convocazioni* elenca quelle pronte per operatore: si tolgono le spunte a quelle da tenere per dopo. **Calendario** apre il mese a schermo intero: verde confermato, blu in attesa di conferma, arancione senza operatore, rosso senza operatore a ridosso (finestra di blocco); passando col mouse (o toccando) si vedono i dettagli, un clic porta alla settimana o alla scheda on-site.
 - **On-site**: *Convocazioni → + On-site* → primo e ultimo giorno (si può togliere un giorno), attività di ogni giorno con la partita per gli MD, luogo, sport, posti TL/OP, compenso proposto e destinatari (gli abilitati, con l'avviso se hanno convocazioni remote in quei giorni). Gli operatori rispondono *Accetto* / *Non posso* dalla loro pagina; chi ha convocazioni remote inviate negli stessi giorni deve prima chiamare. I giorni del deployment compaiono nel calendario: clic sulla riga → scheda con risposte, *Togli*, *Modifica*, *Chiudi richiesta* e *Annulla deployment*. Le presenze e i compensi on-site entrano nel Riepilogo e in *Esporta mese*.
-- **Chiedi disponibilità** (per un solo evento): nella finestra dell'evento (⋯) di una partita o di un turno di supervisione ancora senza operatore (o rifiutato, o da sostituire) → elenco degli operatori con disponibilità del giorno, altri turni e on-site; già spuntati i disponibili e parziali liberi non ancora interpellati → messaggio facoltativo → *Chiedi a N operatori*. Gli operatori trovano in cima alla loro pagina *Ti chiediamo se sei disponibile* e rispondono *Sì, sono disponibile* o *No* (anche via email con il link). Le risposte compaiono nella finestra dell'evento (*Sì: … · No: … · In attesa: N*, con *(prima della modifica)* se l'evento è cambiato dopo), in **Aggiornamenti** e, per i Sì, per email ai supervisori; nel menu di assegnazione chi ha detto sì sale in cima con *✓ ha detto sì*.
+- **Chiedi disponibilità** (per un solo evento): nella finestra dell'evento (⋯) di una partita o di un turno Remote TL / Remote Support ancora senza operatore (o rifiutato, o da sostituire) → elenco degli operatori che possono fare l'evento (secondo il ruolo) con disponibilità del giorno, altri turni e on-site; già spuntati i disponibili e parziali liberi non ancora interpellati → messaggio facoltativo → *Chiedi a N operatori*. Gli operatori trovano in cima alla loro pagina *Ti chiediamo se sei disponibile* e rispondono *Sì, sono disponibile* o *No* (anche via email con il link). Le risposte compaiono nella finestra dell'evento (*Sì: … · No: … · In attesa: N*, con *(prima della modifica)* se l'evento è cambiato dopo), in **Aggiornamenti** e, per i Sì, per email ai supervisori; nel menu di assegnazione chi ha detto sì sale in cima con *✓ ha detto sì*.
 - **Promemoria**: ogni mattina, se ci sono convocazioni da sistemare nei prossimi giorni, arrivano le email (agli operatori solo le loro convocazioni da confermare, con il numero di reperibilità). Un operatore senza email o disattivato compare nel riepilogo dei supervisori con la nota *(senza email)* o *(disattivato)*.
 - **Password dimenticata**: nella schermata di accesso, scrivere l'email e premere *Password dimenticata?*: arriva un'email per sceglierne una nuova.
 - **Aggiungere o togliere un supervisore**: modificare l'elenco delle email sia in [`firebase/firestore.rules`](firebase/firestore.rules) (poi ripubblicare le regole in console) sia in `SUPERVISORI` di `app/config.js`. Per togliere l'accesso basta toglierlo dalle regole; l'account si può eliminare da Authentication → Utenti.
