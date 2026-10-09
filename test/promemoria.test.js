@@ -236,3 +236,195 @@ test('indirizzi dei link ricavati dalla dashboard', () => {
   assert.deepEqual(j(gs.indirizzi('')), { convocazioni: '', sito: '' });
   assert.deepEqual(j(gs.indirizzi('javascript:alert(1)')), { convocazioni: '', sito: '' });
 });
+
+// ---------------------------------------------------------------- giro giornaliero
+
+// Firestore simulato: risponde come l'API REST a runQuery, elenco operatori e impostazioni/operativo
+const valoreREST = (v) => (v === null ? { nullValue: null } : typeof v === 'boolean' ? { booleanValue: v } : typeof v === 'number' ? { integerValue: String(v) } : { stringValue: String(v) });
+const docREST = (coll, o) => ({
+  name: 'projects/tgi-availability/databases/(default)/documents/' + coll + '/' + o.id,
+  fields: Object.fromEntries(Object.entries(o).filter(([k, v]) => k !== 'id' && v !== undefined).map(([k, v]) => [k, valoreREST(v)])),
+});
+function firestoreFinto({ eventi = [], operatori = OPS, telefono = '+39 333', codiceQuery = 200, rispostaQuery = null } = {}) {
+  return (url) => {
+    if (url.endsWith(':runQuery')) {
+      if (codiceQuery !== 200) return { codice: codiceQuery, dati: { error: { status: 'PERMISSION_DENIED' } } };
+      return { codice: 200, dati: rispostaQuery || (eventi.length ? eventi.map((e) => ({ document: docREST('eventi', e), readTime: 't' })) : [{ readTime: 't' }]) };
+    }
+    if (/\/operatori\?/.test(url)) return { codice: 200, dati: { documents: operatori.map((o) => docREST('operatori', o)) } };
+    if (url.endsWith('/impostazioni/operativo')) return telefono === null ? { codice: 404, dati: {} } : { codice: 200, dati: docREST('impostazioni', { id: 'operativo', telefono, giorniBlocco: 3 }) };
+    return { codice: 404, dati: {} };
+  };
+}
+const ADESSO = new Date('2026-10-09T07:10:00Z');   // le 9:10 a Roma
+const ATTIVI = { PROMEMORIA_ATTIVI: 'SI', PROMEMORIA_GIORNI: '3', EMAIL_SUPERVISORI: 's@x.it', URL_ADMIN: 'https://x.github.io/sito/admin.html#aggiornamenti' };
+const ultimo = (t) => (t.prop.has('ULTIMO_PROMEMORIA') ? JSON.parse(t.prop.get('ULTIMO_PROMEMORIA')) : null);
+const query = (t) => t.chiamate.find((c) => c.url.endsWith(':runQuery'));
+const intervallo = (t) => JSON.parse(query(t).opzioni.payload).structuredQuery.where.compositeFilter.filters.map((f) => [f.fieldFilter.field.fieldPath, f.fieldFilter.op, f.fieldFilter.value.stringValue]);
+
+test('spenti: nessuna lettura e nessuna email', () => {
+  const t = carica({ risposte: firestoreFinto({ eventi: [ev({})] }) });
+  assert.equal(t.gs.giroPromemoria(ADESSO).saltato, 'spenti');
+  assert.equal(t.chiamate.length, 0);
+  assert.equal(t.email.length, 0);
+});
+
+test('giro completo: email a operatori e riepilogo, esito salvato', () => {
+  const t = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ eventi: [ev({ titolo: 'Attesa' }), ev({ titolo: 'Libera', operatoreId: '', stato: 'da-assegnare', data: '2026-10-11' })] }) });
+  const r = j(t.gs.giroPromemoria(ADESSO));
+  assert.deepEqual(t.email.map((m) => m.to), ['anna@x.it', 's@x.it']);
+  assert.equal(t.email[0].name, 'Disponibilità Ops · TGI Sport');
+  assert.ok(t.email[0].htmlBody.includes('href="https://x.github.io/sito/"'));
+  assert.ok(t.email[0].htmlBody.includes('+39 333'));
+  assert.ok(t.email[1].htmlBody.includes('href="https://x.github.io/sito/admin.html#convocazioni"'));
+  assert.deepEqual([r.oggi, r.riepilogo, r.operatori], ['2026-10-09', true, 1]);
+  assert.deepEqual(ultimo(t), { giorno: '2026-10-09', quando: ADESSO.toISOString(), riepilogo: true, operatori: 1 });
+  const q = query(t);
+  assert.equal(q.opzioni.method, 'post');
+  assert.equal(q.opzioni.headers.Authorization, 'Bearer gettone-prova');
+  assert.equal(q.opzioni.headers['x-goog-user-project'], 'tgi-availability');
+  assert.deepEqual(intervallo(t), [['data', 'GREATER_THAN_OR_EQUAL', '2026-10-09'], ['data', 'LESS_THAN_OR_EQUAL', '2026-10-12']]);
+});
+
+test('niente in sospeso: nessuna email, giro registrato', () => {
+  const t = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ eventi: [ev({ stato: 'confermato' })] }) });
+  t.gs.giroPromemoria(ADESSO);
+  assert.equal(t.email.length, 0);
+  assert.deepEqual(ultimo(t), { giorno: '2026-10-09', quando: ADESSO.toISOString(), riepilogo: false, operatori: 0 });
+});
+
+test('secondo giro nello stesso giorno non spedisce', () => {
+  const t = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ eventi: [ev({})] }) });
+  t.gs.giroPromemoria(ADESSO);
+  const email = t.email.length, letture = t.chiamate.length;
+  assert.equal(t.gs.giroPromemoria(new Date('2026-10-09T15:00:00Z')).saltato, 'già fatto');
+  assert.equal(t.email.length, email);
+  assert.equal(t.chiamate.length, letture);
+  t.gs.giroPromemoria(new Date('2026-10-10T07:00:00Z'));
+  assert.ok(t.email.length > email);
+});
+
+test('senza indirizzi supervisori: solo agli operatori', () => {
+  const t = carica({ proprieta: Object.assign({}, ATTIVI, { EMAIL_SUPERVISORI: '' }), risposte: firestoreFinto({ eventi: [ev({}), ev({ operatoreId: '', stato: 'da-assegnare' })] }) });
+  const r = t.gs.giroPromemoria(ADESSO);
+  assert.deepEqual(t.email.map((m) => m.to), ['anna@x.it']);
+  assert.equal(r.riepilogo, false);
+});
+
+test('un\'email che non parte non ferma le altre', () => {
+  const ops = [OPS[0], { id: 'b', nome: 'Bruno Blu', email: 'bruno@x.it' }];
+  const t = carica({ proprieta: ATTIVI, erroreEmail: (m) => m.to === 'anna@x.it', risposte: firestoreFinto({ operatori: ops, eventi: [ev({ operatoreId: 'a' }), ev({ operatoreId: 'b' })] }) });
+  const r = t.gs.giroPromemoria(ADESSO);
+  assert.deepEqual(t.email.map((m) => m.to), ['bruno@x.it', 's@x.it']);
+  assert.equal(r.operatori, 1);
+  assert.equal(ultimo(t).operatori, 1);
+});
+
+test('lettura negata: niente email né registrazione', () => {
+  const t = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ codiceQuery: 403 }) });
+  assert.throws(() => t.gs.giroPromemoria(ADESSO), /aggiungilo come Editor/);
+  assert.equal(t.email.length, 0);
+  assert.equal(ultimo(t), null);
+  const altro = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ codiceQuery: 500 }) });
+  assert.throws(() => altro.gs.giroPromemoria(ADESSO), /Lettura di Firebase non riuscita \(500\)\./);
+});
+
+test('anteprima: niente email né registrazione, anche se già fatto oggi', () => {
+  const prima = { giorno: '2026-10-09', quando: 'x', riepilogo: true, operatori: 2 };
+  const t = carica({
+    proprieta: Object.assign({}, ATTIVI, { PROMEMORIA_ATTIVI: 'NO', ULTIMO_PROMEMORIA: JSON.stringify(prima) }),
+    risposte: firestoreFinto({ eventi: [ev({}), ev({ operatoreId: '', stato: 'da-assegnare' })] }),
+  });
+  const r = j(t.gs.giroPromemoria(ADESSO, { anteprima: true }));
+  assert.equal(t.email.length, 0);
+  assert.deepEqual([r.riepilogo, r.operatori, r.destinatari], [true, 1, ['anna@x.it', 's@x.it']]);
+  assert.deepEqual(ultimo(t), prima);
+});
+
+test('il giorno è quello di Roma', () => {
+  const t = carica({ proprieta: ATTIVI, risposte: firestoreFinto() });
+  assert.equal(t.gs.giroPromemoria(new Date('2026-10-09T22:30:00Z')).oggi, '2026-10-10');
+  assert.deepEqual(intervallo(t).map((f) => f[2]), ['2026-10-10', '2026-10-13']);
+});
+
+test('l\'attivatore non scambia l\'evento per la data', () => {
+  const t = carica({ proprieta: ATTIVI, risposte: firestoreFinto() });
+  t.gs.inviaPromemoria({ triggerUid: '1', authMode: 'FULL' });
+  const oggi = formatta(new Date(), 'Europe/Rome', 'yyyy-MM-dd');
+  assert.equal(intervallo(t)[0][2], oggi);
+  assert.equal(ultimo(t).giorno, oggi);
+});
+
+test('risposta runQuery con voci senza documento', () => {
+  const t = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ rispostaQuery: [{ readTime: '2026-10-09T07:10:00Z' }] }) });
+  assert.doesNotThrow(() => t.gs.giroPromemoria(ADESSO));
+  assert.equal(t.email.length, 0);
+});
+
+test('operatori su più pagine', () => {
+  const base = firestoreFinto({ eventi: [ev({ operatoreId: 'z' })] });
+  const t = carica({
+    proprieta: ATTIVI,
+    risposte: (url) => {
+      if (/\/operatori\?/.test(url)) {
+        return url.includes('pageToken=p2')
+          ? { codice: 200, dati: { documents: [docREST('operatori', { id: 'z', nome: 'Zeno Bianchi', email: 'zeno@x.it' })] } }
+          : { codice: 200, dati: { documents: [docREST('operatori', OPS[0])], nextPageToken: 'p2' } };
+      }
+      return base(url);
+    },
+  });
+  t.gs.giroPromemoria(ADESSO);
+  assert.deepEqual(t.email.map((m) => m.to), ['zeno@x.it', 's@x.it']);
+});
+
+// ---------------------------------------------------------------- impostazioni e attivazione
+
+test('impostazioni: valori predefiniti e attivatore', () => {
+  const t = carica();
+  const imp = j(t.gs.leggiImpostazioni());
+  assert.deepEqual([imp.promemoriaAttivi, imp.promemoriaGiorni, imp.ultimoPromemoria], [false, 3, null]);
+  assert.equal(t.gs.impostazioniDashboard().promemoriaProgrammato, false);
+  assert.equal(carica({ attivatori: ['inviaPromemoria'] }).gs.impostazioniDashboard().promemoriaProgrammato, true);
+  const rotte = carica({ proprieta: { PROMEMORIA_GIORNI: '12', ULTIMO_PROMEMORIA: '{rotto' } }).gs.leggiImpostazioni();
+  assert.deepEqual([rotte.promemoriaGiorni, rotte.ultimoPromemoria], [3, null]);
+});
+
+test('salvataggio da dashboard vecchia non tocca i promemoria', () => {
+  const t = carica({ proprieta: { PROMEMORIA_ATTIVI: 'SI', PROMEMORIA_GIORNI: '5' } });
+  const imp = t.gs.salvaImpostazioni({ emailSupervisori: 's@x.it', emailAttive: true, urlAdmin: '' });
+  assert.deepEqual([imp.promemoriaAttivi, imp.promemoriaGiorni, imp.emailSupervisori], [true, 5, 's@x.it']);
+  const nuove = t.gs.salvaImpostazioni({ emailSupervisori: 's@x.it', emailAttive: true, urlAdmin: '', promemoriaAttivi: false, promemoriaGiorni: 2 });
+  assert.deepEqual([nuove.promemoriaAttivi, nuove.promemoriaGiorni, nuove.promemoriaProgrammato], [false, 2, false]);
+});
+
+test('giorni fuori limite rifiutati', () => {
+  const t = carica({ proprieta: { PROMEMORIA_GIORNI: '4' } });
+  [0, 8, 2.5, '', null].forEach((g) => assert.throws(() => t.gs.salvaImpostazioni({ emailSupervisori: '', promemoriaAttivi: true, promemoriaGiorni: g }), /I giorni del promemoria vanno da 1 a 7\./, String(g)));
+  assert.equal(t.prop.get('PROMEMORIA_GIORNI'), '4');
+  assert.equal(t.gs.salvaImpostazioni({ emailSupervisori: '', promemoriaAttivi: true, promemoriaGiorni: 7 }).promemoriaGiorni, 7);
+});
+
+test('attivazione senza doppioni', () => {
+  const t = carica({ attivatori: ['inviaPromemoria', 'altro'], proprieta: { PROMEMORIA_ATTIVI: 'NO', PROMEMORIA_GIORNI: '5' }, risposte: firestoreFinto({ eventi: [ev({})] }) });
+  t.gs.attivaPromemoria();
+  assert.equal(t.tolti.length, 1);
+  assert.equal(t.creati.length, 1);
+  assert.equal(t.creati[0].getHandlerFunction(), 'inviaPromemoria');
+  assert.deepEqual(t.creati[0].impostazioni, { timeBased: true, everyDays: 1, atHour: 8, inTimezone: 'Europe/Rome' });
+  assert.deepEqual(t.attivatori.map((a) => a.getHandlerFunction()).sort(), ['altro', 'inviaPromemoria']);
+  assert.deepEqual([t.prop.get('PROMEMORIA_ATTIVI'), t.prop.get('PROMEMORIA_GIORNI')], ['NO', '5']);
+  assert.equal(t.email.length, 0);
+  const nuovo = carica({ risposte: firestoreFinto() });
+  nuovo.gs.attivaPromemoria();
+  assert.deepEqual([nuovo.prop.get('PROMEMORIA_ATTIVI'), nuovo.prop.get('PROMEMORIA_GIORNI')], ['SI', '3']);
+  assert.ok(nuovo.registro.some((r) => r.includes('lettura riuscita')));
+});
+
+test('attivazione con lettura negata: nessun attivatore, messaggio chiaro', () => {
+  const t = carica({ risposte: firestoreFinto({ codiceQuery: 403 }) });
+  assert.throws(() => t.gs.attivaPromemoria(), /aggiungilo come Editor/);
+  assert.equal(t.creati.length, 0);
+  assert.equal(t.prop.has('PROMEMORIA_ATTIVI'), false);
+  assert.ok(t.registro.some((r) => r.includes('NON attivato')));
+});

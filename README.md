@@ -24,8 +24,9 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 | UEFA | Champions, Europa e Conference League: metà del diurno |
 | Supervisione | un turno per giorno, solo operatori con ruolo **TL**; le partite vanno a TL o OP |
 | Annullati | non contano mai nei riepiloghi |
+| Promemoria | ogni mattina tra le 8 e le 9, per gli eventi remoti da oggi a X giorni dopo (generale: 3): agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto (da sostituire, senza operatore, da inviare, in attesa) |
 
-Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco) e **Competizioni e sport** (ore prima/dopo per competizione, casella *UEFA ½*).
+Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco), **Competizioni e sport** (ore prima/dopo per competizione, casella *UEFA ½*) e **Notifiche email** (promemoria automatici e giorni).
 
 **Esporta mese** (scheda Convocazioni) scarica un Excel con le convocazioni del mese e le presenze per operatore, senza compensi.
 
@@ -39,7 +40,7 @@ Pagine su GitHub Pages ──► Firebase (Firestore + Authentication)   dati e 
 
 - **Firestore** contiene operatori, disponibilità, invii e richieste. Le **regole di sicurezza** ([`firebase/firestore.rules`](firebase/firestore.rules)) decidono chi vede cosa: un operatore legge e scrive solo i propri dati, i supervisori tutto.
 - **Authentication**: ogni supervisore ha il proprio account (email TGI Sport + password, indirizzo confermato via email); ogni codice operatore è un account a sé (nella console si vedono solo impronte, non i codici).
-- **Apps Script** ([`backend/Codice.gs`](backend/Codice.gs)) spedisce le email ai supervisori e agli operatori. Nessuno lo aspetta: la pagina risponde subito e l'email parte dopo.
+- **Apps Script** ([`backend/Codice.gs`](backend/Codice.gs)) spedisce le email ai supervisori e agli operatori. Nessuno lo aspetta: la pagina risponde subito e l'email parte dopo. Ogni mattina manda anche i **promemoria**: per farlo legge Firestore da solo, in sola lettura, con l'account Google che possiede lo script (Editor del progetto Firebase).
 
 Nel repository pubblico non ci sono dati né password. La configurazione in `app/config.js` non è segreta: la protezione sta nelle regole.
 
@@ -96,6 +97,22 @@ Nell'editor di Apps Script: sostituisci il codice con [`backend/Codice.gs`](back
 
 L'app web va pubblicata con *Esegui come: Me* e *Chi ha accesso: Chiunque*: le richieste vengono comunque rifiutate se chi chiama non è un supervisore o un operatore attivo.
 
+### Promemoria automatici
+
+Da fare una volta, nell'ordine:
+
+1. **Firebase**: l'account Google che possiede lo script deve poter leggere i dati. [Console Firebase](https://console.firebase.google.com/) → progetto **tgi-availability** → ⚙️ accanto a *Panoramica del progetto* → **Impostazioni progetto** → scheda **Utenti e autorizzazioni** → **Aggiungi membro** → email dell'account dello script → ruolo **Editor** → **Aggiungi membro**. Se script e Firebase sono dello stesso account, niente da fare.
+2. **Script**: incolla [`backend/Codice.gs`](backend/Codice.gs) e il manifest [`backend/appsscript.json`](backend/appsscript.json), salva, scegli **attivaPromemoria** nel menu delle funzioni accanto a *Debug* e premi **Esegui**; accetta le autorizzazioni nuove (dati di Firestore e attivatori). Nel registro devono comparire:
+   - `Firebase: lettura riuscita.`
+   - `Anteprima di oggi, nessuna email spedita: …` (chi riceverebbe un promemoria oggi)
+   - `Invio giornaliero attivo tra le 8 e le 9 · promemoria accesi, 3 giorni prima …`
+
+   Se invece compare *aggiungilo come Editor del progetto*, il passo 1 non è ancora attivo: aspetta qualche minuto e riesegui. Poi **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione**.
+3. **Sito**: pubblicazione normale. Prima dell'aggiornamento dello script la dashboard scrive *Script delle email da aggiornare*.
+4. **Dashboard**: **Impostazioni → Notifiche email** → *Promemoria automatici ogni mattina* e *Giorni prima dell'evento* → **Salva** (salva anche l'indirizzo usato per i link delle email). La riga sotto mostra l'ultimo promemoria partito.
+
+Per sospenderli basta togliere la casella; per fermare del tutto l'invio giornaliero: editor di Apps Script → ⏰ **Attivatori** → elimina *inviaPromemoria*. `attivaPromemoria` si può rieseguire quando si vuole: non crea doppioni.
+
 ### 4. GitHub Pages
 
 Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(root)`.
@@ -125,6 +142,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 - **Supervisori**: la dashboard si aggiorna da sola appena un operatore invia (badge su *Aggiornamenti*, avviso a schermo e, se attivate, notifiche del computer). Clic sull'intestazione di un giorno → pannello **Convocazione**; *Scrivi email ai selezionati* apre il programma di posta con tutti in Ccn.
 - **Richiedi disponibilità**: periodo (scorciatoie per questa settimana, la prossima, le prossime 2 o 4), messaggio facoltativo e operatori (già selezionati quelli a cui mancano giorni). Ogni operatore vede la richiesta in cima alla sua pagina, con i giorni richiesti evidenziati, e riceve un'email con il link. In **Aggiornamenti** c'è l'avanzamento, *Sollecita chi manca*, il messaggio per WhatsApp e *Chiudi*.
 - **Esporta CSV** scarica la settimana in vista (si apre con Excel).
+- **Promemoria**: ogni mattina, se ci sono convocazioni da sistemare nei prossimi giorni, arrivano le email (agli operatori solo le loro convocazioni da confermare, con il numero di reperibilità). Un operatore senza email o disattivato compare nel riepilogo dei supervisori con la nota *(senza email)* o *(disattivato)*.
 - **Password dimenticata**: nella schermata di accesso, scrivere l'email e premere *Password dimenticata?*: arriva un'email per sceglierne una nuova.
 - **Aggiungere o togliere un supervisore**: modificare l'elenco delle email sia in [`firebase/firestore.rules`](firebase/firestore.rules) (poi ripubblicare le regole in console) sia in `SUPERVISORI` di `app/config.js`. Per togliere l'accesso basta toglierlo dalle regole; l'account si può eliminare da Authentication → Utenti.
 
@@ -135,6 +153,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 - Firebase blocca da solo i tentativi di accesso ripetuti.
 - Uscendo (*Esci*) si cancella anche la copia dei dati salvata sul dispositivo.
 - Le email partono dall'account Google che ha pubblicato lo script (limite di Google: 100 al giorno con Gmail, 1500 con Google Workspace); le notifiche ai supervisori sono al massimo una al minuto per operatore.
+- Per i promemoria lo script legge Firestore con il proprio account, fuori dalle regole di sicurezza: lo fa solo nel giro del mattino e solo in lettura; le richieste che arrivano dalle pagine continuano a usare l'accesso di chi le manda.
 
 ## Prove in locale
 
@@ -154,4 +173,5 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/config.js` | collegamento a Firebase e allo script delle email |
 | `app/stile.css`, `Logo/`, favicon | identità TGI Sport (come Mockup Studio) |
 | `firebase/` | regole di sicurezza di Firestore e configurazione dell'emulatore |
-| `backend/` | script Google Apps Script per le email |
+| `backend/` | script Google Apps Script per le email e i promemoria |
+| `test/` | prove automatiche: `node --test test/*.test.js` |

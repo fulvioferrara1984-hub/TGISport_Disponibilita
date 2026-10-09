@@ -2,9 +2,12 @@
  * Disponibilità Ops · TGI Sport — invio delle email
  * I dati stanno su Firebase; questo Google Apps Script serve solo a spedire le email, in sottofondo:
  *  - ai supervisori, quando un operatore invia le disponibilità;
- *  - agli operatori, quando i supervisori chiedono le disponibilità per un periodo.
+ *  - agli operatori, quando i supervisori chiedono le disponibilità per un periodo;
+ *  - ogni mattina, i promemoria delle convocazioni ancora da sistemare (attivaPromemoria).
  * Chi chiama viene riconosciuto chiedendo a Firestore, con il suo gettone di accesso, di leggere
  * dati che le regole di sicurezza mostrano solo a lui: niente password o segreti qui dentro.
+ * I promemoria girano senza nessuno collegato: leggono Firestore (solo lettura) con l'account Google
+ * proprietario dello script, che per questo deve essere Editor del progetto Firebase.
  */
 
 const CONFIG = {
@@ -23,7 +26,7 @@ function doPost(e) {
     const r = JSON.parse(e.postData.contents);
     const azioni = {
       notificaInvio, emailRichiesta, emailConvocazioni, notificaRisposta,
-      leggiImpostazioni: soloSupervisori(leggiImpostazioni), salvaImpostazioni: soloSupervisori(salvaImpostazioni),
+      leggiImpostazioni: soloSupervisori(impostazioniDashboard), salvaImpostazioni: soloSupervisori(salvaImpostazioni),
     };
     if (!azioni[r.azione]) throw new Error('Operazione non consentita.');
     risposta = { ok: true, dati: azioni[r.azione](r) };
@@ -208,21 +211,43 @@ function periodoLeggibile(da, a) {
 
 // ---------------------------------------------------------------- impostazioni (proprietà dello script)
 
+const giorniValidi = (g) => Number.isInteger(g) && g >= 1 && g <= 7;
+
 function leggiImpostazioni() {
   const p = PropertiesService.getScriptProperties().getProperties();
-  return { emailSupervisori: p.EMAIL_SUPERVISORI || '', emailAttive: p.EMAIL_ATTIVE !== 'NO', urlAdmin: p.URL_ADMIN || '' };
+  const giorni = Number(p.PROMEMORIA_GIORNI);
+  let ultimo = null;
+  try { ultimo = p.ULTIMO_PROMEMORIA ? JSON.parse(p.ULTIMO_PROMEMORIA) : null; } catch (e) { ultimo = null; }
+  return {
+    emailSupervisori: p.EMAIL_SUPERVISORI || '', emailAttive: p.EMAIL_ATTIVE !== 'NO', urlAdmin: p.URL_ADMIN || '',
+    promemoriaAttivi: p.PROMEMORIA_ATTIVI === 'SI', promemoriaGiorni: giorniValidi(giorni) ? giorni : 3, ultimoPromemoria: ultimo,
+  };
+}
+
+// Per la dashboard: anche se l'invio giornaliero è stato attivato (attivaPromemoria)
+function impostazioniDashboard() {
+  return Object.assign(leggiImpostazioni(), {
+    promemoriaProgrammato: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'inviaPromemoria'),
+  });
 }
 
 function salvaImpostazioni(r) {
   const email = String(r.emailSupervisori || '').split(/[,;\s]+/).filter(Boolean);
   if (email.some((x) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) throw new Error('Controlla gli indirizzi email dei supervisori.');
   const url = String(r.urlAdmin || '');
-  PropertiesService.getScriptProperties().setProperties({
+  const nuove = {
     EMAIL_SUPERVISORI: email.join(','),
     EMAIL_ATTIVE: r.emailAttive === false ? 'NO' : 'SI',
     URL_ADMIN: /^https:\/\//.test(url) ? url : '',
-  });
-  return leggiImpostazioni();
+  };
+  // una dashboard non ancora aggiornata non manda i campi dei promemoria: restano come sono
+  if (r.promemoriaGiorni !== undefined) {
+    if (!giorniValidi(r.promemoriaGiorni === null || r.promemoriaGiorni === '' ? NaN : Number(r.promemoriaGiorni))) throw new Error('I giorni del promemoria vanno da 1 a 7.');
+    nuove.PROMEMORIA_GIORNI = String(Number(r.promemoriaGiorni));
+  }
+  if (r.promemoriaAttivi !== undefined) nuove.PROMEMORIA_ATTIVI = r.promemoriaAttivi === true ? 'SI' : 'NO';
+  PropertiesService.getScriptProperties().setProperties(nuove);
+  return impostazioniDashboard();
 }
 
 // ---------------------------------------------------------------- promemoria automatici: scelta degli eventi
@@ -346,4 +371,105 @@ function emailSupervisori(gruppi, ctx) {
       + '<p>Eventi remoti ' + (ctx.giorni === 1 ? 'di oggi e domani' : 'dei prossimi ' + ctx.giorni + ' giorni') + ' ancora da sistemare:</p>'
       + sezioni.join('') + (ctx.convocazioni ? tasto(ctx.convocazioni, 'Apri le convocazioni') : '') + '</div>',
   };
+}
+
+// ---------------------------------------------------------------- promemoria automatici: lettura e giro del mattino
+
+// Firestore con l'account proprietario dello script: legge fuori dalle regole di sicurezza,
+// perciò si usa solo qui, solo in lettura e senza dati in arrivo da fuori.
+function firestoreAdmin(metodo, percorso, corpo) {
+  const opzioni = {
+    method: metodo, muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'x-goog-user-project': CONFIG.FIREBASE_PROJECT_ID },
+  };
+  if (corpo) { opzioni.contentType = 'application/json'; opzioni.payload = JSON.stringify(corpo); }
+  const r = UrlFetchApp.fetch('https://firestore.googleapis.com/v1/projects/' + CONFIG.FIREBASE_PROJECT_ID + '/databases/(default)/documents' + percorso, opzioni);
+  return { codice: r.getResponseCode(), dati: JSON.parse(r.getContentText() || '{}') };
+}
+
+function leggiDatiPromemoria(oggi, fine) {
+  const controlla = (r, ammessi) => {
+    if (r.codice === 200 || (ammessi || []).indexOf(r.codice) >= 0) return r;
+    if (r.codice === 401 || r.codice === 403) throw new Error("L'account dello script non può leggere Firebase: aggiungilo come Editor del progetto (vedi README).");
+    throw new Error('Lettura di Firebase non riuscita (' + r.codice + ').');
+  };
+  const filtro = (op, valore) => ({ fieldFilter: { field: { fieldPath: 'data' }, op, value: { stringValue: valore } } });
+  const q = controlla(firestoreAdmin('post', ':runQuery', { structuredQuery: {
+    from: [{ collectionId: 'eventi' }],
+    where: { compositeFilter: { op: 'AND', filters: [filtro('GREATER_THAN_OR_EQUAL', oggi), filtro('LESS_THAN_OR_EQUAL', fine)] } },
+  } }));
+  // senza risultati l'API risponde con voci che hanno solo readTime
+  const eventi = (Array.isArray(q.dati) ? q.dati : []).filter((x) => x.document).map((x) => daFirestore(x.document));
+  const operatori = [];
+  let pagina = '';
+  do {
+    const r = controlla(firestoreAdmin('get', '/operatori?pageSize=300' + (pagina ? '&pageToken=' + encodeURIComponent(pagina) : '')));
+    (r.dati.documents || []).forEach((d) => operatori.push(daFirestore(d)));
+    pagina = r.dati.nextPageToken || '';
+  } while (pagina);
+  const operativo = controlla(firestoreAdmin('get', '/impostazioni/operativo'), [404]);
+  return { eventi, operatori, telefono: operativo.codice === 200 ? String(daFirestore(operativo.dati).telefono || '') : '' };
+}
+
+// Il giro del mattino. In anteprima non controlla interruttore e giro già fatto, non spedisce e non salva.
+function giroPromemoria(adesso, opzioni) {
+  const anteprima = !!(opzioni && opzioni.anteprima);
+  const imp = leggiImpostazioni();
+  const oggi = Utilities.formatDate(adesso, 'Europe/Rome', 'yyyy-MM-dd');
+  if (!anteprima && !imp.promemoriaAttivi) return { saltato: 'spenti', oggi };
+  if (!anteprima && imp.ultimoPromemoria && imp.ultimoPromemoria.giorno === oggi) return { saltato: 'già fatto', oggi };
+  const dati = leggiDatiPromemoria(oggi, aggiungiGiorni(oggi, imp.promemoriaGiorni));
+  const scelta = selezionaPromemoria(dati.eventi, dati.operatori, oggi, imp.promemoriaGiorni);
+  const link = indirizzi(imp.urlAdmin);
+  const email = scelta.operatori.map((op) => emailOperatore(op, op.eventi, { oggi, telefono: dati.telefono, sito: link.sito }));
+  const daSistemare = GRUPPI_PROMEMORIA.some(([chiave]) => scelta.gruppi[chiave].length);
+  const riepilogo = daSistemare && imp.emailSupervisori
+    ? emailSupervisori(scelta.gruppi, { oggi, giorni: imp.promemoriaGiorni, a: imp.emailSupervisori, convocazioni: link.convocazioni })
+    : null;
+  if (anteprima) {
+    return { oggi, riepilogo: !!riepilogo, operatori: email.length, destinatari: email.concat(riepilogo ? [riepilogo] : []).map((m) => m.to) };
+  }
+  const spedisci = (m) => {
+    try {
+      MailApp.sendEmail(Object.assign({ name: CONFIG.MITTENTE }, m));
+      return true;
+    } catch (e) {
+      console.error('Promemoria non inviato a ' + m.to + ': ' + e.message);
+      return false;
+    }
+  };
+  const inviate = email.filter(spedisci);
+  const riepilogoInviato = !!riepilogo && spedisci(riepilogo);
+  PropertiesService.getScriptProperties().setProperty('ULTIMO_PROMEMORIA', JSON.stringify({
+    giorno: oggi, quando: adesso.toISOString(), riepilogo: riepilogoInviato, operatori: inviate.length,
+  }));
+  return { oggi, riepilogo: riepilogoInviato, operatori: inviate.length, destinatari: inviate.concat(riepilogoInviato ? [riepilogo] : []).map((m) => m.to) };
+}
+
+// Funzione dell'attivatore giornaliero: Google le passa un evento, che qui non serve.
+function inviaPromemoria() {
+  console.log('Promemoria: ' + JSON.stringify(giroPromemoria(new Date())));
+}
+
+// Da eseguire una volta dall'editor (e di nuovo se serve): chiede le autorizzazioni, controlla
+// di poter leggere Firebase, mostra cosa partirebbe oggi e attiva l'invio ogni mattina tra le 8 e le 9.
+function attivaPromemoria() {
+  const oggi = Utilities.formatDate(new Date(), 'Europe/Rome', 'yyyy-MM-dd');
+  try {
+    leggiDatiPromemoria(oggi, aggiungiGiorni(oggi, leggiImpostazioni().promemoriaGiorni));
+  } catch (e) {
+    console.error('Firebase: ' + e.message + ' Invio giornaliero NON attivato.');
+    throw e;
+  }
+  console.log('Firebase: lettura riuscita.');
+  const p = PropertiesService.getScriptProperties();
+  if (p.getProperty('PROMEMORIA_ATTIVI') === null) p.setProperty('PROMEMORIA_ATTIVI', 'SI');
+  if (p.getProperty('PROMEMORIA_GIORNI') === null) p.setProperty('PROMEMORIA_GIORNI', '3');
+  const prova = giroPromemoria(new Date(), { anteprima: true });
+  console.log('Anteprima di oggi, nessuna email spedita: ' + (prova.destinatari.length ? prova.destinatari.join(', ') : 'niente in sospeso.'));
+  ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'inviaPromemoria').forEach((t) => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('inviaPromemoria').timeBased().everyDays(1).atHour(8).inTimezone('Europe/Rome').create();
+  const imp = leggiImpostazioni();
+  console.log('Invio giornaliero attivo tra le 8 e le 9 · promemoria ' + (imp.promemoriaAttivi ? 'accesi' : 'spenti') + ', '
+    + imp.promemoriaGiorni + ' giorni prima · email ancora disponibili oggi: ' + MailApp.getRemainingDailyQuota());
 }
