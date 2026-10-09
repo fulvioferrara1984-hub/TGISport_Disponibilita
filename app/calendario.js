@@ -27,9 +27,9 @@
     const eventi = A.eventi.filter((e) => e.data === d).map((e) => {
       const stato = R.statoCalendario(e, oggi, n);
       if (!stato) return null;
-      const sup = e.tipo === 'supervisione', ora = (sup ? R.convocazione(e, A.regole) : e.orario) || '';
-      return { tipo: 'evento', id: e.id, stato, colore: R.coloreCompetizione(e.competizione, A.regole), ora,
-        testo: (ora ? ora + ' ' : '') + (sup ? 'Supervisione' + (e.competizione ? ' ' + e.competizione : '') : e.titolo || 'Partita'), e };
+      const sup = DO.turnoRemoto(e.tipo), ora = (sup ? R.convocazione(e, A.regole) : e.orario) || '';
+      return { tipo: 'evento', id: e.id, stato, colore: R.coloreCompetizione(R.competizioneDi(e), A.regole), ora,
+        testo: (ora ? ora + ' ' : '') + (sup ? R.nomeTipo(e.tipo) : e.titolo || 'Partita'), e };
     }).filter(Boolean).sort((a, b) => (a.ora || '99').localeCompare(b.ora || '99'));
     return onsite.concat(eventi);
   }
@@ -65,11 +65,11 @@
         + '<span>Posti ' + O.etichettaPosti(x) + '</span>'
         + '<span>' + (chi.length ? DO.esc(chi.join(', ')) : 'Nessuno ha ancora accettato') + '</span>';
     }
-    const e = v.e, sup = e.tipo === 'supervisione';
+    const e = v.e, sup = DO.turnoRemoto(e.tipo);
     const ritrovo = R.convocazione(e, A.regole), fine = R.fine(e, A.regole);
     const round = e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round);
-    return '<b>' + DO.esc(sup ? 'Supervisione' : e.titolo || 'Partita') + '</b>'
-      + '<span>' + giorno + (e.competizione ? ' · ' + DO.esc([e.competizione, round].filter(Boolean).join(' · ')) : '') + '</span>'
+    return '<b>' + DO.esc(sup ? DO.nomeTurno(e.tipo) : e.titolo || 'Partita') + '</b>'
+      + '<span>' + giorno + (!sup && e.competizione ? ' · ' + DO.esc([e.competizione, round].filter(Boolean).join(' · ')) : '') + '</span>'
       + (!sup && e.orario ? '<span>Evento alle ' + DO.esc(e.orario) + '</span>' : '')
       + '<span>' + (sup ? 'Turno ' : 'Ritrovo ') + (ritrovo || '—') + (fine ? ' – fine ' + fine : '') + '</span>'
       + '<span>' + (e.operatoreId ? DO.esc(nomeOp(e.operatoreId)) + ' · ' : 'Senza operatore · ') + (NOMI_STATO[e.stato] || e.stato)

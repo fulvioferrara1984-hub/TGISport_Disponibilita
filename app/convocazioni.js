@@ -1,4 +1,4 @@
-/* Disponibilità Ops — scheda Convocazioni: partite e turni di supervisione, assegnazioni, invio agli operatori.
+/* Disponibilità Ops — scheda Convocazioni: partite e turni remoti (Remote TL, Remote Support), assegnazioni, invio agli operatori.
  * Prende il posto del foglio "Convocazioni" del file Excel. */
 (function (DO) {
   'use strict';
@@ -20,8 +20,10 @@
   const plurale = (n, uno, molti) => n + ' ' + (n === 1 ? uno : molti);
   const operatore = (id) => A.operatori.find((o) => o.id === id);
   const nomeOp = (id) => (operatore(id) || {}).nome || 'operatore rimosso';
-  const titolo = (e) => (e.tipo === 'supervisione' ? 'Supervisione' + (e.competizione ? ' ' + e.competizione : '') : e.titolo || 'Partita');
-  const ordina = (a, b) => (a.tipo === b.tipo ? 0 : a.tipo === 'supervisione' ? -1 : 1)
+  const turno = (e) => DO.turnoRemoto(e.tipo);
+  const titolo = (e) => (turno(e) ? R.nomeTipo(e.tipo) : e.titolo || 'Partita');
+  // turni remoti prima delle partite
+  const ordina = (a, b) => (turno(b) - turno(a))
     || (R.convocazione(a, A.regole) || '99').localeCompare(R.convocazione(b, A.regole) || '99') || titolo(a).localeCompare(titolo(b));
   // altri impegni dello stesso operatore nello stesso giorno: doppio turno
   const altriImpegni = (e, idOp) => A.eventi.filter((x) => x.id !== e.id && x.operatoreId === idOp && x.data === e.data && x.stato !== 'annullato');
@@ -41,7 +43,7 @@
 
   function eventiVisibili() {
     const comp = $('ev-filtro-comp').value, f = $('ev-filtro-stato').value, oggi = DO.oggi();
-    return A.eventi.filter((e) => (!comp || e.competizione === comp)
+    return A.eventi.filter((e) => (!comp || R.competizioneDi(e) === comp)
       && (f ? filtroStato(e) && (e.data >= oggi || f === 'rifiutato') : e.data >= inizio && e.data <= DO.aggiungi(inizio, 6)));
   }
 
@@ -68,7 +70,8 @@
       const g = DO.giorno(d);
       const testa = '<div class="ev-giorno-testa' + (d === DO.oggi() ? ' oggi' : '') + '"><b>' + g.nome + ' ' + g.num + ' ' + g.mese + '</b>'
         + '<span>' + (evs.length ? plurale(evs.filter((e) => e.stato !== 'annullato').length, 'evento', 'eventi') : 'nessun evento') + '</span>'
-        + '<button type="button" class="link" data-nuova-sup="' + d + '">+ supervisione</button>'
+        + '<button type="button" class="link" data-nuovo-turno="supervisione" data-giorno="' + d + '">+ Remote TL</button>'
+        + '<button type="button" class="link" data-nuovo-turno="support" data-giorno="' + d + '">+ Remote Support</button>'
         + '<button type="button" class="link" data-nuove="' + d + '">+ partite</button></div>';
       return '<div class="ev-giorno' + (d < DO.oggi() ? ' passato' : '') + '">' + testa + (f ? '' : righeOnsite(d)) + evs.map(riga).join('') + '</div>';
     }).join('');
@@ -94,20 +97,20 @@
     const st = STATI[e.stato] || STATI['da-assegnare'];
     const conv = DO.esc(R.convocazione(e, A.regole)), fine = DO.esc(R.fine(e, A.regole)), notte = R.notturno(e, A.regole), annullato = e.stato === 'annullato';
     const tag = [];
-    if (e.tipo === 'supervisione') tag.push('<span class="tag tag-sup">Supervisione</span>');
-    if (R.compensoCompetizione(e.competizione, A.regole) === 'dimezzato') tag.push('<span class="tag">Dimezzato</span>');
+    if (turno(e)) tag.push('<span class="tag tag-sup">' + R.nomeTipo(e.tipo) + '</span>');
+    if (R.compensoCompetizione(R.competizioneDi(e), A.regole) === 'dimezzato') tag.push('<span class="tag">Dimezzato</span>');
     if (e.gettone === 'maggiorato') tag.push('<span class="tag tag-magg">Maggiorato</span>');
     if (e.daSostituire && !annullato) tag.push('<span class="tag tag-errore">Da sostituire</span>');
     // nella finestra di blocco gli operatori non possono più cambiare: ciò che manca va sistemato ora
     if ((e.stato === 'da-assegnare' || e.stato === 'convocato') && e.data >= DO.oggi() && DO.bloccato(e.data, DO.oggi(), A.operativo.giorniBlocco)) {
       tag.push('<span class="tag tag-ridosso">⏰ a ridosso</span>');
     }
-    return '<div class="ev-riga' + (annullato ? ' annullato' : '') + (e.tipo === 'supervisione' ? ' sup' : '') + '" data-id="' + e.id + '" style="--comp: ' + R.coloreCompetizione(e.competizione, A.regole) + '">'
-      + '<div class="ev-ora">' + (e.tipo === 'supervisione' ? '<b>' + (conv || '—') + '</b><small>' + (fine ? 'fine ' + fine : 'inizio turno') + '</small>'
+    return '<div class="ev-riga' + (annullato ? ' annullato' : '') + (turno(e) ? ' sup' : '') + '" data-id="' + e.id + '" style="--comp: ' + R.coloreCompetizione(R.competizioneDi(e), A.regole) + '">'
+      + '<div class="ev-ora">' + (turno(e) ? '<b>' + (conv || '—') + '</b><small>' + (fine ? 'fine ' + fine : 'inizio turno') + '</small>'
         : '<b>' + DO.esc(e.orario || '—') + '</b><small>ritrovo ' + (conv || '—') + '</small>' + (fine ? '<small>fine ' + fine + '</small>' : ''))
         + (notte ? '<small class="notte">notturno</small>' : '') + '</div>'
-      + '<div class="ev-info"><b>' + DO.esc(e.tipo === 'supervisione' ? 'Supervisione' : e.titolo) + '</b>'
-        + '<small>' + DO.esc([e.competizione, e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(' · ')) + '</small>'
+      + '<div class="ev-info"><b>' + DO.esc(titolo(e)) + '</b>'
+        + (turno(e) ? '' : '<small>' + DO.esc([e.competizione, e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(' · ')) + '</small>')
         + (tag.length ? '<span class="ev-tag">' + tag.join('') + '</span>' : '')
         + (e.note ? '<small class="ev-nota">' + DO.esc(e.note) + '</small>' : '') + '</div>'
       + '<div class="ev-op">' + selettore(e) + avvisiOperatore(e) + '</div>'
@@ -118,9 +121,10 @@
       + '</div>';
   }
 
-  // Menu operatori: solo i TL per la supervisione; prima chi è disponibile, con i segnali di disponibilità e doppio turno.
+  // Menu operatori secondo il ruolo (Remote TL: solo TL; Remote Support: Support e TL); prima chi è disponibile,
+  // con i segnali di disponibilità e doppio turno.
   function selettore(e) {
-    const ammessi = A.operatori.filter((o) => (o.attivo || o.id === e.operatoreId) && (e.tipo !== 'supervisione' || o.ruolo === 'TL' || o.id === e.operatoreId));
+    const ammessi = R.assegnabili(A.operatori, e);
     const peso = { D: 0, P: 1, '': 2, A: 3 };
     // chi ha risposto «sì» alla richiesta per questo evento sale in cima
     const r = richiestaDi(e.id), hannoDettoSi = new Set(r ? Q.riassunto(r).si : []);
@@ -135,7 +139,7 @@
       return { o, peso: (si ? -10 : 0) + peso[v.s || ''] + (v.onsite ? 0.9 : livello === 'sovrapposto' ? 0.8 : livello ? 0.5 : 0), testo };
     }).sort((a, b) => a.peso - b.peso || a.o.nome.localeCompare(b.o.nome, 'it'));
     return '<select data-assegna="' + e.id + '"' + (e.stato === 'annullato' ? ' disabled' : '') + ' aria-label="Operatore">'
-      + '<option value="">— ' + (e.tipo === 'supervisione' ? 'Scegli un Remote TL' : 'Scegli operatore') + ' —</option>'
+      + '<option value="">' + R.sceltaOperatore(e.tipo) + '</option>'
       + voci.map((x) => '<option value="' + x.o.id + '"' + (x.o.id === e.operatoreId ? ' selected' : '') + '>' + DO.esc(x.testo) + '</option>').join('')
       + '</select>';
   }
@@ -172,7 +176,7 @@
 
   function aggiornaCompetizioni() {
     const nomi = A.regole.competizioni.map((c) => c.nome);
-    A.eventi.forEach((e) => { if (e.competizione && !nomi.includes(e.competizione)) nomi.push(e.competizione); });
+    A.eventi.forEach((e) => { const c = R.competizioneDi(e); if (c && !nomi.includes(c)) nomi.push(c); });
     const sel = $('ev-filtro-comp'), attuale = sel.value;
     const html = '<option value="">Tutte le competizioni</option>' + nomi.map((n) => '<option>' + DO.esc(n) + '</option>').join('');
     if (sel.dataset.html !== html) { sel.innerHTML = html; sel.dataset.html = html; sel.value = attuale; }
@@ -181,7 +185,8 @@
   // elenchi dei menu nelle finestre (competizioni e sport dalle regole)
   function riempiElenchi(radice) {
     radice.querySelectorAll('select[data-elenco]').forEach((sel) => {
-      const voci = sel.dataset.elenco === 'sport' ? A.regole.sport : A.regole.competizioni.map((c) => c.nome);
+      // le mansioni (Remote TL, Remote Support) non sono competizioni delle partite
+      const voci = sel.dataset.elenco === 'sport' ? A.regole.sport : A.regole.competizioni.filter((c) => !c.mansione).map((c) => c.nome);
       sel.innerHTML = '<option value="">—</option>' + voci.map((v) => '<option>' + DO.esc(v) + '</option>').join('');
     });
   }
@@ -241,8 +246,8 @@
   $('ev-giorni').addEventListener('click', (e) => {
     const m = e.target.closest('[data-modifica-evento]');
     if (m) apriEvento(A.eventi.find((x) => x.id === m.dataset.modificaEvento));
-    const s = e.target.closest('[data-nuova-sup]');
-    if (s) apriSupervisione(s.dataset.nuovaSup, s.dataset.nuovaSup);
+    const s = e.target.closest('[data-nuovo-turno]');
+    if (s) apriTurni(s.dataset.nuovoTurno, s.dataset.giorno, s.dataset.giorno);
     const p = e.target.closest('[data-nuove]');
     if (p) apriPartite(p.dataset.nuove);
   });
@@ -253,10 +258,10 @@
     inModifica = e;
     const f = $('form-evento');
     riempiElenchi(f);
-    const sup = e.tipo === 'supervisione';
-    $('evd-titolo').textContent = sup ? 'Turno di supervisione' : 'Partita';
-    $('evd-titolo-riga').hidden = sup;
-    $('evd-orario-riga').hidden = sup;
+    const sup = turno(e);
+    // turni remoti: niente competizione, round, partita, orario e sport (conta la mansione)
+    $('evd-titolo').textContent = sup ? DO.nomeTurno(e.tipo) : 'Partita';
+    ['evd-titolo-riga', 'evd-orario-riga', 'evd-comp-riga', 'evd-sport-riga'].forEach((id) => { $(id).hidden = sup; });
     aggiungiOpzione($('evd-competizione'), e.competizione);
     aggiungiOpzione($('evd-sport'), e.sport);
     $('evd-competizione').value = e.competizione || '';
@@ -301,13 +306,13 @@
   let daChiedere = null;
   function apriChiedi(e) {
     daChiedere = e;
-    const g = DO.giorno(e.data), sup = e.tipo === 'supervisione';
+    const g = DO.giorno(e.data), sup = turno(e);
     $('chi-evento').textContent = titolo(e) + ' · ' + g.nome + ' ' + g.num + ' ' + g.mese + ' · ' + (sup ? 'turno ' : 'ritrovo ') + orariTurno(e);
     $('chi-messaggio').value = '';
     $('chi-email').checked = true;
     $('chi-errore').hidden = true;
     const r = richiestaDi(e.id);
-    const ammessi = A.operatori.filter((o) => o.attivo && (!sup || o.ruolo === 'TL')).sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+    const ammessi = A.operatori.filter((o) => o.attivo && R.puoFare(o.ruolo, e.tipo)).sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
     $('chi-destinatari').innerHTML = ammessi.length ? ammessi.map((o) => {
       const v = A.valore(o.id, e.data), { livello } = conflitto(e, o.id);
       const chiesto = !!r && r.destinatari.includes(o.id), risposta = r && (r.risposte || {})[o.id];
@@ -322,7 +327,7 @@
       const spunta = Q.preselezione({ disponibilita: v.s, impegnato: altriImpegni(e, o.id).length > 0, onsite: !!v.onsite, giaChiesto: chiesto, assegnato: qui });
       return '<li><label><input type="checkbox" value="' + o.id + '"' + (spunta ? ' checked' : '') + '><span class="chi"><b>' + DO.esc(o.nome) + '</b><small>'
         + DO.esc(segni.join(' · ')) + '</small></span></label></li>';
-    }).join('') : '<li class="nota">' + (sup ? 'Nessun Remote TL attivo.' : 'Nessun operatore attivo.') + '</li>';
+    }).join('') : '<li class="nota">' + (sup ? 'Nessun operatore attivo con il ruolo adatto a questo turno.' : 'Nessun operatore attivo.') + '</li>';
     aggiornaBottoneChiedi();
     $('dlg-chiedi').showModal();
   }
@@ -354,7 +359,7 @@
       $('dlg-chiedi').close();
       const g = DO.giorno(e.data);
       A.esitoRichiesta(r, email, 'Ciao! I supervisori TGI Sport ti chiedono se sei disponibile per ' + titolo(e) + ' (' + g.breve.toLowerCase() + ' ' + g.num + ' '
-        + g.meseBreve + ', ' + (e.tipo === 'supervisione' ? 'turno ' : 'ritrovo ') + orariTurno(e) + ').' + (messaggio ? '\n' + messaggio : '') + '\n\nRispondi qui: ' + A.linkSito());
+        + g.meseBreve + ', ' + (turno(e) ? 'turno ' : 'ritrovo ') + orariTurno(e) + ').' + (messaggio ? '\n' + messaggio : '') + '\n\nRispondi qui: ' + A.linkSito());
     } catch (err) {
       mostraErrore('chi-errore', err.message);
       aggiornaBottoneChiedi();
@@ -368,8 +373,8 @@
   // orari automatici con le regole della competizione scelta: lasciando vuoto il campo si usano questi
   function ritrovoAuto() {
     if (!inModifica) return;
-    const sup = inModifica.tipo === 'supervisione';
-    const bozza = { tipo: inModifica.tipo, competizione: $('evd-competizione').value, orario: sup ? '' : $('evd-orario').value, convocazione: sup ? $('evd-convocazione').value : '' };
+    const sup = turno(inModifica);
+    const bozza = { tipo: inModifica.tipo, competizione: sup ? DO.mansione(inModifica.tipo) : $('evd-competizione').value, orario: sup ? '' : $('evd-orario').value, convocazione: sup ? $('evd-convocazione').value : '' };
     const auto = R.convocazione(bozza, A.regole), fineAuto = R.fine(bozza, A.regole);
     $('evd-ritrovo-auto').textContent = sup ? '' : auto ? '(automatico ' + auto + ')' : '';
     $('evd-convocazione').placeholder = auto;
@@ -383,10 +388,10 @@
 
   $('form-evento').addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    const e = inModifica, sup = e.tipo === 'supervisione';
+    const e = inModifica, sup = turno(e);
     const campi = {
-      competizione: $('evd-competizione').value, round: $('evd-round').value.trim(), data: $('evd-data').value,
-      sport: $('evd-sport').value, note: $('evd-note').value.trim(), gettone: $('evd-maggiorato').checked ? 'maggiorato' : '',
+      competizione: sup ? DO.mansione(e.tipo) : $('evd-competizione').value, round: sup ? '' : $('evd-round').value.trim(), data: $('evd-data').value,
+      sport: sup ? '' : $('evd-sport').value, note: $('evd-note').value.trim(), gettone: $('evd-maggiorato').checked ? 'maggiorato' : '',
       daSostituire: $('evd-sostituire').checked,
     };
     if (sup) { campi.convocazione = $('evd-convocazione').value; campi.orario = ''; } else {
@@ -483,19 +488,23 @@
     } catch (err) { mostraErrore('evp-errore', err.message); }
   });
 
-  // ---------- nuovi turni di supervisione ----------
-  function apriSupervisione(da, a) {
-    const f = $('form-supervisione');
-    riempiElenchi(f);
+  // ---------- nuovi turni remoti (Remote TL, Remote Support) ----------
+  let tipoTurno = 'supervisione';
+  function apriTurni(tipo, da, a) {
+    tipoTurno = tipo === 'support' ? 'support' : 'supervisione';
     const sab = DO.aggiungi(inizio, 4);   // sabato della settimana mostrata (da martedì)
+    $('evs-titolo').textContent = tipoTurno === 'support' ? 'Turni Remote Support' : 'Turni Remote TL';
+    $('evs-nota').textContent = 'Un turno per ogni giorno del periodo. ' + (tipoTurno === 'support'
+      ? 'Si possono assegnare operatori con ruolo Remote Support o Remote TL.' : 'Si possono assegnare solo operatori con ruolo Remote TL.');
     $('evs-da').value = da || sab;
     $('evs-a').value = a || DO.aggiungi(sab, 1);
-    const tl = A.operatori.filter((o) => o.attivo && o.ruolo === 'TL');
-    $('evs-tl').innerHTML = '<option value="">— da assegnare —</option>' + tl.map((o) => '<option value="' + o.id + '">' + DO.esc(o.nome) + '</option>').join('');
+    const ops = R.assegnabili(A.operatori, { tipo: tipoTurno }).sort((x, y) => x.nome.localeCompare(y.nome, 'it'));
+    $('evs-op').innerHTML = '<option value="">— da assegnare —</option>' + ops.map((o) => '<option value="' + o.id + '">' + DO.esc(o.nome) + '</option>').join('');
     $('evs-errore').hidden = true;
     $('dlg-supervisione').showModal();
   }
-  $('ev-nuova-sup').addEventListener('click', () => apriSupervisione());
+  $('ev-nuovo-tl').addEventListener('click', () => apriTurni('supervisione'));
+  $('ev-nuovo-support').addEventListener('click', () => apriTurni('support'));
   $('form-supervisione').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const da = $('evs-da').value, a = $('evs-a').value, ritrovo = $('evs-ritrovo').value;
@@ -503,11 +512,11 @@
     const giorni = [];
     for (let d = da; d <= a; d = DO.aggiungi(d, 1)) giorni.push(d);
     if (giorni.length > 31) { mostraErrore('evs-errore', 'Al massimo 31 giorni alla volta.'); return; }
-    const comp = $('evs-competizione').value;
+    const nome = DO.mansione(tipoTurno);
     try {
-      await DO.dati.creaEventi(giorni.map((d) => ({ tipo: 'supervisione', competizione: comp, sport: sportDi(comp), data: d, titolo: 'Supervisione',
-        orario: '', convocazione: ritrovo, convocazioneCalcolata: ritrovo, fineCalcolata: R.fine({ tipo: 'supervisione', convocazione: ritrovo }, A.regole),
-        operatoreId: $('evs-tl').value })));
+      await DO.dati.creaEventi(giorni.map((d) => ({ tipo: tipoTurno, competizione: nome, sport: '', data: d, titolo: nome,
+        orario: '', convocazione: ritrovo, convocazioneCalcolata: ritrovo, fineCalcolata: R.fine({ tipo: tipoTurno, convocazione: ritrovo }, A.regole),
+        operatoreId: $('evs-op').value })));
       $('dlg-supervisione').close();
       inizio = DO.martedi(da);
       $('ev-filtro-stato').value = '';
@@ -534,7 +543,7 @@
   let daInviare = [];
   const rigaInvio = (e) => {
     const g = DO.giorno(e.data);
-    return g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (e.competizione ? ' · ' + e.competizione : '') + ' · ritrovo ' + (R.convocazione(e, A.regole) || '—');
+    return g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (!turno(e) && e.competizione ? ' · ' + e.competizione : '') + ' · ritrovo ' + (R.convocazione(e, A.regole) || '—');
   };
   function contaScelte() {
     const n = $('evi-elenco').querySelectorAll('input[data-evento]:checked').length;
@@ -589,7 +598,7 @@
     const contatti = Object.keys(perOp).map((id) => {
       const o = operatore(id) || {};
       return { nome: o.nome || '', email: o.email || '', eventi: perOp[id].map((e) => ({
-        data: e.data, titolo: titolo(e), tipo: e.tipo, competizione: e.competizione || '', round: e.round || '', orario: e.orario || '', convocazione: e.convocazioneCalcolata, fine: e.fineCalcolata,
+        data: e.data, titolo: titolo(e), tipo: e.tipo, competizione: turno(e) ? '' : e.competizione || '', round: turno(e) ? '' : e.round || '', orario: e.orario || '', convocazione: e.convocazioneCalcolata, fine: e.fineCalcolata,
       })) };
     });
     try {

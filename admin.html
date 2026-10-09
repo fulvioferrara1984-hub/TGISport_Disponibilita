@@ -55,14 +55,15 @@
       <div class="titolo-pagina">
         <div>
           <h1>Convocazioni</h1>
-          <p>Crea partite e turni di supervisione, assegna gli operatori e invia le convocazioni.</p>
+          <p>Crea partite e turni Remote TL e Remote Support, assegna gli operatori e invia le convocazioni.</p>
         </div>
         <div class="strumenti">
           <input type="month" id="ev-mese" aria-label="Mese da esportare" class="solo-desktop">
           <button type="button" class="bottone solo-desktop" id="ev-esporta" title="Excel con convocazioni e presenze del mese, senza compensi">Esporta mese</button>
           <button type="button" class="bottone" id="ev-calendario">Calendario</button>
           <button type="button" class="bottone" id="ev-onsite">+ On-site</button>
-          <button type="button" class="bottone" id="ev-nuova-sup">+ Supervisione</button>
+          <button type="button" class="bottone" id="ev-nuovo-tl">+ Remote TL</button>
+          <button type="button" class="bottone" id="ev-nuovo-support">+ Remote Support</button>
           <button type="button" class="bottone" id="ev-nuove">+ Partite</button>
           <button type="button" class="primario" id="ev-invia">Invia convocazioni</button>
         </div>
@@ -461,7 +462,7 @@
   <dialog id="dlg-evento" class="largo">
     <form method="dialog" id="form-evento">
       <h2 id="evd-titolo">Evento</h2>
-      <div class="due-campi">
+      <div class="due-campi" id="evd-comp-riga">
         <label class="campo"><span>Competizione</span><select id="evd-competizione" data-elenco="competizioni"></select></label>
         <label class="campo"><span>Round / giornata</span><input type="text" id="evd-round" maxlength="40"></label>
       </div>
@@ -475,7 +476,7 @@
         <label class="campo"><span>Fine turno <small id="evd-fine-auto"></small></span><input type="time" id="evd-fine"></label>
       </div>
       <div class="due-campi">
-        <label class="campo"><span>Sport</span><select id="evd-sport" data-elenco="sport"></select></label>
+        <label class="campo" id="evd-sport-riga"><span>Sport</span><select id="evd-sport" data-elenco="sport"></select></label>
         <label class="campo"><span>Note interne (non visibili agli operatori)</span><input type="text" id="evd-note" maxlength="300"></label>
       </div>
       <label class="spunta"><input type="checkbox" id="evd-maggiorato"><span>Gettone maggiorato</span></label>
@@ -535,20 +536,19 @@
     </form>
   </dialog>
 
-  <!-- Nuovi turni di supervisione: uno per giorno -->
+  <!-- Nuovi turni remoti (Remote TL, Remote Support): uno per giorno -->
   <dialog id="dlg-supervisione">
     <form method="dialog" id="form-supervisione">
-      <h2>Turni di supervisione</h2>
-      <p class="nota" style="margin: -6px 0 14px;">Un turno per ogni giorno del periodo. Si possono assegnare solo operatori con ruolo Remote TL.</p>
+      <h2 id="evs-titolo">Turni Remote TL</h2>
+      <p class="nota" id="evs-nota" style="margin: -6px 0 14px;">Un turno per ogni giorno del periodo. Si possono assegnare solo operatori con ruolo Remote TL.</p>
       <div class="due-campi">
         <label class="campo"><span>Dal</span><input type="date" id="evs-da" required></label>
         <label class="campo"><span>Al</span><input type="date" id="evs-a" required></label>
       </div>
       <div class="due-campi">
-        <label class="campo"><span>Competizione</span><select id="evs-competizione" data-elenco="competizioni"></select></label>
         <label class="campo"><span>Inizio turno (ritrovo)</span><input type="time" id="evs-ritrovo" value="10:00" required></label>
+        <label class="campo"><span>Operatore (facoltativo)</span><select id="evs-op"></select></label>
       </div>
-      <label class="campo"><span>Remote TL (facoltativo)</span><select id="evs-tl"></select></label>
       <div class="errore" id="evs-errore" hidden></div>
       <div class="dialog-azioni">
         <button type="button" class="bottone" data-chiudi>Annulla</button>
