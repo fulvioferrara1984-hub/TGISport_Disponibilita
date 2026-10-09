@@ -7,7 +7,7 @@
   <title>Supervisori · Disponibilità TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css?v=19">
+  <link rel="stylesheet" href="app/stile.css?v=20">
 </head>
 <body>
   <header class="testata con-schede">
@@ -60,6 +60,7 @@
         <div class="strumenti">
           <input type="month" id="ev-mese" aria-label="Mese da esportare" class="solo-desktop">
           <button type="button" class="bottone solo-desktop" id="ev-esporta" title="Excel con convocazioni e presenze del mese, senza compensi">Esporta mese</button>
+          <button type="button" class="bottone" id="ev-calendario">Calendario</button>
           <button type="button" class="bottone" id="ev-onsite">+ On-site</button>
           <button type="button" class="bottone" id="ev-nuova-sup">+ Supervisione</button>
           <button type="button" class="bottone" id="ev-nuove">+ Partite</button>
@@ -426,6 +427,30 @@
     </form>
   </dialog>
 
+  <!-- Calendario mensile a schermo intero (scheda Convocazioni) -->
+  <div class="calendario-pieno" id="calendario" hidden role="dialog" aria-modal="true" aria-label="Calendario delle convocazioni">
+    <div class="cal-barra">
+      <button type="button" class="icona" id="cal-prec" aria-label="Mese precedente">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <h2 id="cal-titolo" aria-live="polite"></h2>
+      <button type="button" class="icona" id="cal-succ" aria-label="Mese successivo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" class="bottone" id="cal-oggi">Oggi</button>
+      <span class="spazio"></span>
+      <div class="cal-legenda" aria-label="Legenda">
+        <span class="cal-verde">Confermato</span><span class="cal-blu">In attesa di conferma</span>
+        <span class="cal-arancione">Senza operatore</span><span class="cal-rosso">Senza operatore, a ridosso</span>
+      </div>
+      <button type="button" class="bottone" id="cal-schermo">Schermo intero</button>
+      <button type="button" class="primario" id="cal-chiudi">Chiudi</button>
+    </div>
+    <div class="cal-intestazione" aria-hidden="true"><span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span></div>
+    <div class="cal-griglia" id="cal-griglia"></div>
+    <div class="cal-dettagli" id="cal-dettagli" hidden></div>
+  </div>
+
   <dialog id="dlg-esito">
     <form method="dialog">
       <h2>Richiesta inviata</h2>
@@ -541,16 +566,17 @@
     </form>
   </dialog>
 
-  <script src="app/config.js?v=19"></script>
-  <script src="app/comune.js?v=19"></script>
-  <script src="app/onsite.js?v=19"></script>
-  <script src="app/demo.js?v=19"></script>
-  <script src="app/dati-firebase.js?v=19"></script>
-  <script src="app/regole.js?v=19"></script>
-  <script src="app/admin.js?v=19"></script>
-  <script src="app/convocazioni.js?v=19"></script>
-  <script src="app/onsite-admin.js?v=19"></script>
-  <script src="app/riepilogo.js?v=19"></script>
-  <script src="app/impostazioni.js?v=19"></script>
+  <script src="app/config.js?v=20"></script>
+  <script src="app/comune.js?v=20"></script>
+  <script src="app/onsite.js?v=20"></script>
+  <script src="app/demo.js?v=20"></script>
+  <script src="app/dati-firebase.js?v=20"></script>
+  <script src="app/regole.js?v=20"></script>
+  <script src="app/admin.js?v=20"></script>
+  <script src="app/convocazioni.js?v=20"></script>
+  <script src="app/onsite-admin.js?v=20"></script>
+  <script src="app/calendario.js?v=20"></script>
+  <script src="app/riepilogo.js?v=20"></script>
+  <script src="app/impostazioni.js?v=20"></script>
 </body>
 </html>

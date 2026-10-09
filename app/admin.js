@@ -83,6 +83,8 @@
     get compensiOnsite() { return compensiOnsite; },
     get vista() { return vista; },
     valore, impegni, etichettaGiorno, linkSito, mostra: (n) => mostra(n),
+    // porta le schede (es. Convocazioni) alla settimana che contiene questo giorno
+    vaiA: (data) => moduli.forEach((m) => m.vaiA && m.vaiA(data)),
   };
 
   function vaiSettimana(nuovo) {

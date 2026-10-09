@@ -214,6 +214,7 @@
   // ---------- navigazione e filtri ----------
   $('ev-prec').addEventListener('click', () => { inizio = DO.aggiungi(inizio, -7); disegna(); });
   $('ev-succ').addEventListener('click', () => { inizio = DO.aggiungi(inizio, 7); disegna(); });
+  $('ev-calendario').addEventListener('click', () => DO.calendario.apri(inizio));
   $('ev-oggi').addEventListener('click', () => { inizio = DO.martedi(DO.oggi()); $('ev-filtro-stato').value = ''; disegna(); });
   $('ev-filtro-comp').addEventListener('change', disegna);
   $('ev-mese').addEventListener('change', () => { $('ev-mese').dataset.scelto = '1'; });
