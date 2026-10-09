@@ -43,7 +43,7 @@
       orario: '14:00', convocazione: '', convocazioneCalcolata: '10:00', operatoreId: 'op-demo1', stato: 'convocato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
     eventi.push({ id: 'evc1', tipo: 'partita', competizione: 'Champions League', round: 'League Phase', sport: 'Calcio', data: DO.aggiungi(lun, 2), titolo: 'Feyenoord-Como',
       orario: '18:45', convocazione: '', convocazioneCalcolata: '14:45', operatoreId: 'op-demo2', stato: 'confermato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
-    return { operatori, disponibilita, invii, richieste: [], eventi, regole: null, password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true } };
+    return { operatori, disponibilita, invii, richieste: [], eventi, regole: null, operativo: null, password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true } };
   }
 
   let dati = null, ruolo = '', alloScadere = null, utenteDemo = null;
@@ -150,6 +150,7 @@
       richieste: dati.richieste.filter((x) => x.attiva).slice().reverse(),
       eventi: JSON.parse(JSON.stringify(dati.eventi)),
       regole: DO.regole.complete(dati.regole),
+      operativo: Object.assign({}, DO.OPERATIVO_PREDEFINITO, dati.operativo || {}),
     });
     ascoltatori.add(invia);
     setTimeout(invia, 200);
@@ -225,11 +226,13 @@
   }
   async function eliminaEvento(id) { dati.eventi = dati.eventi.filter((x) => x.id !== id); salva(); }
   async function inviaConvocazioni(eventi, contatti) {
-    eventi.forEach((x) => { const e = dati.eventi.find((y) => y.id === x.id); Object.assign(e, { inviata: true, stato: 'convocato', convocazioneCalcolata: x.convocazioneCalcolata }); });
+    eventi.forEach((x) => { const e = dati.eventi.find((y) => y.id === x.id); Object.assign(e, { inviata: true, stato: 'convocato', convocazioneCalcolata: x.convocazioneCalcolata, fineCalcolata: x.fineCalcolata || '' }); });
     salva();
     return { inviate: pausa(600).then(() => ({ email: contatti.filter((c) => c.email).length })) };
   }
   async function salvaRegole(r) { dati.regole = r; salva(); }
+  async function leggiOperativo() { await pausa(100); return Object.assign({}, DO.OPERATIVO_PREDEFINITO, dati.operativo || {}); }
+  async function salvaOperativo(o) { dati.operativo = { telefono: String(o.telefono || ''), giorniBlocco: o.giorniBlocco }; salva(); }
   async function importa(p) {
     p.operatori.forEach((o) => { if (!dati.operatori.some((x) => x.id === o.id)) dati.operatori.push(Object.assign({ email: '', telefono: '', attivo: true, ultimoInvio: '', codice: '' }, o)); });
     p.eventi.forEach((e) => { dati.eventi = dati.eventi.filter((x) => x.id !== e.id); dati.eventi.push(e); });
@@ -268,7 +271,7 @@
     configura, utente, accediOperatore, accediSupervisore, creaSupervisore: soloFirebase, recuperaPassword: soloFirebase, esci,
     mieDisponibilita, inviaDisponibilita, mieConvocazioni, rispondiConvocazione,
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
-    creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa,
+    creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa, leggiOperativo, salvaOperativo,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     azzera: () => { try { localStorage.removeItem(CHIAVE); } catch (e) { /* niente */ } },
   };

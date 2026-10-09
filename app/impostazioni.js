@@ -13,6 +13,8 @@
       if (document.activeElement !== i) i.value = r.tariffe[contratto][tipo];
     });
     $('reg-anticipo').value = r.anticipoOre;
+    $('reg-fine').value = r.fineOre;
+    $('reg-durata-sup').value = r.durataSupervisioneOre;
     $('reg-notte-da').value = r.notteDa;
     $('reg-notte-a').value = r.notteA;
   }
@@ -32,7 +34,11 @@
       const k = i.dataset.tariffa, punto = k.lastIndexOf('.');
       tariffe[k.slice(0, punto)][k.slice(punto + 1)] = Math.max(0, Number(i.value) || 0);
     });
-    salva({ tariffe, anticipoOre: Number($('reg-anticipo').value) || 0, notteDa: $('reg-notte-da').value || '22:00', notteA: $('reg-notte-a').value || '06:00' }, 'Regole salvate.');
+    salva({
+      tariffe, anticipoOre: Number($('reg-anticipo').value) || 0, fineOre: Number($('reg-fine').value) || 0,
+      durataSupervisioneOre: Number($('reg-durata-sup').value) || R.PREDEFINITE.durataSupervisioneOre,
+      notteDa: $('reg-notte-da').value || '22:00', notteA: $('reg-notte-a').value || '06:00',
+    }, 'Regole salvate.');
   });
 
   // ---------- competizioni e sport ----------
@@ -43,6 +49,9 @@
     $('reg-competizioni').innerHTML = bozzaComp.map((c, i) => '<li data-i="' + i + '">'
       + '<input type="text" value="' + DO.esc(c.nome) + '" data-campo="nome" aria-label="Nome competizione" maxlength="80">'
       + '<select data-campo="sport" aria-label="Sport"><option value="">—</option>' + sport.map((s) => '<option' + (s === c.sport ? ' selected' : '') + '>' + DO.esc(s) + '</option>').join('') + '</select>'
+      // ore prima (ritrovo) e dopo (fine turno): vuoto = valori generali
+      + '<input type="number" data-campo="prima" min="0" max="12" step="0.25" value="' + (c.prima === null || c.prima === undefined ? '' : c.prima) + '" placeholder="' + A.regole.anticipoOre + '" title="Ritrovo: ore prima" aria-label="Ritrovo: ore prima">'
+      + '<input type="number" data-campo="dopo" min="0" max="12" step="0.25" value="' + (c.dopo === null || c.dopo === undefined ? '' : c.dopo) + '" placeholder="' + A.regole.fineOre + '" title="Fine turno: ore dopo" aria-label="Fine turno: ore dopo">'
       + '<label class="spunta"><input type="checkbox" data-campo="uefa"' + (c.uefa ? ' checked' : '') + '><span>UEFA ½</span></label>'
       + '<button type="button" class="icona" data-togli="' + i + '" aria-label="Togli">✕</button></li>').join('');
     if (document.activeElement !== $('reg-sport')) $('reg-sport').value = sport.join(', ');
@@ -69,10 +78,27 @@
   });
   $('form-competizioni').addEventListener('submit', (e) => {
     e.preventDefault();
-    const competizioni = bozzaComp.filter((c) => c.nome.trim()).map((c) => ({ nome: c.nome.trim(), sport: c.sport || '', uefa: !!c.uefa }));
+    const oreDa = (v) => (v === '' || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v));
+    const competizioni = bozzaComp.filter((c) => c.nome.trim()).map((c) => ({ nome: c.nome.trim(), sport: c.sport || '', uefa: !!c.uefa, prima: oreDa(c.prima), dopo: oreDa(c.dopo) }));
     const sport = $('reg-sport').value.split(',').map((s) => s.trim()).filter(Boolean);
     bozzaComp = null;
     salva({ competizioni, sport }, 'Competizioni salvate.');
+  });
+
+  // ---------- regole per gli operatori (telefono di reperibilità, giorni di blocco) ----------
+  function disegnaOperativo() {
+    const o = A.operativo;
+    if (document.activeElement !== $('op-telefono-rep')) $('op-telefono-rep').value = o.telefono;
+    if (document.activeElement !== $('op-giorni-blocco')) $('op-giorni-blocco').value = o.giorniBlocco;
+  }
+  $('form-operativo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const giorni = Math.round(Number($('op-giorni-blocco').value));
+    if (!(giorni >= 0 && giorni <= 14)) { DO.avviso('I giorni di blocco vanno da 0 a 14.', 'errore'); return; }
+    try {
+      await DO.dati.salvaOperativo({ telefono: $('op-telefono-rep').value.trim(), giorniBlocco: giorni });
+      DO.avviso('Regole per gli operatori salvate.', 'ok');
+    } catch (err) { DO.avviso(err.message, 'errore'); }
   });
 
   // ---------- importazione dal file Excel ----------
@@ -173,7 +199,9 @@
         operatoreId, stato: annullato ? 'annullato' : operatoreId ? (testo(r[9]).toUpperCase() === 'SI' ? 'confermato' : 'convocato') : 'da-assegnare',
         inviata: !annullato && !!operatoreId, storico,
       };
+      if (sup) { e.convocazione = R.convocazione(e, regole); e.orario = ''; }
       e.convocazioneCalcolata = R.convocazione(e, regole);
+      e.fineCalcolata = R.fine(e, regole);
       // identificativo stabile: ripetere l'importazione aggiorna lo stesso evento anche se si aggiungono righe
       const base = 'xls-' + data + '-' + (chiave(e.titolo) || 'evento') + '-' + orario.replace(':', '') + '-' + chiave(comp);
       visti[base] = (visti[base] || 0) + 1;
@@ -255,7 +283,7 @@
   });
 
   A.registra({
-    aggiorna: () => { if (A.vista === 'impostazioni') { disegnaRegole(); if (!bozzaComp) disegnaCompetizioni(); } },
-    mostra: (nome) => { if (nome === 'impostazioni') { disegnaRegole(); disegnaCompetizioni(true); } },
+    aggiorna: () => { if (A.vista === 'impostazioni') { disegnaRegole(); disegnaOperativo(); if (!bozzaComp) disegnaCompetizioni(); } },
+    mostra: (nome) => { if (nome === 'impostazioni') { disegnaRegole(); disegnaOperativo(); disegnaCompetizioni(true); } },
   });
 })(window.DO);

@@ -495,7 +495,10 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 .tabella.tariffe input { height: 34px; text-align: right; padding: 0 8px; }
 .tre-campi .campo { justify-content: flex-end; }
 .elenco-competizioni { list-style: none; margin: 0; padding: 0 4px 0 0; display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }
-.elenco-competizioni li { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto 32px; gap: 8px; align-items: center; }
+.elenco-competizioni li { display: grid; grid-template-columns: minmax(0, 1fr) 130px 56px 56px auto 32px; gap: 8px; align-items: center; }
+.elenco-competizioni input[type="number"] { height: 32px; padding: 0 6px; text-align: center; font-size: 13px; }
+.intestazione-competizioni { display: grid; grid-template-columns: minmax(0, 1fr) 130px 56px 56px auto 32px; gap: 8px; font-size: 11px; color: var(--inchiostro-3); margin: 0 4px 4px 0; text-align: center; }
+.intestazione-competizioni span:first-child { text-align: left; }
 .elenco-competizioni input[type="text"], .elenco-competizioni select { height: 32px; font-size: 13px; }
 .elenco-competizioni .spunta { margin: 0; font-size: 12px; white-space: nowrap; }
 .elenco-competizioni .icona { width: 30px; height: 30px; font-size: 12px; }
@@ -578,8 +581,11 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
   .kpi { grid-template-columns: 1fr 1fr; }
   .impostazioni { grid-template-columns: minmax(0, 1fr); }
   .kpi b { font-size: 18px; }
-  .elenco-competizioni li { grid-template-columns: minmax(0, 1fr) 96px 30px; }
-  .elenco-competizioni .spunta { grid-column: 1; grid-row: 2; }
+  .elenco-competizioni li { grid-template-columns: minmax(0, 1fr) 52px 52px 30px; }
+  .elenco-competizioni select { grid-column: 1; grid-row: 2; }
+  .elenco-competizioni .spunta { grid-column: 2 / span 3; grid-row: 2; }
+  .intestazione-competizioni { grid-template-columns: minmax(0, 1fr) 52px 52px 30px; }
+  .intestazione-competizioni span:nth-child(2), .intestazione-competizioni span:nth-child(5) { display: none; }
   .convocazione { grid-template-columns: 54px minmax(0, 1fr); padding: 12px 14px; }
   .conv-azioni { grid-column: 1 / -1; justify-content: stretch; }
   .conv-azioni button { flex: 1; }

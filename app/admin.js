@@ -9,6 +9,7 @@
   let oggi = DO.oggi(), limite = DO.limite();
   let lun = DO.lunedi(oggi);
   let operatori = [], disp = {}, feed = [], richieste = [], nonLettiOps = new Set(), eventi = [], regole = DO.regole.complete(null);
+  let operativo = Object.assign({}, DO.OPERATIVO_PREDEFINITO);
   let giornoSel = '', selezionati = new Set();
   let vista = 'griglia', ferma = null, visti = null;
 
@@ -44,6 +45,7 @@
     feed = stato.invii;
     eventi = stato.eventi || [];
     regole = stato.regole || DO.regole.complete(null);
+    operativo = stato.operativo || Object.assign({}, DO.OPERATIVO_PREDEFINITO);
     richieste = statoRichieste(stato.richieste);
     nonLettiOps = new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
     impostaNonLetti(feed.filter((x) => !x.letto).length);
@@ -66,6 +68,7 @@
     get disp() { return disp; },
     get eventi() { return eventi; },
     get regole() { return regole; },
+    get operativo() { return operativo; },
     get vista() { return vista; },
     valore, impegni, etichettaGiorno, linkSito, mostra: (n) => mostra(n),
   };

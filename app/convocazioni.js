@@ -221,6 +221,7 @@
     $('evd-data').value = e.data;
     $('evd-orario').value = e.orario || '';
     $('evd-convocazione').value = sup ? R.convocazione(e, A.regole) : e.convocazione || '';
+    $('evd-fine').value = e.fine || '';
     $('evd-sport').value = e.sport || '';
     $('evd-note').value = e.note || '';
     $('evd-maggiorato').checked = e.gettone === 'maggiorato';
@@ -237,14 +238,20 @@
     if (valore && ![...sel.options].some((o) => o.value === valore)) sel.insertAdjacentHTML('beforeend', '<option>' + DO.esc(valore) + '</option>');
   }
 
+  // orari automatici con le regole della competizione scelta: lasciando vuoto il campo si usano questi
   function ritrovoAuto() {
     if (!inModifica) return;
     const sup = inModifica.tipo === 'supervisione';
-    const auto = R.convocazione({ orario: $('evd-orario').value }, A.regole);
-    $('evd-ritrovo-auto').textContent = sup ? '' : auto ? '(automatico ' + auto + ', lascia vuoto per usarlo)' : '';
+    const bozza = { tipo: inModifica.tipo, competizione: $('evd-competizione').value, orario: sup ? '' : $('evd-orario').value, convocazione: sup ? $('evd-convocazione').value : '' };
+    const auto = R.convocazione(bozza, A.regole), fineAuto = R.fine(bozza, A.regole);
+    $('evd-ritrovo-auto').textContent = sup ? '' : auto ? '(automatico ' + auto + ')' : '';
     $('evd-convocazione').placeholder = auto;
+    $('evd-fine-auto').textContent = fineAuto ? '(automatica ' + fineAuto + ')' : '';
+    $('evd-fine').placeholder = fineAuto;
   }
   $('evd-orario').addEventListener('input', ritrovoAuto);
+  $('evd-convocazione').addEventListener('input', ritrovoAuto);
+  $('evd-competizione').addEventListener('change', ritrovoAuto);
   $('evd-competizione').addEventListener('change', () => { if (!$('evd-sport').value) $('evd-sport').value = sportDi($('evd-competizione').value); });
 
   $('form-evento').addEventListener('submit', async (ev) => {
@@ -260,8 +267,10 @@
       campi.orario = $('evd-orario').value;
       campi.convocazione = $('evd-convocazione').value;
     }
+    campi.fine = $('evd-fine').value;
     if (!campi.data) { mostraErrore('evd-errore', 'Indica la data.'); return; }
     campi.convocazioneCalcolata = R.convocazione(Object.assign({}, e, campi), A.regole);
+    campi.fineCalcolata = R.fine(Object.assign({}, e, campi), A.regole);
     // una convocazione già inviata con data o orari cambiati va rimandata all'operatore
     const cambiato = e.inviata && (campi.data !== e.data || campi.orario !== (e.orario || '') || campi.convocazioneCalcolata !== R.convocazione(e, A.regole));
     if (cambiato && e.stato !== 'annullato') Object.assign(campi, { inviata: false, stato: 'assegnato', risposta: '' });
@@ -335,7 +344,10 @@
     if (!ok.length) { mostraErrore('evp-errore', 'Nessuna partita da creare.'); return; }
     const comune = { tipo: 'partita', competizione: $('evp-competizione').value, round: $('evp-round').value.trim(), sport: $('evp-sport').value };
     try {
-      await DO.dati.creaEventi(ok.map((p) => Object.assign({}, comune, p, { convocazioneCalcolata: R.convocazione(p, A.regole) })));
+      await DO.dati.creaEventi(ok.map((p) => {
+        const e = Object.assign({}, comune, p);
+        return Object.assign(e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) });
+      }));
       $('dlg-partite').close();
       lun = DO.lunedi(ok[0].data);
       $('ev-filtro-stato').value = '';
@@ -367,7 +379,8 @@
     const comp = $('evs-competizione').value;
     try {
       await DO.dati.creaEventi(giorni.map((d) => ({ tipo: 'supervisione', competizione: comp, sport: sportDi(comp), data: d, titolo: 'Supervisione',
-        orario: '', convocazione: ritrovo, convocazioneCalcolata: ritrovo, operatoreId: $('evs-tl').value })));
+        orario: '', convocazione: ritrovo, convocazioneCalcolata: ritrovo, fineCalcolata: R.fine({ tipo: 'supervisione', convocazione: ritrovo }, A.regole),
+        operatoreId: $('evs-tl').value })));
       $('dlg-supervisione').close();
       lun = DO.lunedi(da);
       $('ev-filtro-stato').value = '';
@@ -396,7 +409,7 @@
     const b = $('evi-conferma');
     b.disabled = true;
     const perOp = {};
-    const eventi = daInviare.map((e) => Object.assign({}, e, { convocazioneCalcolata: R.convocazione(e, A.regole) }));
+    const eventi = daInviare.map((e) => Object.assign({}, e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) }));
     eventi.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });
     const contatti = Object.keys(perOp).map((id) => {
       const o = operatore(id) || {};

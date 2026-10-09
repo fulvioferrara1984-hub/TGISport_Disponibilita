@@ -228,10 +228,26 @@
               <p class="nota" style="margin: 8px 0 14px;">Competizioni UEFA: metà del diurno. Il maggiorato si sceglie sul singolo evento.</p>
               <div class="tre-campi">
                 <label class="campo"><span>Ritrovo: ore prima</span><input type="number" id="reg-anticipo" min="0" max="12" step="0.25"></label>
+                <label class="campo"><span>Fine turno: ore dopo</span><input type="number" id="reg-fine" min="0" max="12" step="0.25"></label>
+                <label class="campo"><span>Durata supervisione: ore</span><input type="number" id="reg-durata-sup" min="1" max="16" step="0.5"></label>
+              </div>
+              <p class="nota" style="margin: -4px 0 12px;">Valori generali: ogni competizione può avere i suoi (scheda Competizioni e sport).</p>
+              <div class="due-campi">
                 <label class="campo"><span>Notturno: ritrovo dalle</span><input type="time" id="reg-notte-da"></label>
                 <label class="campo"><span>alle</span><input type="time" id="reg-notte-a"></label>
               </div>
               <button type="submit" class="primario">Salva regole</button>
+            </form>
+          </section>
+          <section class="scheda">
+            <div class="scheda-testa"><h2>Regole per gli operatori</h2></div>
+            <form class="scheda-corpo" id="form-operativo">
+              <div class="due-campi">
+                <label class="campo"><span>Telefono di reperibilità</span><input type="tel" id="op-telefono-rep" maxlength="30" placeholder="+39 …"></label>
+                <label class="campo"><span>Blocco: giorni prima dell'evento</span><input type="number" id="op-giorni-blocco" min="0" max="14" step="1"></label>
+              </div>
+              <p class="nota" style="margin: 0 0 12px;">Quando all'evento mancano questi giorni o meno, l'operatore non può più cambiare disponibilità né rinunciare: deve chiamare il numero di reperibilità. Con 3, per un evento di lunedì il blocco parte da venerdì.</p>
+              <button type="submit" class="primario">Salva</button>
             </form>
           </section>
           <section class="scheda">
@@ -249,6 +265,7 @@
           <section class="scheda">
             <div class="scheda-testa"><h2>Competizioni e sport</h2></div>
             <form class="scheda-corpo" id="form-competizioni">
+              <div class="intestazione-competizioni" aria-hidden="true"><span>Competizione</span><span>Sport</span><span title="Ritrovo: ore prima">−h</span><span title="Fine turno: ore dopo">+h</span><span>UEFA</span><span></span></div>
               <ul class="elenco-competizioni" id="reg-competizioni"></ul>
               <button type="button" class="link" id="reg-aggiungi-comp" style="margin: 8px 0 14px;">+ Aggiungi competizione</button>
               <label class="campo"><span>Sport (separati da virgola)</span><textarea id="reg-sport" rows="3"></textarea></label>
@@ -353,10 +370,13 @@
         <label class="campo"><span>Round / giornata</span><input type="text" id="evd-round" maxlength="40"></label>
       </div>
       <label class="campo" id="evd-titolo-riga"><span>Partita</span><input type="text" id="evd-partita" maxlength="120" placeholder="es. Inter-Monza"></label>
-      <div class="tre-campi">
+      <div class="due-campi">
         <label class="campo"><span>Data</span><input type="date" id="evd-data" required></label>
         <label class="campo" id="evd-orario-riga"><span>Orario evento</span><input type="time" id="evd-orario"></label>
+      </div>
+      <div class="due-campi">
         <label class="campo"><span>Ritrovo <small id="evd-ritrovo-auto"></small></span><input type="time" id="evd-convocazione"></label>
+        <label class="campo"><span>Fine turno <small id="evd-fine-auto"></small></span><input type="time" id="evd-fine"></label>
       </div>
       <div class="due-campi">
         <label class="campo"><span>Sport</span><select id="evd-sport" data-elenco="sport"></select></label>

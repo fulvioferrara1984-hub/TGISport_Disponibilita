@@ -59,3 +59,11 @@ test('sovrapposti', () => {
 test('il notturno resta calcolato sul ritrovo', () => {
   assert.equal(R.notturno({ competizione: 'Serie A', orario: '02:00' }, regole), true);
 });
+
+test('competizioni salvate senza orari restano valide', () => {
+  const r = R.complete({ competizioni: [{ nome: 'Serie A', sport: 'Calcio', uefa: false }] });
+  assert.equal(r.competizioni[0].prima, null);
+  assert.equal(r.competizioni[0].dopo, null);
+  assert.equal(r.fineOre, 2);
+  assert.equal(r.durataSupervisioneOre, 6);
+});

@@ -275,7 +275,7 @@
   // ---------- supervisori ----------
   // Ascolto in tempo reale: alla prima lettura arrivano tutti i dati, poi solo ciò che cambia.
   function ascolta(cb) {
-    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null };
+    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null, operativo: null };
     const pronto = () => { if (Object.values(stato).every((v) => v !== null)) cb(Object.assign({}, stato)); };
     let fermo = false;
     const errore = (e) => {
@@ -321,6 +321,10 @@
         stato.regole = DO.regole.complete(d.exists() ? d.data() : null);
         pronto();
       }, erroreNuovo('regole', DO.regole.complete(null))),
+      F.onSnapshot(F.doc(db, 'impostazioni', 'operativo'), (d) => {
+        stato.operativo = operativoDa(d);
+        pronto();
+      }, erroreNuovo('operativo', Object.assign({}, DO.OPERATIVO_PREDEFINITO))),
     ];
     return () => { fermo = true; ferma.forEach((f) => f()); };
   }
@@ -414,6 +418,7 @@
       orario: e.orario || '', convocazione: e.convocazione || '', note: String(e.note || '').slice(0, 300),
       // orario di ritrovo già calcolato: gli operatori non leggono le regole (anticipo, tariffe)
       convocazioneCalcolata: e.convocazioneCalcolata || '',
+      fine: e.fine || '', fineCalcolata: e.fineCalcolata || '',
       gettone: e.gettone === 'maggiorato' ? 'maggiorato' : '', daSostituire: !!e.daSostituire,
     };
   }
@@ -448,7 +453,7 @@
       for (let i = 0; i < eventi.length; i += 400) {
         const batch = F.writeBatch(db);
         eventi.slice(i, i + 400).forEach((e) => batch.update(F.doc(db, 'eventi', e.id), {
-          inviata: true, stato: 'convocato', risposta: '', rispostaIl: '', convocazioneCalcolata: e.convocazioneCalcolata || '',
+          inviata: true, stato: 'convocato', risposta: '', rispostaIl: '', convocazioneCalcolata: e.convocazioneCalcolata || '', fineCalcolata: e.fineCalcolata || '',
           storico: F.arrayUnion(voce('Convocazione inviata')),
         }));
         await batch.commit();
@@ -460,6 +465,23 @@
   }
 
   const salvaRegole = (r) => scrivi(() => F.setDoc(F.doc(db, 'impostazioni', 'regole'), r));
+
+  // Regole per gli operatori: le leggono anche loro (niente tariffe qui dentro).
+  function operativoDa(d) {
+    const x = d && d.exists() ? d.data() : {};
+    const giorni = Number(x.giorniBlocco);
+    return { telefono: String(x.telefono || ''), giorniBlocco: Number.isInteger(giorni) && giorni >= 0 ? giorni : DO.OPERATIVO_PREDEFINITO.giorniBlocco };
+  }
+  async function leggiOperativo() {
+    await avvia();
+    try {
+      return operativoDa(await F.getDoc(F.doc(db, 'impostazioni', 'operativo')));
+    } catch (e) {
+      // regole non ancora pubblicate o rete assente: valori predefiniti, la pagina funziona lo stesso
+      return Object.assign({}, DO.OPERATIVO_PREDEFINITO);
+    }
+  }
+  const salvaOperativo = (o) => scrivi(() => F.setDoc(F.doc(db, 'impostazioni', 'operativo'), { telefono: String(o.telefono || ''), giorniBlocco: o.giorniBlocco }));
 
   // Importazione dal file Excel: identificativi fissi, così ripeterla aggiorna senza duplicare.
   async function importa(p) {
@@ -492,7 +514,8 @@
       return s.docs.map((d) => {
         const e = d.data();
         return { id: d.id, tipo: e.tipo, competizione: e.competizione, round: e.round, sport: e.sport, data: e.data, titolo: e.titolo,
-          orario: e.orario, convocazione: e.convocazione, convocazioneCalcolata: e.convocazioneCalcolata || '', stato: e.stato, risposta: e.risposta || '' };
+          orario: e.orario, convocazione: e.convocazione, convocazioneCalcolata: e.convocazioneCalcolata || '',
+          fine: e.fine || '', fineCalcolata: e.fineCalcolata || '', stato: e.stato, risposta: e.risposta || '' };
       });
     } catch (e) {
       // un accesso revocato lo segnala già mieDisponibilita: qui, nel dubbio, nessuna convocazione
@@ -542,7 +565,7 @@
     configura, utente, accediOperatore, accediSupervisore, creaSupervisore, recuperaPassword, esci,
     mieDisponibilita, inviaDisponibilita, mieConvocazioni, rispondiConvocazione,
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
-    creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa,
+    creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa, leggiOperativo, salvaOperativo,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
   };
 })(window.DO = window.DO || {});
