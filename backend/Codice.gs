@@ -4,7 +4,8 @@
  *  - ai supervisori, quando un operatore invia le disponibilità;
  *  - agli operatori, quando i supervisori chiedono le disponibilità per un periodo;
  *  - ogni mattina, i promemoria delle convocazioni ancora da sistemare (attivaPromemoria);
- *  - agli operatori, le richieste di deployment on-site; ai supervisori, chi le accetta.
+ *  - agli operatori, le richieste di deployment on-site; ai supervisori, chi le accetta;
+ *  - agli operatori, la richiesta di disponibilità per una singola partita; ai supervisori, chi risponde sì.
  * Chi chiama viene riconosciuto chiedendo a Firestore, con il suo gettone di accesso, di leggere
  * dati che le regole di sicurezza mostrano solo a lui: niente password o segreti qui dentro.
  * I promemoria girano senza nessuno collegato: leggono Firestore (solo lettura) con l'account Google
@@ -27,6 +28,7 @@ function doPost(e) {
     const r = JSON.parse(e.postData.contents);
     const azioni = {
       notificaInvio, emailRichiesta, emailConvocazioni, notificaRisposta, emailOnsite, notificaOnsite,
+      emailRichiestaEvento, notificaRispostaEvento,
       leggiImpostazioni: soloSupervisori(impostazioniDashboard), salvaImpostazioni: soloSupervisori(salvaImpostazioni),
     };
     if (!azioni[r.azione]) throw new Error('Operazione non consentita.');
@@ -573,6 +575,78 @@ function notificaOnsite(r) {
   const imp = leggiImpostazioni();
   if (!imp.emailAttive || !imp.emailSupervisori) return { inviata: false };
   const testo = testoNotificaOnsite(op.nome, ruolo, d, indirizzi(imp.urlAdmin).convocazioni);
+  MailApp.sendEmail({ to: imp.emailSupervisori, name: CONFIG.MITTENTE, subject: testo.subject, htmlBody: testo.htmlBody });
+  return { inviata: true };
+}
+
+// ---------------------------------------------------------------- richiesta di disponibilità per un evento
+
+// "Roma-Lazio" / "Turno di supervisione"; "Serie A, giornata 9"; "evento 20:45 · ritrovo 16:45 – fine 22:45" / "turno 10:00 – 16:00"
+const nomeEvento = (e) => (e.tipo === 'supervisione' ? 'Turno di supervisione' : String(e.titolo || 'Partita'));
+const gareEvento = (e) => [e.competizione, e.round && (/^\d+$/.test(String(e.round)) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(', ');
+function orariEvento(e) {
+  if (e.tipo === 'supervisione') return 'turno ' + (e.ritrovo || '—') + (e.fine ? ' – ' + e.fine : '');
+  return (e.orario ? 'evento ' + e.orario + ' · ' : '') + 'ritrovo ' + (e.ritrovo || '—') + (e.fine ? ' – fine ' + e.fine : '');
+}
+
+// All'operatore: partita, giorno e orari, messaggio dei supervisori. Si risponde sulla piattaforma.
+function testoEmailRichiestaEvento(dest, e, messaggio, sito) {
+  return {
+    to: dest.email,
+    subject: 'Sei disponibile? ' + nomeEvento(e) + ' · ' + giornoLungo(String(e.data)),
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p>Ciao ' + esc(String(dest.nome || '').split(' ')[0]) + ',</p>'
+      + '<p>i supervisori ti chiedono se sei disponibile per:</p>'
+      + '<p><b>' + esc(nomeEvento(e)) + '</b>' + (gareEvento(e) ? '<br>' + esc(gareEvento(e)) : '')
+      + '<br>' + esc(giornoLungo(String(e.data))) + ' · ' + esc(orariEvento(e)) + '</p>'
+      + (messaggio ? '<p style="padding:10px 14px;background:#f3f4f6;border-radius:8px">' + esc(messaggio).replace(/\n/g, '<br>') + '</p>' : '')
+      + (sito ? tasto(sito, 'Rispondi sulla piattaforma') : '')
+      + '<p style="color:#8b919c;font-size:12px">Per entrare usa il tuo codice personale.</p></div>',
+  };
+}
+
+function emailRichiestaEvento(r) {
+  verificaSupervisore(r.idToken);
+  const sito = /^https:\/\//.test(String(r.urlSito || '')) ? String(r.urlSito) : '';
+  const e = r.evento || {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(e.data || ''))) throw new Error('Evento non valido.');
+  const messaggio = String(r.messaggio || '').slice(0, 300);
+  const esito = { email: 0, nonInviate: [] };
+  (Array.isArray(r.destinatari) ? r.destinatari : []).slice(0, 100).forEach((dest) => {
+    if (!EMAIL_VALIDA.test(String(dest.email || ''))) { esito.nonInviate.push(dest.nome); return; }
+    try {
+      MailApp.sendEmail(Object.assign({ name: CONFIG.MITTENTE }, testoEmailRichiestaEvento(dest, e, messaggio, sito)));
+      esito.email++;
+    } catch (err) {
+      esito.nonInviate.push(dest.nome);
+    }
+  });
+  esito.quotaRestante = MailApp.getRemainingDailyQuota();
+  return esito;
+}
+
+// Ai supervisori: chi è disponibile per quale partita
+function testoNotificaRispostaEvento(nome, e, convocazioni) {
+  const giorno = giornoLungo(String(e.data || ''));
+  return {
+    subject: nome + ' è disponibile per ' + nomeEvento(e) + ' (' + giorno + ')',
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p><b>' + esc(nome) + '</b> è disponibile per <b>'
+      + esc(nomeEvento(e)) + '</b> (' + esc(giorno) + ').</p>'
+      + '<p>' + (gareEvento(e) ? esc(gareEvento(e)) + ' · ' : '') + esc(orariEvento(e)) + '</p>'
+      + (convocazioni ? tasto(convocazioni, 'Apri le convocazioni') : '') + '</div>',
+  };
+}
+
+// L'operatore ha detto sì: lo script rilegge la richiesta con il suo gettone e controlla la sua risposta.
+function notificaRispostaEvento(r) {
+  const op = verificaOperatore(r.idToken);
+  const letto = firestore('richiesteEvento/' + encodeURIComponent(String(r.id || '')), r.idToken);
+  if (letto.codice !== 200) throw new Error('Accesso non consentito.');
+  const d = daFirestore(letto.dati);
+  const risposta = (d.risposte || {})[op.id];
+  if (!risposta || risposta.r !== 'si') return { inviata: false };
+  const imp = leggiImpostazioni();
+  if (!imp.emailAttive || !imp.emailSupervisori) return { inviata: false };
+  const testo = testoNotificaRispostaEvento(op.nome, d.evento || {}, indirizzi(imp.urlAdmin).convocazioni);
   MailApp.sendEmail({ to: imp.emailSupervisori, name: CONFIG.MITTENTE, subject: testo.subject, htmlBody: testo.htmlBody });
   return { inviata: true };
 }

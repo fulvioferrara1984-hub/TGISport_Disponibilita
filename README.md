@@ -25,6 +25,7 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 | Supervisione | un turno per giorno, solo operatori con ruolo **Remote TL**; le partite vanno a Remote TL o Remote OP |
 | Annullati | non contano mai nei riepiloghi |
 | On-site | richiesta con date, attività per giorno (Travel Day, MD-1, MD…), luogo, sport e posti TL/OP, solo agli operatori abilitati; chi accetta per primo occupa il posto, è on-site in quei giorni (non assegnabile al remoto) e non si ritira dal sito; compenso di trasferta = giorni × tariffa on-site (generale: 150 € al giorno), modificabile, visibile solo ai supervisori |
+| Disponibilità per evento | dal menu ⋯ di una partita o di un turno di supervisione remoto ancora scoperto: gli operatori scelti rispondono Sì o No per quell'evento (anche dentro la finestra di blocco, fino al giorno stesso); il Sì è solo una segnalazione, l'assegnazione resta del supervisore; la richiesta si chiude da sola quando l'evento ha un operatore e si riapre se viene rifiutato o segnato da sostituire |
 | Promemoria | ogni mattina tra le 8 e le 9 (nuovo tentativo alle 11 se il primo non riesce), per gli eventi remoti da oggi a X giorni dopo (generale: 3): agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto (da sostituire, senza operatore, da inviare, in attesa) |
 
 Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco), **Competizioni e sport** (ore prima/dopo, colore e menu *Compenso* per competizione) , **Notifiche email** (promemoria automatici e giorni) e **Tariffe e regole → Tariffa on-site**; l'abilitazione on-site di ciascuno si imposta nella scheda dell'operatore.
@@ -125,6 +126,15 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste on-site non partono e la dashboard lo segnala dopo l'invio.
 4. **Dashboard**: in **Operatori → Modifica** imposta *On-site: TL / OP* per chi può andare in trasferta, e controlla la **Tariffa on-site** in Impostazioni.
 
+### Richiesta di disponibilità per evento
+
+Ordine come per ogni aggiornamento, **sito → regole → script**:
+
+1. **Sito**: finché le regole nuove non sono pubblicate la pagina operatori non mostra le richieste per evento (senza errori), la dashboard avvisa *Richieste per evento non disponibili: pubblica le nuove regole di Firestore* e il tasto *Chiedi disponibilità* risponde *Pubblica le nuove regole di Firestore (vedi README).*
+2. **Regole**: incolla [`firebase/firestore.rules`](firebase/firestore.rules) in Firebase → Firestore Database → Regole → **Pubblica**. Le regole lasciano a ciascun operatore solo la propria risposta, con la richiesta aperta e fino al giorno dell'evento.
+3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste per evento non partono e la dashboard lo segnala dopo l'invio.
+4. **Dashboard**: ricaricala su ogni computer dei supervisori.
+
 ### Outlook come app di posta
 
 Il tasto **Invia mail** (codice personale di un operatore) apre una nuova email nell'app di posta predefinita del computer, già compilata. Perché sia Outlook:
@@ -166,6 +176,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 - **Esporta CSV** scarica la settimana in vista (si apre con Excel).
 - **Convocazioni**: la settimana va da martedì a lunedì (una giornata di campionato in una sola vista); ogni competizione ha il suo colore (automatico, modificabile in *Impostazioni → Competizioni e sport*), l'on-site è sempre viola. *Invia convocazioni* elenca quelle pronte per operatore: si tolgono le spunte a quelle da tenere per dopo. **Calendario** apre il mese a schermo intero: verde confermato, blu in attesa di conferma, arancione senza operatore, rosso senza operatore a ridosso (finestra di blocco); passando col mouse (o toccando) si vedono i dettagli, un clic porta alla settimana o alla scheda on-site.
 - **On-site**: *Convocazioni → + On-site* → primo e ultimo giorno (si può togliere un giorno), attività di ogni giorno con la partita per gli MD, luogo, sport, posti TL/OP, compenso proposto e destinatari (gli abilitati, con l'avviso se hanno convocazioni remote in quei giorni). Gli operatori rispondono *Accetto* / *Non posso* dalla loro pagina; chi ha convocazioni remote inviate negli stessi giorni deve prima chiamare. I giorni del deployment compaiono nel calendario: clic sulla riga → scheda con risposte, *Togli*, *Modifica*, *Chiudi richiesta* e *Annulla deployment*. Le presenze e i compensi on-site entrano nel Riepilogo e in *Esporta mese*.
+- **Chiedi disponibilità** (per un solo evento): nella finestra dell'evento (⋯) di una partita o di un turno di supervisione ancora senza operatore (o rifiutato, o da sostituire) → elenco degli operatori con disponibilità del giorno, altri turni e on-site; già spuntati i disponibili e parziali liberi non ancora interpellati → messaggio facoltativo → *Chiedi a N operatori*. Gli operatori trovano in cima alla loro pagina *Ti chiediamo se sei disponibile* e rispondono *Sì, sono disponibile* o *No* (anche via email con il link). Le risposte compaiono nella finestra dell'evento (*Sì: … · No: … · In attesa: N*, con *(prima della modifica)* se l'evento è cambiato dopo), in **Aggiornamenti** e, per i Sì, per email ai supervisori; nel menu di assegnazione chi ha detto sì sale in cima con *✓ ha detto sì*.
 - **Promemoria**: ogni mattina, se ci sono convocazioni da sistemare nei prossimi giorni, arrivano le email (agli operatori solo le loro convocazioni da confermare, con il numero di reperibilità). Un operatore senza email o disattivato compare nel riepilogo dei supervisori con la nota *(senza email)* o *(disattivato)*.
 - **Password dimenticata**: nella schermata di accesso, scrivere l'email e premere *Password dimenticata?*: arriva un'email per sceglierne una nuova.
 - **Aggiungere o togliere un supervisore**: modificare l'elenco delle email sia in [`firebase/firestore.rules`](firebase/firestore.rules) (poi ripubblicare le regole in console) sia in `SUPERVISORI` di `app/config.js`. Per togliere l'accesso basta toglierlo dalle regole; l'account si può eliminare da Authentication → Utenti.
@@ -195,6 +206,7 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/comune.js` | date, avvisi, accesso, email |
 | `app/regole.js` | ritrovo, notturno, gettoni, stagione |
 | `app/calendario.js` | calendario mensile a schermo intero delle Convocazioni |
+| `app/richieste-evento.js` | richieste di disponibilità per un evento: allineamento con l'evento, stato per l'operatore, riepilogo delle risposte |
 | `app/onsite.js`, `app/onsite-admin.js` | deployment on-site: calcoli (giorni, posti, presenze, compensi) e richiesta/scheda nella dashboard |
 | `app/convocazioni.js`, `app/riepilogo.js`, `app/impostazioni.js` | schede Convocazioni, Riepilogo, regole e importazione |
 | `app/config.js` | collegamento a Firebase e allo script delle email |
