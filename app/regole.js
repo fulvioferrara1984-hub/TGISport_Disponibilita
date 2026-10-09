@@ -269,6 +269,18 @@
       + (fermo >= 2 ? ' · ⚠ nessun giro da ' + fermo + ' giorni: controlla lo script delle email' : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria,
+  // riga di stato del backup settimanale, dalle impostazioni restituite dallo script delle email
+  function statoBackup(imp) {
+    if (!imp || imp.backupAttivo === undefined) return 'Script delle email da aggiornare: il backup non è ancora disponibile.';
+    if (!imp.backupProgrammato) return 'Invio del venerdì non attivo: esegui attivaPromemoria nello script delle email.';
+    const u = imp.ultimoBackup;
+    if (!u) return 'Nessun backup ancora inviato.';
+    if (u.errore) return 'Ultimo backup non riuscito: ' + u.errore;
+    const d = new Date(u.quando), fuso = { timeZone: 'Europe/Rome' };
+    return 'Ultimo backup: ' + d.toLocaleDateString('it-IT', Object.assign({ weekday: 'long', day: 'numeric', month: 'long' }, fuso))
+      + ' alle ' + d.toLocaleTimeString('it-IT', Object.assign({ hour: '2-digit', minute: '2-digit' }, fuso)) + ' · ' + u.eventi + ' eventi, ' + u.deployment + ' deployment';
+  }
+
+  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});

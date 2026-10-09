@@ -171,6 +171,8 @@
       return X.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
     };
     const imp = foglio('Impostazioni'), conv = foglio('Convocazioni');
+    // backup settimanale (colonna «ID evento»): ripristino fedele, con gli id, gli stati e gli orari scritti a mano
+    if ((conv[1] || []).some((x) => testo(x) === 'ID evento')) return leggiBackup(wb, foglio, imp, conv);
     const ass = wb.Sheets.Assenze ? foglio('Assenze') : [];
     const avvisi = [];
 
@@ -284,6 +286,90 @@
     return { regole, operatori, eventi, disponibilita, assenze, avvisi, esistenti };
   }
 
+  // Ripristino da un backup settimanale (fogli Convocazioni A–R, Operatori, Impostazioni con compenso, ore e colore)
+  function leggiBackup(wb, foglio, imp, conv) {
+    const numero = (v) => (typeof v === 'number' ? v : testo(v) !== '' && !isNaN(Number(v)) ? Number(v) : null);
+    const giornoBackup = (/· ([^·]+?) alle \d{1,2}:\d{2}/.exec(testo((conv[0] || [])[0])) || [])[1] || '';
+
+    // impostazioni
+    const regole = JSON.parse(JSON.stringify(A.regole));
+    const tariffe = {};
+    ['P.IVA', 'Coop'].forEach((c) => ['diurno', 'notturno', 'maggiorato'].forEach((t) => { tariffe[('netto ' + c + ' ' + t).toLowerCase()] = [c, t]; }));
+    const COMPENSI = { diurno: 'diurno', notturno: 'notturno', maggiorato: 'maggiorato', dimezzato: 'dimezzato' };
+    imp.slice(1).forEach((r) => {
+      const voce = testo(r[0]).toLowerCase();
+      if (tariffe[voce] && typeof r[1] === 'number') regole.tariffe[tariffe[voce][0]][tariffe[voce][1]] = r[1];
+      if (voce.startsWith('tariffa on-site') && typeof r[1] === 'number') regole.tariffaOnsite = r[1];
+      if (voce === 'notturno dalle' && oraExcel(r[1])) regole.notteDa = oraExcel(r[1]);
+      if (voce === 'notturno alle' && oraExcel(r[1])) regole.notteA = oraExcel(r[1]);
+      if (testo(r[6]) && !regole.sport.includes(testo(r[6]))) regole.sport.push(testo(r[6]));
+      const nome = testo(r[8]);
+      if (!nome) return;
+      const compenso = COMPENSI[testo(r[9]).toLowerCase()] || 'diurno';
+      const campi = { nome, compenso, uefa: compenso === 'dimezzato', prima: numero(r[10]), dopo: numero(r[11]), colore: testo(r[12]) };
+      const i = regole.competizioni.findIndex((c) => c.nome === nome);
+      if (i >= 0) regole.competizioni[i] = Object.assign({}, regole.competizioni[i], campi);
+      else regole.competizioni.push(Object.assign({ sport: '' }, campi));
+    });
+    const r = R.complete(regole);
+
+    // operatori: per nome; dati completi dal foglio Operatori
+    const RUOLI = { 'Remote TL': 'TL', 'Remote Support': 'SUP' };
+    const datiOp = {};
+    (wb.Sheets.Operatori ? foglio('Operatori') : []).slice(1).forEach((x) => {
+      const nome = testo(x[0]);
+      if (!nome) return;
+      datiOp[chiave(nome)] = { mansione: testo(x[1]), ruolo: RUOLI[testo(x[2])] || 'OP', contratto: ['P.IVA', 'Coop'].includes(testo(x[3])) ? testo(x[3]) : '',
+        email: testo(x[4]), telefono: testo(x[5]), onsite: ['TL', 'OP'].includes(testo(x[6])) ? testo(x[6]) : '', attivo: testo(x[7]).toUpperCase() !== 'NO', nome };
+    });
+    const operatori = [], esistenti = {}, idPerNome = {};
+    const assicura = (nome) => {
+      const k = chiave(nome);
+      if (!k) return '';
+      if (idPerNome[k]) return idPerNome[k];
+      const { nome: _, ...campi } = datiOp[k] || {};
+      const e = A.operatori.find((o) => chiave(o.nome) === k);
+      if (e) {
+        if (Object.keys(campi).length) esistenti[e.id] = campi;
+        return (idPerNome[k] = e.id);
+      }
+      const nuovo = Object.assign({ id: 'xls-' + k, nome: testo(nome), mansione: '', ruolo: 'OP', contratto: '', email: '', telefono: '', onsite: '', attivo: true, nuovo: true }, campi);
+      operatori.push(nuovo);
+      return (idPerNome[k] = nuovo.id);
+    };
+    Object.values(datiOp).forEach((o) => assicura(o.nome));
+
+    // eventi
+    const STATI = { 'Da assegnare': 'da-assegnare', 'Da inviare': 'assegnato', 'In attesa di risposta': 'convocato', Confermato: 'confermato', Rifiutato: 'rifiutato', Annullato: 'annullato' };
+    const TIPI = { 'Remote TL': 'supervisione', 'Remote Support': 'support' };
+    const eventi = [], visti = {};
+    conv.slice(2).forEach((x) => {
+      const data = dataExcel(x[3]);
+      if (!data) return;
+      const tipo = TIPI[testo(x[14])] || 'partita', turno = tipo !== 'partita';
+      const operatoreId = assicura(testo(x[7]));
+      const stato = STATI[testo(x[11])] || (operatoreId ? 'assegnato' : 'da-assegnare');
+      const e = {
+        tipo, competizione: turno ? DO.mansione(tipo) : testo(x[0]), round: turno ? '' : testo(x[1]), sport: turno ? '' : testo(x[2]), data,
+        titolo: turno ? DO.mansione(tipo) : testo(x[4]), orario: turno ? '' : oraExcel(x[5]),
+        // ritrovo e fine «scritti a mano» dalle colonne Q e R; un turno ha sempre il suo ritrovo
+        convocazione: oraExcel(x[16]) || (turno ? oraExcel(x[6]) : ''), fine: oraExcel(x[17]), note: testo(x[10]),
+        gettone: testo(x[12]).toUpperCase() === 'SI' ? 'maggiorato' : '', daSostituire: testo(x[13]).toUpperCase() === 'SI', operatoreId, stato,
+        inviata: ['convocato', 'confermato', 'rifiutato'].includes(stato) || (stato === 'annullato' && !!operatoreId),
+      };
+      e.convocazioneCalcolata = R.convocazione(e, r);
+      e.fineCalcolata = R.fine(e, r);
+      const base = 'xls-' + data + '-' + (chiave(e.titolo) || 'evento') + '-' + e.orario.replace(':', '') + '-' + chiave(e.competizione);
+      visti[base] = (visti[base] || 0) + 1;
+      e.id = testo(x[15]) || base + (visti[base] > 1 ? '-' + visti[base] : '');
+      // lo storico di un evento ancora presente resta, con in più il ripristino
+      const prima = A.eventi.find((y) => y.id === e.id);
+      e.storico = ((prima && prima.storico) || []).concat({ quando: new Date().toISOString(), testo: 'Ripristinato dal backup' + (giornoBackup ? ' del ' + giornoBackup : '') });
+      eventi.push(e);
+    });
+    return { regole: r, operatori, eventi, disponibilita: [], assenze: 0, avvisi: [], esistenti, backup: giornoBackup || 'file' };
+  }
+
   let pacchetto = null;
   $('imp-file').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -303,13 +389,15 @@
           + conta((x) => x.stato === 'confermato') + ' confermati, ' + conta((x) => x.stato === 'convocato') + ' in attesa di conferma, '
           + conta((x) => x.stato === 'da-assegnare') + ' da assegnare, ' + conta((x) => x.stato === 'annullato') + ' annullati'
           + (giaPresenti ? ' · <b>' + giaPresenti + '</b> già importati verranno aggiornati' : '') + '</li>'
+        + (pacchetto.backup ? '<li><b>Backup del ' + DO.esc(pacchetto.backup) + ': ' + giaPresenti + ' eventi da aggiornare, ' + (ev.length - giaPresenti) + ' da ricreare</b></li>' : '')
         + '<li><b>' + nuoviOp.length + '</b> operatori nuovi' + (nuoviOp.length ? ': ' + nuoviOp.map((o) => DO.esc(o.nome) + ' (' + R.nomeRuolo(o.ruolo) + ', ' + (o.contratto || 'contratto ?') + ')').join(', ') : '') + '</li>'
         + (Object.keys(pacchetto.esistenti).length ? '<li>Operatori già presenti aggiornati: ' + Object.keys(pacchetto.esistenti).map((id) => {
           const o = A.operatori.find((x) => x.id === id), m = pacchetto.esistenti[id];
           return DO.esc(o.nome) + ' (' + [m.ruolo && 'ruolo ' + R.nomeRuolo(m.ruolo), m.contratto && 'contratto ' + m.contratto].filter(Boolean).join(', ') + ')';
         }).join(', ') + '</li>' : '')
-        + '<li><b>' + pacchetto.assenze + '</b> giorni di assenza da segnare come "Non disponibile"</li>'
-        + '<li>Tariffe, sport e competizioni (Europa League e Conference League con compenso dimezzato)</li></ul>'
+        + (pacchetto.backup ? '<li>Tariffe, sport, competizioni e mansioni come nel backup (i deployment on-site non si reimportano)</li></ul>'
+          : '<li><b>' + pacchetto.assenze + '</b> giorni di assenza da segnare come "Non disponibile"</li>'
+          + '<li>Tariffe, sport e competizioni (Europa League e Conference League con compenso dimezzato)</li></ul>')
         + (pacchetto.avvisi.length ? '<p class="nota"><b>Da controllare:</b> ' + pacchetto.avvisi.map(DO.esc).join(' ') + '</p>' : '')
         + '<p class="nota">Gli operatori nuovi arrivano senza codice di accesso: crealo dalla scheda Operatori quando vuoi invitarli. Gli eventi con operatore risultano già inviati, con la conferma del file.</p>'
         + '<div class="dialog-azioni"><button type="button" class="bottone" id="imp-annulla">Annulla</button><button type="button" class="primario" id="imp-conferma">Importa</button></div>';

@@ -127,6 +127,15 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste on-site non partono e la dashboard lo segnala dopo l'invio.
 4. **Dashboard**: in **Operatori → Modifica** imposta *On-site: TL / OP* per chi può andare in trasferta, e controlla la **Tariffa on-site** in Impostazioni.
 
+### Backup settimanale
+
+Ordine **sito → script**, nessuna regola di Firestore da cambiare e nessuna nuova autorizzazione:
+
+1. **Sito**: pubblicazione normale; in **Impostazioni → Notifiche email** compaiono la casella *Backup settimanale*, la riga *Ultimo backup* e il tasto *Invia un backup adesso* (spenti finché lo script non è aggiornato).
+2. **Script**: incolla [`backend/Codice.gs`](backend/Codice.gs), salva, poi **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione**.
+3. **Attivazione** (una volta): nell'editor scegli **attivaPromemoria** e premi **Esegui**. Nel registro compare anche `Backup ogni venerdì tra le 18 e le 19 · backup acceso`.
+4. **Prova**: in dashboard premi **Invia un backup adesso** e controlla che l'email arrivi con il file Excel allegato.
+
 ### Accessi in sola visualizzazione
 
 Ordine **sito → regole**, lo script delle email non cambia:
@@ -175,6 +184,14 @@ Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(
 1. Ogni supervisore apre `admin.html` → **Primo accesso? Crea la tua password** → email TGI Sport e password scelta. Arriva un'email di Firebase con il link per confermare l'indirizzo (guardare anche nello spam); dopo il clic si entra con email e password.
 2. **Impostazioni**: email dei supervisori che ricevono la notifica a ogni invio (possono essere anche solo alcuni).
 3. **Operatori → + Nuovo operatore**: compare il **codice personale** con il **link d'invito** (*Copia messaggio d'invito* per WhatsApp). Il codice si vede una volta sola; se l'operatore lo perde, *Nuovo codice* (il vecchio smette subito di funzionare).
+
+## Ripristinare da un backup
+
+Ogni venerdì tra le 18 e le 19 i supervisori ricevono `Backup_TGI_Sport_<data>.xlsx` (fogli **Convocazioni**, **On-site**, **Operatori**, **Impostazioni**), con tutti gli eventi della stagione, anche annullati e da assegnare. Per ripristinare: **Impostazioni → Importa dal file Excel** → scegli il file. L'importazione riconosce il backup (colonna *ID evento*):
+
+- gli eventi tornano con il loro ID, stato, tipo (partita, Remote TL, Remote Support), gettone maggiorato, «da sostituire» e orari scritti a mano; quelli già presenti si aggiornano (lo storico resta, con *Ripristinato dal backup del …*), quelli che mancano si ricreano; quelli che non sono nel file non si toccano;
+- gli operatori si riconoscono per nome e riprendono ruolo, contratto, contatti, on-site e stato; i nuovi arrivano senza codice;
+- tariffe, notturno, sport, competizioni e mansioni tornano come nel file; i deployment on-site no (il foglio è da consultare).
 
 ## Importare il file Excel della stagione
 

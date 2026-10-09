@@ -735,6 +735,11 @@
     $('imp-promemoria-giorni').value = disponibili ? r.promemoriaGiorni : '';
     $('imp-promemoria').disabled = $('imp-promemoria-giorni').disabled = !disponibili;
     $('imp-promemoria-stato').textContent = DO.regole.statoPromemoria(r);
+    // backup settimanale: anche lui solo con lo script delle email aggiornato
+    const backup = r.backupAttivo !== undefined;
+    $('imp-backup').checked = !!r.backupAttivo;
+    $('imp-backup').disabled = $('imp-backup-ora').disabled = !backup;
+    $('imp-backup-stato').textContent = DO.regole.statoBackup(r);
   }
 
   async function caricaImpostazioni() {
@@ -763,6 +768,7 @@
       if (giorni === null) { DO.avviso('I giorni del promemoria vanno da 1 a 7.', 'errore'); return; }
       Object.assign(dati, { promemoriaAttivi: $('imp-promemoria').checked, promemoriaGiorni: giorni });
     }
+    if (!$('imp-backup').disabled) dati.backupAttivo = $('imp-backup').checked;
     const b = e.target.querySelector('button[type="submit"]');
     b.disabled = true;
     try {
@@ -773,6 +779,22 @@
     } finally {
       b.disabled = false;
     }
+  });
+
+  $('imp-backup-ora').addEventListener('click', async (e) => {
+    const b = e.target;
+    b.disabled = true;
+    b.textContent = 'Invio in corso…';
+    try {
+      const r = await DO.dati.inviaBackupOra();
+      DO.avviso('Backup inviato a ' + r.destinatari + (r.destinatari === 1 ? ' indirizzo.' : ' indirizzi.'), 'ok', 6000);
+    } catch (err) {
+      DO.avviso('Backup non inviato: ' + err.message, 'errore', 8000);
+    } finally {
+      b.textContent = 'Invia un backup adesso';
+      b.disabled = false;
+    }
+    caricaImpostazioni();
   });
 
   $('form-password').addEventListener('submit', async (e) => {

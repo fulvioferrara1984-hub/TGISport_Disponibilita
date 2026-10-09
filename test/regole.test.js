@@ -321,3 +321,15 @@ test('compatibilità con le dashboard della versione precedente: Dimezzato scrit
   const risalvato = R.complete({ competizioni: normali(r).map((c) => ({ nome: c.nome, uefa: c.uefa })) });
   assert.equal(normali(risalvato)[0].compenso, 'dimezzato');
 });
+
+test('riga dell\'ultimo backup', () => {
+  const s = (imp) => R.statoBackup(imp);
+  assert.equal(s(undefined), 'Script delle email da aggiornare: il backup non è ancora disponibile.');
+  assert.equal(s({ promemoriaAttivi: true }), 'Script delle email da aggiornare: il backup non è ancora disponibile.');
+  assert.equal(s({ backupAttivo: true, backupProgrammato: false }), 'Invio del venerdì non attivo: esegui attivaPromemoria nello script delle email.');
+  assert.equal(s({ backupAttivo: true, backupProgrammato: true, ultimoBackup: null }), 'Nessun backup ancora inviato.');
+  assert.equal(s({ backupAttivo: true, backupProgrammato: true, ultimoBackup: { quando: '2026-10-16T16:04:00.000Z', eventi: 152, deployment: 3, errore: '' } }),
+    'Ultimo backup: venerdì 16 ottobre alle 18:04 · 152 eventi, 3 deployment');
+  assert.equal(s({ backupAttivo: false, backupProgrammato: true, ultimoBackup: { quando: '2026-10-16T16:04:00.000Z', errore: 'Nessun indirizzo dei supervisori.' } }),
+    'Ultimo backup non riuscito: Nessun indirizzo dei supervisori.');
+});

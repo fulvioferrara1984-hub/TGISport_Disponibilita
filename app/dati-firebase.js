@@ -557,7 +557,8 @@
     await scrivi(async () => {
       const scritture = [];
       p.operatori.forEach((o) => scritture.push(['set', F.doc(db, 'operatori', o.id), {
-        nome: o.nome, mansione: o.mansione || '', email: '', telefono: '', attivo: true, contratto: o.contratto, ruolo: o.ruolo,
+        nome: o.nome, mansione: o.mansione || '', email: o.email || '', telefono: o.telefono || '', attivo: o.attivo !== false, contratto: o.contratto, ruolo: o.ruolo,
+        onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
         uid: '', ultimoInvio: '', creato: new Date().toISOString(),
       }]));
       p.eventi.forEach((e) => scritture.push(['set', F.doc(db, 'eventi', e.id), Object.assign(pulisciEvento(e), {
@@ -872,6 +873,7 @@
   const togliVisualizzatore = (email) => scriviElenco(() => F.deleteDoc(F.doc(db, 'visualizzatori', normalizzaEmail(email))));
 
   const leggiImpostazioni = () => email('leggiImpostazioni');
+  const inviaBackupOra = () => email('inviaBackupOra');
   const salvaImpostazioni = (x) => email('salvaImpostazioni', x);
 
   async function cambiaPassword(attuale, nuova) {
@@ -896,6 +898,6 @@
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
-    aggiungiVisualizzatore, togliVisualizzatore,
+    aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
   };
 })(window.DO = window.DO || {});

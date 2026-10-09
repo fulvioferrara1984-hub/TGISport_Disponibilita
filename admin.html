@@ -7,7 +7,7 @@
   <title>Supervisori · Disponibilità TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css?v=25">
+  <link rel="stylesheet" href="app/stile.css?v=26">
 </head>
 <body>
   <header class="testata con-schede">
@@ -271,6 +271,10 @@
               <label class="campo"><span>Giorni prima dell'evento</span><input type="number" id="imp-promemoria-giorni" min="1" max="7" step="1" disabled></label>
               <p class="nota" style="margin: 0 0 6px;">Tra le 8 e le 9 (nuovo tentativo alle 11 se il primo non riesce), per gli eventi remoti da oggi a questi giorni dopo: agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto.</p>
               <p class="nota" id="imp-promemoria-stato" style="margin: 0 0 12px;"></p>
+              <label class="spunta" style="margin: 0 0 6px;"><input type="checkbox" id="imp-backup" disabled><span>Backup settimanale (venerdì alle 18)</span></label>
+              <p class="nota" style="margin: 0 0 6px;">Ogni venerdì tra le 18 e le 19 i supervisori ricevono un file Excel con tutti gli eventi della stagione, da reimportare se mai servisse (Importa dal file Excel).</p>
+              <p class="nota" id="imp-backup-stato" style="margin: 0 0 8px;"></p>
+              <button type="button" class="bottone" id="imp-backup-ora" style="margin: 0 0 14px;" disabled>Invia un backup adesso</button>
               <button type="submit" class="primario">Salva</button>
             </form>
           </section>
@@ -595,18 +599,18 @@
     </form>
   </dialog>
 
-  <script src="app/config.js?v=25"></script>
-  <script src="app/comune.js?v=25"></script>
-  <script src="app/onsite.js?v=25"></script>
-  <script src="app/richieste-evento.js?v=25"></script>
-  <script src="app/demo.js?v=25"></script>
-  <script src="app/dati-firebase.js?v=25"></script>
-  <script src="app/regole.js?v=25"></script>
-  <script src="app/admin.js?v=25"></script>
-  <script src="app/convocazioni.js?v=25"></script>
-  <script src="app/onsite-admin.js?v=25"></script>
-  <script src="app/calendario.js?v=25"></script>
-  <script src="app/riepilogo.js?v=25"></script>
-  <script src="app/impostazioni.js?v=25"></script>
+  <script src="app/config.js?v=26"></script>
+  <script src="app/comune.js?v=26"></script>
+  <script src="app/onsite.js?v=26"></script>
+  <script src="app/richieste-evento.js?v=26"></script>
+  <script src="app/demo.js?v=26"></script>
+  <script src="app/dati-firebase.js?v=26"></script>
+  <script src="app/regole.js?v=26"></script>
+  <script src="app/admin.js?v=26"></script>
+  <script src="app/convocazioni.js?v=26"></script>
+  <script src="app/onsite-admin.js?v=26"></script>
+  <script src="app/calendario.js?v=26"></script>
+  <script src="app/riepilogo.js?v=26"></script>
+  <script src="app/impostazioni.js?v=26"></script>
 </body>
 </html>

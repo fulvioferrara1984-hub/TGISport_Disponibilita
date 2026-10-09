@@ -289,7 +289,8 @@
   }
 
   // come lo script delle email: i promemoria si salvano solo se arrivano, con giorni da 1 a 7
-  const PROMEMORIA_DEMO = { promemoriaAttivi: true, promemoriaGiorni: 3, ultimoPromemoria: null, promemoriaProgrammato: true };
+  const PROMEMORIA_DEMO = { promemoriaAttivi: true, promemoriaGiorni: 3, ultimoPromemoria: null, promemoriaProgrammato: true,
+    backupAttivo: true, backupProgrammato: true, ultimoBackup: null };
   async function leggiImpostazioni() { await pausa(150); return Object.assign({}, PROMEMORIA_DEMO, dati.impostazioni); }
   async function salvaImpostazioni(x) {
     const giorni = x.promemoriaGiorni === undefined ? undefined : Number(x.promemoriaGiorni === '' || x.promemoriaGiorni === null ? NaN : x.promemoriaGiorni);
@@ -297,9 +298,21 @@
     const prima = Object.assign({}, PROMEMORIA_DEMO, dati.impostazioni);
     dati.impostazioni = Object.assign(prima, { emailSupervisori: x.emailSupervisori || '', emailAttive: x.emailAttive !== false },
       x.promemoriaAttivi === undefined ? {} : { promemoriaAttivi: x.promemoriaAttivi === true },
-      giorni === undefined ? {} : { promemoriaGiorni: giorni });
+      giorni === undefined ? {} : { promemoriaGiorni: giorni }, x.backupAttivo === undefined ? {} : { backupAttivo: x.backupAttivo === true });
     salva();
     return Object.assign({}, dati.impostazioni);
+  }
+  // nella demo nessuna email parte: si registra solo l'ultimo backup
+  async function inviaBackupOra() {
+    await pausa(400);
+    const imp = Object.assign({}, PROMEMORIA_DEMO, dati.impostazioni);
+    const destinatari = String(imp.emailSupervisori || '').split(/[,;\s]+/).filter(Boolean);
+    if (!destinatari.length) throw new Error('Nessun indirizzo dei supervisori in Impostazioni → Notifiche email.');
+    const eventi = dati.eventi.length;
+    dati.impostazioni = Object.assign(imp, { ultimoBackup: { quando: new Date().toISOString(), eventi, annullati: dati.eventi.filter((e) => e.stato === 'annullato').length,
+      deployment: dati.onsite.length, destinatari: destinatari.length, errore: '' } });
+    salva();
+    return { destinatari: destinatari.length, eventi };
   }
   // ---------- deployment on-site (stesse condizioni delle regole di Firestore) ----------
   const copia = (x) => JSON.parse(JSON.stringify(x));
@@ -476,7 +489,7 @@
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
-    aggiungiVisualizzatore, togliVisualizzatore,
+    aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
     azzera: () => { try { localStorage.removeItem(CHIAVE); } catch (e) { /* niente */ } },
   };
 })(window.DO = window.DO || {});
