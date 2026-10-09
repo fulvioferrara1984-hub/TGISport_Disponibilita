@@ -32,6 +32,7 @@ function doPost(e) {
     const azioni = {
       notificaInvio, emailRichiesta, emailConvocazioni, notificaRisposta, emailOnsite, notificaOnsite,
       emailRichiestaEvento, notificaRispostaEvento,
+      inviaBackupOra: soloSupervisori(() => { const r = giroBackup(new Date(), { forza: true }); return { destinatari: r.destinatari, eventi: r.eventi }; }),
       leggiImpostazioni: soloSupervisori(impostazioniDashboard), salvaImpostazioni: soloSupervisori(salvaImpostazioni),
     };
     if (!azioni[r.azione]) throw new Error('Operazione non consentita.');
@@ -223,11 +224,13 @@ const giorniValidi = (g) => Number.isInteger(g) && g >= 1 && g <= 7;
 function leggiImpostazioni() {
   const p = PropertiesService.getScriptProperties().getProperties();
   const giorni = Number(p.PROMEMORIA_GIORNI);
-  let ultimo = null;
+  let ultimo = null, backup = null;
   try { ultimo = p.ULTIMO_PROMEMORIA ? JSON.parse(p.ULTIMO_PROMEMORIA) : null; } catch (e) { ultimo = null; }
+  try { backup = p.ULTIMO_BACKUP ? JSON.parse(p.ULTIMO_BACKUP) : null; } catch (e) { backup = null; }
   return {
     emailSupervisori: p.EMAIL_SUPERVISORI || '', emailAttive: p.EMAIL_ATTIVE !== 'NO', urlAdmin: p.URL_ADMIN || '',
     promemoriaAttivi: p.PROMEMORIA_ATTIVI === 'SI', promemoriaGiorni: giorniValidi(giorni) ? giorni : 3, ultimoPromemoria: ultimo,
+    backupAttivo: p.BACKUP_ATTIVO === 'SI', ultimoBackup: backup,
   };
 }
 
@@ -235,6 +238,7 @@ function leggiImpostazioni() {
 function impostazioniDashboard() {
   return Object.assign(leggiImpostazioni(), {
     promemoriaProgrammato: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'inviaPromemoria'),
+    backupProgrammato: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'inviaBackup'),
   });
 }
 
@@ -253,6 +257,7 @@ function salvaImpostazioni(r) {
     nuove.PROMEMORIA_GIORNI = String(Number(r.promemoriaGiorni));
   }
   if (r.promemoriaAttivi !== undefined) nuove.PROMEMORIA_ATTIVI = r.promemoriaAttivi === true ? 'SI' : 'NO';
+  if (r.backupAttivo !== undefined) nuove.BACKUP_ATTIVO = r.backupAttivo === true ? 'SI' : 'NO';
   PropertiesService.getScriptProperties().setProperties(nuove);
   return impostazioniDashboard();
 }
@@ -395,17 +400,30 @@ function firestoreAdmin(metodo, percorso, corpo) {
   return { codice: r.getResponseCode(), dati: JSON.parse(r.getContentText() || '{}') };
 }
 
+// Risposta di una lettura con l'account dello script: errori chiari, con il messaggio di Google
+// (permessi mancanti, API spenta, autorizzazioni dello script…)
+function letturaAdmin(r, ammessi) {
+  const e = (Array.isArray(r.dati) ? r.dati[0] || {} : r.dati || {}).error;
+  const google = e && e.message ? ' Risposta di Google: ' + e.message : '';
+  if (r.codice === 200 || (ammessi || []).indexOf(r.codice) >= 0) return r;
+  if (r.codice === 401 || r.codice === 403) throw new Error("L'account dello script non può leggere Firebase: aggiungilo come Editor del progetto (vedi README)." + google);
+  throw new Error('Lettura di Firebase non riuscita (' + r.codice + ').' + google);
+}
+
+// Tutti i documenti di una raccolta, pagina per pagina
+function elencoAdmin(raccolta) {
+  const out = [];
+  let pagina = '';
+  do {
+    const r = letturaAdmin(firestoreAdmin('get', '/' + raccolta + '?pageSize=300' + (pagina ? '&pageToken=' + encodeURIComponent(pagina) : '')));
+    (r.dati.documents || []).forEach((d) => out.push(daFirestore(d)));
+    pagina = r.dati.nextPageToken || '';
+  } while (pagina);
+  return out;
+}
+
 function leggiDatiPromemoria(oggi, fine) {
-  // il messaggio di Google (permessi mancanti, API spenta, autorizzazioni dello script…) resta nell'errore
-  const google = (d) => {
-    const e = (Array.isArray(d) ? d[0] || {} : d || {}).error;
-    return e && e.message ? ' Risposta di Google: ' + e.message : '';
-  };
-  const controlla = (r, ammessi) => {
-    if (r.codice === 200 || (ammessi || []).indexOf(r.codice) >= 0) return r;
-    if (r.codice === 401 || r.codice === 403) throw new Error("L'account dello script non può leggere Firebase: aggiungilo come Editor del progetto (vedi README)." + google(r.dati));
-    throw new Error('Lettura di Firebase non riuscita (' + r.codice + ').' + google(r.dati));
-  };
+  const controlla = letturaAdmin;
   const filtro = (op, valore) => ({ fieldFilter: { field: { fieldPath: 'data' }, op, value: { stringValue: valore } } });
   const q = controlla(firestoreAdmin('post', ':runQuery', { structuredQuery: {
     from: [{ collectionId: 'eventi' }],
@@ -413,13 +431,7 @@ function leggiDatiPromemoria(oggi, fine) {
   } }));
   // senza risultati l'API risponde con voci che hanno solo readTime
   const eventi = (Array.isArray(q.dati) ? q.dati : []).filter((x) => x.document).map((x) => daFirestore(x.document));
-  const operatori = [];
-  let pagina = '';
-  do {
-    const r = controlla(firestoreAdmin('get', '/operatori?pageSize=300' + (pagina ? '&pageToken=' + encodeURIComponent(pagina) : '')));
-    (r.dati.documents || []).forEach((d) => operatori.push(daFirestore(d)));
-    pagina = r.dati.nextPageToken || '';
-  } while (pagina);
+  const operatori = elencoAdmin('operatori');
   const operativo = controlla(firestoreAdmin('get', '/impostazioni/operativo'), [404]);
   return { eventi, operatori, telefono: operativo.codice === 200 ? String(daFirestore(operativo.dati).telefono || '') : '' };
 }
@@ -493,9 +505,14 @@ function attivaPromemoria() {
       : 'niente in sospeso.'));
   ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'inviaPromemoria').forEach((t) => ScriptApp.deleteTrigger(t));
   [8, 11].forEach((ora) => ScriptApp.newTrigger('inviaPromemoria').timeBased().everyDays(1).atHour(ora).inTimezone('Europe/Rome').create());
+  // backup settimanale: il venerdì tra le 18 e le 19 (acceso la prima volta, poi resta la scelta fatta in Impostazioni)
+  if (p.getProperty('BACKUP_ATTIVO') === null) p.setProperty('BACKUP_ATTIVO', 'SI');
+  ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'inviaBackup').forEach((t) => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('inviaBackup').timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(18).inTimezone('Europe/Rome').create();
   const imp = leggiImpostazioni();
   console.log('Invio giornaliero attivo tra le 8 e le 9 (nuovo tentativo alle 11) · promemoria ' + (imp.promemoriaAttivi ? 'accesi' : 'spenti') + ', '
     + imp.promemoriaGiorni + ' giorni prima · email ancora disponibili oggi: ' + MailApp.getRemainingDailyQuota());
+  console.log('Backup ogni venerdì tra le 18 e le 19 · backup ' + (imp.backupAttivo ? 'acceso' : 'spento'));
 }
 
 // ---------------------------------------------------------------- on-site: richiesta e accettazione
@@ -743,3 +760,116 @@ function righeBackup(d, adesso) {
   return { titolo, convocazioni, onsite, operatori, impostazioni,
     conteggi: { eventi: eventi.length, annullati: eventi.filter((e) => e.stato === 'annullato').length, deployment: lista(d.onsite).length } };
 }
+
+// ---------------------------------------------------------------- backup: file .xlsx scritto a mano (parti XML in uno zip)
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+// testo per l'XML: entità e niente caratteri di controllo (non ammessi in XML)
+const escXml = (t) => String(t).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+  .replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]);
+function colonnaExcel(n) {
+  let s = '';
+  for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+  return s;
+}
+function xmlFoglio(righe) {
+  const celle = (riga, r) => riga.map((v, c) => {
+    const rif = colonnaExcel(c) + r;
+    if (v && typeof v === 'object' && v.data) return /^\d{4}-\d{2}-\d{2}$/.test(v.data) ? '<c r="' + rif + '" s="1"><v>' + giornoExcel(v.data) + '</v></c>' : '';
+    if (typeof v === 'number' && isFinite(v)) return '<c r="' + rif + '"><v>' + v + '</v></c>';
+    return v === '' || v == null ? '' : '<c r="' + rif + '" t="inlineStr"><is><t xml:space="preserve">' + escXml(v) + '</t></is></c>';
+  }).join('');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="30" width="16" customWidth="1"/></cols><sheetData>'
+    + righe.map((riga, i) => '<row r="' + (i + 1) + '">' + celle(riga, i + 1) + '</row>').join('') + '</sheetData></worksheet>';
+}
+
+// fogli = [{ nome, righe }] → Blob .xlsx
+function fileBackup(fogli, nome) {
+  const NS = 'http://schemas.openxmlformats.org';
+  const testa = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const parti = [
+    ['[Content_Types].xml', testa + '<Types xmlns="' + NS + '/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      + fogli.map((f, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')
+      + '</Types>'],
+    ['_rels/.rels', testa + '<Relationships xmlns="' + NS + '/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="' + NS + '/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+    ['xl/workbook.xml', testa + '<workbook xmlns="' + NS + '/spreadsheetml/2006/main" xmlns:r="' + NS + '/officeDocument/2006/relationships"><sheets>'
+      + fogli.map((f, i) => '<sheet name="' + escXml(f.nome) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join('') + '</sheets></workbook>'],
+    ['xl/_rels/workbook.xml.rels', testa + '<Relationships xmlns="' + NS + '/package/2006/relationships">'
+      + fogli.map((f, i) => '<Relationship Id="rId' + (i + 1) + '" Type="' + NS + '/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>').join('')
+      + '<Relationship Id="rId' + (fogli.length + 1) + '" Type="' + NS + '/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+    ['xl/styles.xml', testa + '<styleSheet xmlns="' + NS + '/spreadsheetml/2006/main">'
+      + '<numFmts count="1"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/></numFmts>'
+      + '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+      + '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
+      + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+      + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+      + '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>'
+      + '</styleSheet>'],
+  ].concat(fogli.map((f, i) => ['xl/worksheets/sheet' + (i + 1) + '.xml', xmlFoglio(f.righe)]));
+  const zip = Utilities.zip(parti.map(([percorso, xml]) => Utilities.newBlob(xml, 'application/xml', percorso)), nome);
+  return Utilities.newBlob(zip.getBytes(), XLSX_MIME, nome);
+}
+
+// ---------------------------------------------------------------- backup: lettura e invio
+
+function leggiDatiBackup(oggi) {
+  const da = stagioneDa(oggi);
+  const cerca = (raccolta, campo) => {
+    const r = letturaAdmin(firestoreAdmin('post', ':runQuery', { structuredQuery: {
+      from: [{ collectionId: raccolta }],
+      where: { fieldFilter: { field: { fieldPath: campo }, op: 'GREATER_THAN_OR_EQUAL', value: { stringValue: da } } },
+    } }));
+    return (Array.isArray(r.dati) ? r.dati : []).filter((x) => x.document).map((x) => daFirestore(x.document));
+  };
+  const compensi = {};
+  elencoAdmin('onsiteRiservato').forEach((x) => { compensi[x.id] = x.compenso; });
+  const regole = letturaAdmin(firestoreAdmin('get', '/impostazioni/regole'), [404]);
+  return { eventi: cerca('eventi', 'data'), onsite: cerca('onsite', 'a'), compensi, operatori: elencoAdmin('operatori'),
+    regole: regole.codice === 200 ? daFirestore(regole.dati) : {} };
+}
+
+// Il backup del venerdì (o subito, con forza). Ogni esito, anche un errore, resta in ULTIMO_BACKUP per la dashboard.
+function giroBackup(adesso, opzioni) {
+  const imp = leggiImpostazioni();
+  if (!(opzioni && opzioni.forza) && !imp.backupAttivo) return { saltato: 'spento' };
+  const registra = (dati) => PropertiesService.getScriptProperties().setProperty('ULTIMO_BACKUP', JSON.stringify(Object.assign({ quando: adesso.toISOString() }, dati)));
+  try {
+    const destinatari = String(imp.emailSupervisori || '').split(',').filter(Boolean);
+    if (!destinatari.length) throw new Error('Nessun indirizzo dei supervisori in Impostazioni → Notifiche email.');
+    const oggi = Utilities.formatDate(adesso, 'Europe/Rome', 'yyyy-MM-dd');
+    const r = righeBackup(leggiDatiBackup(oggi), adesso);
+    const nome = 'Backup_TGI_Sport_' + oggi + '.xlsx';
+    const file = fileBackup([{ nome: 'Convocazioni', righe: r.convocazioni }, { nome: 'On-site', righe: r.onsite },
+      { nome: 'Operatori', righe: r.operatori }, { nome: 'Impostazioni', righe: r.impostazioni }], nome);
+    const c = r.conteggi, inizio = Number(stagioneDa(oggi).slice(0, 4));
+    const dashboard = /^https:\/\//.test(imp.urlAdmin) ? imp.urlAdmin.replace(/#.*$/, '') : '';
+    MailApp.sendEmail({
+      to: destinatari.join(','),
+      name: CONFIG.MITTENTE,
+      subject: 'Backup eventi TGI Sport · ' + giornoLungo(oggi),
+      htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5">'
+        + '<p>In allegato il backup degli eventi della stagione <b>' + inizio + '/' + String(inizio + 1).slice(2) + '</b>: <b>' + c.eventi + ' eventi</b> ('
+        + c.annullati + (c.annullati === 1 ? ' annullato' : ' annullati') + ') e ' + c.deployment + ' deployment on-site.</p>'
+        + '<p>Per ripristinare: dashboard → Impostazioni → Importa dal file Excel → scegli questo file.</p>'
+        + (dashboard ? tasto(dashboard, 'Apri la dashboard') : '') + '</div>',
+      attachments: [file],
+    });
+    registra({ eventi: c.eventi, annullati: c.annullati, deployment: c.deployment, destinatari: destinatari.length, errore: '' });
+    return { inviato: true, eventi: c.eventi, deployment: c.deployment, destinatari: destinatari.length };
+  } catch (e) {
+    registra({ errore: e.message });
+    console.error('Backup non riuscito: ' + e.message);
+    throw e;
+  }
+}
+
+// Attivatore del venerdì (creato da attivaPromemoria)
+function inviaBackup() {
+  giroBackup(new Date());
+}
+

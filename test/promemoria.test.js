@@ -361,11 +361,11 @@ test('attivazione senza doppioni', () => {
   const t = carica({ attivatori: ['inviaPromemoria', 'altro'], proprieta: { PROMEMORIA_ATTIVI: 'NO', PROMEMORIA_GIORNI: '5' }, risposte: firestoreFinto({ eventi: [ev({})] }) });
   t.gs.attivaPromemoria();
   assert.equal(t.tolti.length, 1);
-  // giro alle 8 e nuovo tentativo alle 11 (se alle 8 è andato tutto bene, il secondo non fa nulla)
-  assert.equal(t.creati.length, 2);
-  assert.deepEqual(t.creati.map((c) => c.getHandlerFunction()), ['inviaPromemoria', 'inviaPromemoria']);
-  assert.deepEqual(t.creati.map((c) => c.impostazioni), [8, 11].map((ora) => ({ timeBased: true, everyDays: 1, atHour: ora, inTimezone: 'Europe/Rome' })));
-  assert.deepEqual(t.attivatori.map((a) => a.getHandlerFunction()).sort(), ['altro', 'inviaPromemoria', 'inviaPromemoria']);
+  // giro alle 8 e nuovo tentativo alle 11 (se alle 8 è andato tutto bene, il secondo non fa nulla); in più il backup del venerdì
+  const promemoria = t.creati.filter((c) => c.getHandlerFunction() === 'inviaPromemoria');
+  assert.equal(promemoria.length, 2);
+  assert.deepEqual(promemoria.map((c) => c.impostazioni), [8, 11].map((ora) => ({ timeBased: true, everyDays: 1, atHour: ora, inTimezone: 'Europe/Rome' })));
+  assert.deepEqual(t.attivatori.map((a) => a.getHandlerFunction()).sort(), ['altro', 'inviaBackup', 'inviaPromemoria', 'inviaPromemoria']);
   t.gs.attivaPromemoria();
   assert.equal(t.attivatori.filter((a) => a.getHandlerFunction() === 'inviaPromemoria').length, 2);
   assert.deepEqual([t.prop.get('PROMEMORIA_ATTIVI'), t.prop.get('PROMEMORIA_GIORNI')], ['NO', '5']);

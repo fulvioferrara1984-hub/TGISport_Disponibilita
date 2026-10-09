@@ -1,7 +1,7 @@
 // Prove del backup settimanale dello script di Google (backend/Codice.gs): node --test test/*.test.js
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { carica, j } = require('./gs.js');
+const { carica, j, leggiZip } = require('./gs.js');
 
 const ADESSO = new Date('2026-10-16T16:04:00Z');   // venerdì 16 ottobre, 18:04 in Italia
 const REGOLE = {
@@ -94,3 +94,126 @@ test('foglio Impostazioni', () => {
   assert.deepEqual(vuote[1].slice(0, 2), ['Netto P.IVA diurno', 140]);
   assert.deepEqual(vuote.slice(1, 3).map((r) => r.slice(8)), [['Remote TL', 'Diurno', 0, 8, ''], ['Remote Support', 'Diurno', 0, 6, '']]);
 });
+
+// ---------------------------------------------------------------- file, invio, attivatore, impostazioni
+
+const fogli = (r) => [{ nome: 'Convocazioni', righe: r.convocazioni }, { nome: 'On-site', righe: r.onsite }, { nome: 'Operatori', righe: r.operatori }, { nome: 'Impostazioni', righe: r.impostazioni }];
+
+test('file xlsx', () => {
+  const r = gs.righeBackup(DATI, ADESSO);
+  const file = gs.fileBackup(fogli(r), 'Backup_TGI_Sport_2026-10-16.xlsx');
+  assert.equal(file.getName(), 'Backup_TGI_Sport_2026-10-16.xlsx');
+  assert.equal(file.getContentType(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  const parti = leggiZip(file.getBytes());
+  ['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml',
+    'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml', 'xl/worksheets/sheet4.xml'].forEach((x) => assert.ok(x in parti, x));
+  assert.deepEqual([...parti['xl/workbook.xml'].matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]), ['Convocazioni', 'On-site', 'Operatori', 'Impostazioni']);
+  const foglio = parti['xl/worksheets/sheet1.xml'];
+  assert.ok(foglio.includes('<c r="A2" t="inlineStr"><is><t xml:space="preserve">Competizione</t></is></c>'));
+  assert.ok(foglio.includes('<c r="D3" s="1"><v>46312</v></c>'));   // 17/10/2026 come data di Excel
+  assert.ok(parti['xl/styles.xml'].includes('formatCode="dd/mm/yyyy"'));
+  // caratteri speciali: XML valido, testo intatto
+  const strano = gs.fileBackup([{ nome: 'Prova', righe: [['A&B <x> l\'«é» 🙂\u0007', 3.5]] }], 'p.xlsx');
+  const xml = leggiZip(strano.getBytes())['xl/worksheets/sheet1.xml'];
+  assert.ok(xml.includes('A&amp;B &lt;x&gt; l&apos;«é» 🙂</t>'));
+  assert.ok(xml.includes('<c r="B1"><v>3.5</v></c>'));
+});
+
+// Firestore simulato per la lettura del backup (account dello script)
+const valoreREST = (v) => (v === null || v === undefined ? { nullValue: null } : Array.isArray(v) ? { arrayValue: { values: v.map(valoreREST) } }
+  : typeof v === 'object' ? { mapValue: { fields: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, valoreREST(x)])) } }
+    : typeof v === 'boolean' ? { booleanValue: v } : typeof v === 'number' ? (Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v }) : { stringValue: String(v) });
+const docREST = (coll, o) => ({ name: 'projects/tgi-availability/databases/(default)/documents/' + coll + '/' + o.id,
+  fields: Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'id').map(([k, v]) => [k, valoreREST(v)])) });
+function firestoreBackup({ negato = false, supervisore = true } = {}) {
+  return (url, opzioni) => {
+    if (url.endsWith('invii?pageSize=1')) return { codice: supervisore ? 200 : 403, dati: {} };
+    if (negato) return { codice: 403, dati: { error: { message: 'Missing permissions' } } };
+    if (url.endsWith(':runQuery')) {
+      const coll = JSON.parse(opzioni.payload).structuredQuery.from[0].collectionId;
+      const docs = coll === 'eventi' ? EVENTI : coll === 'onsite' ? ONSITE : [];
+      return { codice: 200, dati: docs.length ? docs.map((d) => ({ document: docREST(coll, d), readTime: 't' })) : [{ readTime: 't' }] };
+    }
+    if (/\/operatori\?/.test(url)) return { codice: 200, dati: { documents: OPERATORI.map((o) => docREST('operatori', o)) } };
+    if (/\/onsiteRiservato\?/.test(url)) return { codice: 200, dati: { documents: [docREST('onsiteRiservato', { id: 'd1', compenso: 300 })] } };
+    if (url.endsWith('/impostazioni/regole')) return { codice: 200, dati: docREST('impostazioni', Object.assign({ id: 'regole' }, REGOLE)) };
+    if (url.endsWith('/impostazioni/operativo')) return { codice: 404, dati: {} };
+    return { codice: 404, dati: {} };
+  };
+}
+const PROPRIETA = { EMAIL_SUPERVISORI: 's1@x.it,s2@x.it', BACKUP_ATTIVO: 'SI', URL_ADMIN: 'https://x.github.io/sito/admin.html#impostazioni' };
+const ultimoBackup = (t) => JSON.parse(t.prop.get('ULTIMO_BACKUP'));
+
+test('invio del venerdì', () => {
+  const t = carica({ proprieta: PROPRIETA, risposte: firestoreBackup() });
+  assert.deepEqual(j(t.gs.giroBackup(ADESSO)), { inviato: true, eventi: 5, deployment: 1, destinatari: 2 });
+  const filtro = JSON.parse(t.chiamate.find((c) => c.url.endsWith(':runQuery')).opzioni.payload).structuredQuery.where.fieldFilter;
+  assert.deepEqual([filtro.field.fieldPath, filtro.op, filtro.value.stringValue], ['data', 'GREATER_THAN_OR_EQUAL', '2026-08-01']);
+  assert.equal(t.email.length, 1);
+  const m = t.email[0];
+  assert.equal(m.to, 's1@x.it,s2@x.it');
+  assert.equal(m.subject, 'Backup eventi TGI Sport · venerdì 16 ottobre');
+  assert.equal(m.attachments[0].getName(), 'Backup_TGI_Sport_2026-10-16.xlsx');
+  ['5 eventi', '1 annullat', '1 deployment', 'Per ripristinare: dashboard → Impostazioni → Importa dal file Excel → scegli questo file.', 'https://x.github.io/sito/admin.html']
+    .forEach((x) => assert.ok(m.htmlBody.includes(x), x));
+  // il file allegato contiene gli eventi letti
+  assert.ok(leggiZip(m.attachments[0].getBytes())['xl/worksheets/sheet1.xml'].includes('Roma-Lazio'));
+  const u = ultimoBackup(t);
+  assert.deepEqual([u.eventi, u.annullati, u.deployment, u.destinatari, u.errore], [5, 1, 1, 2, '']);
+});
+
+test('backup spento e invio forzato', () => {
+  const t = carica({ proprieta: Object.assign({}, PROPRIETA, { BACKUP_ATTIVO: 'NO' }), risposte: firestoreBackup() });
+  assert.deepEqual(j(t.gs.giroBackup(ADESSO)), { saltato: 'spento' });
+  assert.equal(t.email.length + t.chiamate.length, 0);
+  assert.equal(j(t.gs.giroBackup(ADESSO, { forza: true })).inviato, true);
+  assert.equal(t.email.length, 1);
+});
+
+test('backup: lettura negata o nessun indirizzo', () => {
+  const t = carica({ proprieta: PROPRIETA, risposte: firestoreBackup({ negato: true }) });
+  assert.throws(() => t.gs.giroBackup(ADESSO), /Editor del progetto/);
+  assert.equal(t.email.length, 0);
+  assert.match(ultimoBackup(t).errore, /Editor del progetto.*Missing permissions/);
+  const s = carica({ proprieta: Object.assign({}, PROPRIETA, { EMAIL_SUPERVISORI: '' }), risposte: firestoreBackup() });
+  assert.throws(() => s.gs.giroBackup(ADESSO), /Nessun indirizzo dei supervisori in Impostazioni → Notifiche email\./);
+  assert.equal(s.email.length + s.chiamate.length, 0);
+  assert.match(ultimoBackup(s).errore, /Nessun indirizzo/);
+});
+
+test('attivatore del venerdì', () => {
+  const t = carica({ proprieta: { EMAIL_SUPERVISORI: 's@x.it' }, risposte: firestoreBackup() });
+  t.gs.attivaPromemoria();
+  t.gs.attivaPromemoria();
+  const backup = t.attivatori.filter((a) => a.getHandlerFunction() === 'inviaBackup');
+  assert.equal(backup.length, 1);
+  assert.deepEqual(j(backup[0].impostazioni), { timeBased: true, onWeekDay: 'FRIDAY', atHour: 18, inTimezone: 'Europe/Rome' });
+  assert.equal(t.prop.get('BACKUP_ATTIVO'), 'SI');
+  assert.ok(t.registro.some((r) => r.includes('Backup ogni venerdì tra le 18 e le 19 · backup acceso')));
+  // una scelta già fatta resta
+  const s = carica({ proprieta: { EMAIL_SUPERVISORI: 's@x.it', BACKUP_ATTIVO: 'NO' }, risposte: firestoreBackup() });
+  s.gs.attivaPromemoria();
+  assert.equal(s.prop.get('BACKUP_ATTIVO'), 'NO');
+});
+
+test('invia un backup adesso: solo i supervisori', () => {
+  const chiama = (t) => JSON.parse(t.gs.doPost({ postData: { contents: JSON.stringify({ azione: 'inviaBackupOra', idToken: 'gettone' }) } }));
+  const op = carica({ proprieta: PROPRIETA, risposte: firestoreBackup({ supervisore: false }) });
+  assert.deepEqual(chiama(op), { ok: false, errore: 'Accesso non consentito.' });
+  assert.equal(op.email.length, 0);
+  const sup = carica({ proprieta: Object.assign({}, PROPRIETA, { BACKUP_ATTIVO: 'NO' }), risposte: firestoreBackup() });
+  assert.deepEqual(chiama(sup), { ok: true, dati: { destinatari: 2, eventi: 5 } });
+  assert.equal(sup.email.length, 1);
+});
+
+test('impostazioni del backup', () => {
+  const t = carica({ proprieta: Object.assign({}, PROPRIETA, { ULTIMO_BACKUP: JSON.stringify({ quando: '2026-10-16T16:04:00.000Z', eventi: 5 }) }), attivatori: ['inviaBackup'] });
+  const imp = j(t.gs.impostazioniDashboard());
+  assert.deepEqual([imp.backupAttivo, imp.backupProgrammato, imp.ultimoBackup.eventi], [true, true, 5]);
+  assert.equal(j(t.gs.salvaImpostazioni({ emailSupervisori: 's@x.it', backupAttivo: false })).backupAttivo, false);
+  assert.equal(t.prop.get('BACKUP_ATTIVO'), 'NO');
+  t.gs.salvaImpostazioni({ emailSupervisori: 's@x.it' });   // dashboard vecchia: la casella resta com'è
+  assert.equal(t.prop.get('BACKUP_ATTIVO'), 'NO');
+  assert.equal(j(carica({}).gs.impostazioniDashboard()).backupProgrammato, false);
+});
+

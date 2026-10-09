@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const zlib = require('node:zlib');
 
 const CODICE = fs.readFileSync(path.join(__dirname, '../backend/Codice.gs'), 'utf8');
 
@@ -14,6 +15,53 @@ function formatta(data, fuso, formato) {
   return formato.replace('yyyy', p.year).replace('MM', p.month).replace('dd', p.day).replace('HH', p.hour).replace('mm', p.minute);
 }
 
+// Blob di Google: testo o byte, con tipo e nome
+function blob(dati, tipo, nome) {
+  const buf = typeof dati === 'string' ? Buffer.from(dati, 'utf8') : Buffer.from(dati);
+  const b = {
+    nome: nome || '', tipo: tipo || '',
+    getBytes: () => [...buf], getDataAsString: () => buf.toString('utf8'),
+    getName: () => b.nome, setName: (n) => { b.nome = n; return b; }, getContentType: () => b.tipo, setContentType: (t) => { b.tipo = t; return b; },
+  };
+  return b;
+}
+
+// Utilities.zip: uno zip vero, senza compressione (si apre con Excel e con la libreria dell'importazione)
+function zipSemplice(blobs) {
+  const locali = [], centrali = [];
+  let posizione = 0;
+  blobs.forEach((b) => {
+    const nome = Buffer.from(b.getName(), 'utf8'), dati = Buffer.from(b.getBytes()), crc = zlib.crc32(dati);
+    const testa = Buffer.alloc(30);
+    testa.writeUInt32LE(0x04034b50, 0); testa.writeUInt16LE(20, 4); testa.writeUInt16LE(0x0800, 6);
+    testa.writeUInt32LE(crc, 14); testa.writeUInt32LE(dati.length, 18); testa.writeUInt32LE(dati.length, 22); testa.writeUInt16LE(nome.length, 26);
+    const centro = Buffer.alloc(46);
+    centro.writeUInt32LE(0x02014b50, 0); centro.writeUInt16LE(20, 4); centro.writeUInt16LE(20, 6); centro.writeUInt16LE(0x0800, 8);
+    centro.writeUInt32LE(crc, 16); centro.writeUInt32LE(dati.length, 20); centro.writeUInt32LE(dati.length, 24); centro.writeUInt16LE(nome.length, 28);
+    centro.writeUInt32LE(posizione, 42);
+    locali.push(testa, nome, dati);
+    centrali.push(centro, nome);
+    posizione += testa.length + nome.length + dati.length;
+  });
+  const centrale = Buffer.concat(centrali), fine = Buffer.alloc(22);
+  fine.writeUInt32LE(0x06054b50, 0); fine.writeUInt16LE(blobs.length, 8); fine.writeUInt16LE(blobs.length, 10);
+  fine.writeUInt32LE(centrale.length, 12); fine.writeUInt32LE(posizione, 16);
+  return Buffer.concat(locali.concat([centrale, fine]));
+}
+
+// Rilegge uno zip senza compressione: { percorso: testo }
+function leggiZip(bytes) {
+  const buf = Buffer.from(bytes), parti = {};
+  let i = 0;
+  while (buf.readUInt32LE(i) === 0x04034b50) {
+    const lungo = buf.readUInt32LE(i + 18), nome = buf.readUInt16LE(i + 26), extra = buf.readUInt16LE(i + 28);
+    const percorso = buf.toString('utf8', i + 30, i + 30 + nome), inizio = i + 30 + nome + extra;
+    parti[percorso] = buf.toString('utf8', inizio, inizio + lungo);
+    i = inizio + lungo;
+  }
+  return parti;
+}
+
 // stub: { proprieta: {}, risposte: (url, opzioni) => ({ codice, dati }), erroreEmail: (email) => boolean, attivatori: [nomi funzione] }
 function carica(stub = {}) {
   const prop = new Map(Object.entries(stub.proprieta || {}));
@@ -22,7 +70,7 @@ function carica(stub = {}) {
   const creati = [], tolti = [];
   const catena = (nome) => {
     const c = { impostazioni: {} };
-    ['timeBased', 'everyDays', 'atHour', 'inTimezone'].forEach((m) => { c[m] = (v) => { c.impostazioni[m] = v === undefined ? true : v; return c; }; });
+    ['timeBased', 'everyDays', 'atHour', 'inTimezone', 'onWeekDay'].forEach((m) => { c[m] = (v) => { c.impostazioni[m] = v === undefined ? true : v; return c; }; });
     c.create = () => { const t = { getHandlerFunction: () => nome, impostazioni: c.impostazioni }; creati.push(t); attivatori.push(t); return t; };
     return c;
   };
@@ -53,11 +101,13 @@ function carica(stub = {}) {
       getProjectTriggers: () => attivatori.slice(),
       deleteTrigger: (t) => { tolti.push(t); attivatori.splice(attivatori.indexOf(t), 1); },
       newTrigger: (nome) => catena(nome),
+      WeekDay: { MONDAY: 'MONDAY', FRIDAY: 'FRIDAY', SUNDAY: 'SUNDAY' },
     },
     Utilities: {
       formatDate: formatta,
       base64DecodeWebSafe: (s) => [...Buffer.from(s, 'base64url')],
-      newBlob: (b) => ({ getDataAsString: () => Buffer.from(b).toString('utf8') }),
+      newBlob: (dati, tipo, nome) => blob(dati, tipo, nome),
+      zip: (blobs, nome) => blob([...zipSemplice(blobs)], 'application/zip', nome),
     },
     CacheService: { getScriptCache: () => ({ get: () => null, put: () => {} }) },
     ContentService: { createTextOutput: (t) => ({ setMimeType: () => t }), MimeType: { JSON: 'json' } },
@@ -70,4 +120,4 @@ function carica(stub = {}) {
 // gli oggetti creati nel contesto vm hanno prototipi diversi: si confrontano dopo un passaggio in JSON
 const j = (x) => JSON.parse(JSON.stringify(x));
 
-module.exports = { carica, j, formatta };
+module.exports = { carica, j, formatta, leggiZip };
