@@ -63,3 +63,9 @@ test('griglia del mese: settimane da lunedì a domenica', () => {
   assert.deepEqual([febbraio.length, febbraio[0][0].data, febbraio[3][6].data], [4, '2027-02-01', '2027-02-28']);
   assert.ok(febbraio.flat().every((g) => g.delMese));
 });
+
+test('giorno di riferimento del calendario: oggi se è nella settimana mostrata', () => {
+  assert.equal(DO.giornoDiRiferimento('2026-09-29', '2026-10-02'), '2026-10-02');
+  assert.equal(DO.giornoDiRiferimento('2026-10-06', '2026-10-02'), '2026-10-06');
+  assert.equal(DO.giornoDiRiferimento('2026-09-22', '2026-10-02'), '2026-09-22');
+});

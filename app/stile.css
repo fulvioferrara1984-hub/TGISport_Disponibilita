@@ -664,8 +664,8 @@ body.con-calendario { overflow: hidden; }
 .cal-legenda { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--inchiostro-2); }
 .cal-legenda span::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 3px; background: var(--stato); vertical-align: -1px; }
 .cal-intestazione { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 6px 0; background: var(--pannello); border-bottom: 1px solid var(--linea); font-size: 12px; font-weight: 600; color: var(--inchiostro-3); text-align: center; }
-.cal-griglia { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--linea); overflow: auto; }
-.cal-giorno { min-height: 96px; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 4px 5px; background: var(--pannello); overflow: hidden; }
+.cal-griglia { --cella: 96px; flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--linea); overflow: auto; }
+.cal-giorno { min-height: var(--cella); min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 4px 5px; background: var(--pannello); overflow: hidden; }
 .cal-giorno.fuori { background: #f7f8fa; }
 .cal-giorno.fuori .cal-num { color: var(--inchiostro-3); }
 .cal-num { align-self: flex-start; padding: 0 6px; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--inchiostro-2); }
@@ -689,7 +689,8 @@ body.con-calendario { overflow: hidden; }
   .cal-barra { padding: 8px 10px; gap: 6px; }
   .cal-barra h2 { min-width: 0; font-size: 15px; }
   .cal-legenda, #cal-schermo { display: none; }
-  .cal-giorno { min-height: 64px; padding: 2px; }
+  .cal-griglia { --cella: 64px; }
+  .cal-giorno { padding: 2px; }
   .cal-voce { padding: 1px 3px 1px 5px; font-size: 10px; }
   .cal-altri { font-size: 10px; padding: 0 3px; }
 }

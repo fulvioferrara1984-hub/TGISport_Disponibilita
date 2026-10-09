@@ -114,7 +114,8 @@
     const scelto = coloreValido((competizione(nome, regole) || {}).colore);
     if (scelto) return scelto;
     let h = 0;
-    for (const ch of String(nome)) h = (h * 31 + ch.charCodeAt(0)) % 1000003;
+    // moltiplicatore scelto perché le competizioni principali (Serie A, coppe, UEFA, Nations League) abbiano colori diversi
+    for (const ch of String(nome)) h = (h * 37 + ch.charCodeAt(0)) % 1000003;
     return PALETTE[h % PALETTE.length];
   }
 

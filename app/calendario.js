@@ -39,7 +39,8 @@
     const [a, m] = mese.split('-').map(Number), oggi = DO.oggi();
     $('cal-titolo').textContent = MESI[m - 1] + ' ' + a;
     const settimane = DO.grigliaMese(mese);
-    $('cal-griglia').style.gridTemplateRows = 'repeat(' + settimane.length + ', minmax(0, 1fr))';
+    // righe mai più basse delle celle (--cella): con poco spazio la griglia scorre invece di sovrapporsi
+    $('cal-griglia').style.gridTemplateRows = 'repeat(' + settimane.length + ', minmax(var(--cella), 1fr))';
     $('cal-griglia').innerHTML = settimane.map((s) => s.map(({ data, delMese }) => {
       const tutte = voci(data), visibili = tutte.length > MAX_VOCI ? tutte.slice(0, MAX_VOCI - 1) : tutte;
       const altre = tutte.length - visibili.length;

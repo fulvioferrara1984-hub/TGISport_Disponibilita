@@ -218,3 +218,10 @@ test('stato degli eventi nel calendario', () => {
   assert.equal(s({ stato: 'annullato' }), '');
   assert.equal(s({ stato: 'da-assegnare', operatoreId: '', data: '2026-10-01' }), 'rosso');
 });
+
+test('colori automatici distinti per le competizioni principali', () => {
+  const r = R.complete(null);
+  const principali = ['Serie A', 'Coppa Italia', 'Supercoppa Italiana', 'Ligue 1', 'Champions League', 'Europa League', 'Conference League', 'Nations League'];
+  const colori = principali.map((n) => R.coloreCompetizione(n, r));
+  assert.equal(new Set(colori).size, principali.length, JSON.stringify(colori));
+});

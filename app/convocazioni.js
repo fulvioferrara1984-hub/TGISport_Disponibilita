@@ -214,7 +214,7 @@
   // ---------- navigazione e filtri ----------
   $('ev-prec').addEventListener('click', () => { inizio = DO.aggiungi(inizio, -7); disegna(); });
   $('ev-succ').addEventListener('click', () => { inizio = DO.aggiungi(inizio, 7); disegna(); });
-  $('ev-calendario').addEventListener('click', () => DO.calendario.apri(inizio));
+  $('ev-calendario').addEventListener('click', () => DO.calendario.apri(DO.giornoDiRiferimento(inizio, DO.oggi())));
   $('ev-oggi').addEventListener('click', () => { inizio = DO.martedi(DO.oggi()); $('ev-filtro-stato').value = ''; disegna(); });
   $('ev-filtro-comp').addEventListener('change', disegna);
   $('ev-mese').addEventListener('change', () => { $('ev-mese').dataset.scelto = '1'; });
@@ -485,9 +485,17 @@
     b.disabled = true;
     const perOp = {};
     const scelti = new Set([...$('evi-elenco').querySelectorAll('input[data-evento]:checked')].map((x) => x.dataset.evento));
-    const eventi = daInviare.filter((e) => scelti.has(e.id))
-      .map((e) => Object.assign({}, e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) }));
-    if (!eventi.length) { b.disabled = false; return; }
+    // mentre la finestra era aperta un altro supervisore può aver annullato o riassegnato qualcosa: si invia solo
+    // ciò che è ancora «da inviare» allo stesso operatore, con i dati aggiornati
+    const attuali = new Map(A.eventi.map((e) => [e.id, e]));
+    const ancoraValidi = daInviare.filter((e) => scelti.has(e.id))
+      .map((e) => ({ prima: e, ora: attuali.get(e.id) }))
+      .filter((x) => x.ora && x.ora.stato === 'assegnato' && x.ora.operatoreId === x.prima.operatoreId)
+      .map((x) => x.ora);
+    const cambiati = scelti.size - ancoraValidi.length;
+    const eventi = ancoraValidi.map((e) => Object.assign({}, e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) }));
+    if (cambiati) DO.avviso(cambiati + (cambiati === 1 ? ' convocazione è cambiata' : ' convocazioni sono cambiate') + ' mentre la finestra era aperta e non è stata inviata: controlla e riprova.', 'errore', 8000);
+    if (!eventi.length) { b.disabled = false; $('dlg-invia').close(); return; }
     eventi.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });
     const contatti = Object.keys(perOp).map((id) => {
       const o = operatore(id) || {};
@@ -511,6 +519,7 @@
   A.registra({
     aggiorna: disegna,
     mostra: (nome) => { if (nome === 'convocazioni') disegna(); },
-    vaiA: (data) => { if (data) inizio = DO.martedi(data); $('ev-filtro-stato').value = ''; disegna(); },
+    // arrivando da un altro punto (calendario, Aggiornamenti) si toglie ogni filtro: l'evento cercato deve vedersi
+    vaiA: (data) => { if (data) inizio = DO.martedi(data); $('ev-filtro-stato').value = ''; $('ev-filtro-comp').value = ''; disegna(); },
   });
 })(window.DO);
