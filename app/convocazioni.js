@@ -4,7 +4,8 @@
   'use strict';
 
   const $ = DO.$, A = DO.admin, R = DO.regole;
-  let lun = DO.lunedi(DO.oggi());
+  // la settimana delle Convocazioni va da martedì a lunedì: una giornata di Serie A (venerdì–lunedì) sta tutta insieme
+  let inizio = DO.martedi(DO.oggi());
   let inModifica = null;
 
   const STATI = {
@@ -39,15 +40,15 @@
   function eventiVisibili() {
     const comp = $('ev-filtro-comp').value, f = $('ev-filtro-stato').value, oggi = DO.oggi();
     return A.eventi.filter((e) => (!comp || e.competizione === comp)
-      && (f ? filtroStato(e) && (e.data >= oggi || f === 'rifiutato') : e.data >= lun && e.data <= DO.aggiungi(lun, 6)));
+      && (f ? filtroStato(e) && (e.data >= oggi || f === 'rifiutato') : e.data >= inizio && e.data <= DO.aggiungi(inizio, 6)));
   }
 
   function disegna() {
     if (A.vista !== 'convocazioni') return;
-    if (!$('ev-mese').dataset.scelto) $('ev-mese').value = lun.slice(0, 7);
+    if (!$('ev-mese').dataset.scelto) $('ev-mese').value = inizio.slice(0, 7);
     const f = $('ev-filtro-stato').value;
     $('ev-navigatore').classList.toggle('spento', !!f);
-    $('ev-etichetta').textContent = f ? 'Tutte le date' : DO.etichettaSettimana(lun);
+    $('ev-etichetta').textContent = f ? 'Tutte le date' : DO.etichettaSettimana(inizio);
     // la vista principale è la settimana: un filtro per stato è una lista a parte, con il ritorno ben visibile
     $('ev-filtro-attivo').hidden = !f;
     if (f) $('ev-filtro-attivo').innerHTML = 'Stai vedendo: <b>' + DO.esc($('ev-filtro-stato').selectedOptions[0].textContent.replace(' (tutte)', '')) + '</b>, tutte le date'
@@ -58,7 +59,7 @@
     $('ev-riepilogo').textContent = attivi.length ? attivi.length + (attivi.length === 1 ? ' evento' : ' eventi') + ' · ' + attivi.filter((e) => !e.operatoreId).length + ' da assegnare' : '';
     disegnaConteggi();
 
-    const giorni = f ? [...new Set(lista.map((e) => e.data))].sort() : DO.settimana(lun);
+    const giorni = f ? [...new Set(lista.map((e) => e.data))].sort() : DO.settimana(inizio);
     if (!lista.length && f) { $('ev-giorni').innerHTML = '<div class="griglia-vuota">Nessun evento in questo stato.</div>'; return; }
     $('ev-giorni').innerHTML = giorni.map((d) => {
       const evs = lista.filter((e) => e.data === d).sort(ordina);
@@ -76,7 +77,7 @@
     return A.onsite.filter((x) => x.stato !== 'annullata' && (x.giorni || []).some((g) => g.data === d)).map((x) => {
       const g = x.giorni.find((y) => y.data === d);
       const nomi = ['TL', 'OP'].flatMap((r) => (x['accettati' + r] || []).map((id) => nomeOp(id) + ' (' + r + ')'));
-      return '<div class="ev-riga onsite" data-onsite="' + x.id + '" role="button" tabindex="0">'
+      return '<div class="ev-riga onsite" data-onsite="' + x.id + '" role="button" tabindex="0" style="--comp: ' + DO.onsite.COLORE + '">'
         + '<div class="ev-ora"><b>On-site</b><small>' + DO.esc(g.attivita) + '</small></div>'
         + '<div class="ev-info"><b>' + DO.esc([g.attivita, g.partita, x.luogo, x.sport].filter(Boolean).join(' · ')) + '</b>'
         + (x.titolo ? '<small>' + DO.esc(x.titolo) + '</small>' : '') + '</div>'
@@ -99,7 +100,7 @@
     if ((e.stato === 'da-assegnare' || e.stato === 'convocato') && e.data >= DO.oggi() && DO.bloccato(e.data, DO.oggi(), A.operativo.giorniBlocco)) {
       tag.push('<span class="tag tag-ridosso">⏰ a ridosso</span>');
     }
-    return '<div class="ev-riga' + (annullato ? ' annullato' : '') + (e.tipo === 'supervisione' ? ' sup' : '') + '" data-id="' + e.id + '">'
+    return '<div class="ev-riga' + (annullato ? ' annullato' : '') + (e.tipo === 'supervisione' ? ' sup' : '') + '" data-id="' + e.id + '" style="--comp: ' + R.coloreCompetizione(e.competizione, A.regole) + '">'
       + '<div class="ev-ora">' + (e.tipo === 'supervisione' ? '<b>' + (conv || '—') + '</b><small>' + (fine ? 'fine ' + fine : 'inizio turno') + '</small>'
         : '<b>' + (e.orario || '—') + '</b><small>ritrovo ' + (conv || '—') + '</small>' + (fine ? '<small>fine ' + fine + '</small>' : ''))
         + (notte ? '<small class="notte">notturno</small>' : '') + '</div>'
@@ -211,9 +212,9 @@
   });
 
   // ---------- navigazione e filtri ----------
-  $('ev-prec').addEventListener('click', () => { lun = DO.aggiungi(lun, -7); disegna(); });
-  $('ev-succ').addEventListener('click', () => { lun = DO.aggiungi(lun, 7); disegna(); });
-  $('ev-oggi').addEventListener('click', () => { lun = DO.lunedi(DO.oggi()); $('ev-filtro-stato').value = ''; disegna(); });
+  $('ev-prec').addEventListener('click', () => { inizio = DO.aggiungi(inizio, -7); disegna(); });
+  $('ev-succ').addEventListener('click', () => { inizio = DO.aggiungi(inizio, 7); disegna(); });
+  $('ev-oggi').addEventListener('click', () => { inizio = DO.martedi(DO.oggi()); $('ev-filtro-stato').value = ''; disegna(); });
   $('ev-filtro-comp').addEventListener('change', disegna);
   $('ev-mese').addEventListener('change', () => { $('ev-mese').dataset.scelto = '1'; });
   $('ev-filtro-attivo').addEventListener('click', (e) => { if (e.target.id === 'ev-torna') { $('ev-filtro-stato').value = ''; disegna(); } });
@@ -385,7 +386,7 @@
         return Object.assign(e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) });
       }));
       $('dlg-partite').close();
-      lun = DO.lunedi(ok[0].data);
+      inizio = DO.martedi(ok[0].data);
       $('ev-filtro-stato').value = '';
       DO.avviso(ok.length + (ok.length === 1 ? ' partita creata.' : ' partite create.'), 'ok');
       disegna();
@@ -396,7 +397,7 @@
   function apriSupervisione(da, a) {
     const f = $('form-supervisione');
     riempiElenchi(f);
-    const sab = DO.aggiungi(lun, 5);
+    const sab = DO.aggiungi(inizio, 4);   // sabato della settimana mostrata (da martedì)
     $('evs-da').value = da || sab;
     $('evs-a').value = a || DO.aggiungi(sab, 1);
     const tl = A.operatori.filter((o) => o.attivo && o.ruolo === 'TL');
@@ -418,7 +419,7 @@
         orario: '', convocazione: ritrovo, convocazioneCalcolata: ritrovo, fineCalcolata: R.fine({ tipo: 'supervisione', convocazione: ritrovo }, A.regole),
         operatoreId: $('evs-tl').value })));
       $('dlg-supervisione').close();
-      lun = DO.lunedi(da);
+      inizio = DO.martedi(da);
       $('ev-filtro-stato').value = '';
       DO.avviso(giorni.length + (giorni.length === 1 ? ' turno creato.' : ' turni creati.'), 'ok');
       disegna();
@@ -436,7 +437,7 @@
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(presenze), 'Presenze');
     X.writeFile(wb, 'Convocazioni_' + mese + '.xlsx');
   }
-  $('ev-esporta').addEventListener('click', () => esportaMese($('ev-mese').value || lun.slice(0, 7)));
+  $('ev-esporta').addEventListener('click', () => esportaMese($('ev-mese').value || inizio.slice(0, 7)));
 
   // ---------- invio delle convocazioni ----------
   let daInviare = [];
@@ -482,6 +483,6 @@
   A.registra({
     aggiorna: disegna,
     mostra: (nome) => { if (nome === 'convocazioni') disegna(); },
-    vaiA: (data) => { if (data) lun = DO.lunedi(data); $('ev-filtro-stato').value = ''; disegna(); },
+    vaiA: (data) => { if (data) inizio = DO.martedi(data); $('ev-filtro-stato').value = ''; disegna(); },
   });
 })(window.DO);

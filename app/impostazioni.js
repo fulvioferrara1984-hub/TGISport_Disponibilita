@@ -60,6 +60,9 @@
       // ore prima (ritrovo) e dopo (fine turno): vuoto = valori generali
       + '<input type="number" data-campo="prima" min="0" max="12" step="0.25" value="' + (c.prima === null || c.prima === undefined ? '' : c.prima) + '" placeholder="' + A.regole.anticipoOre + '" title="Ritrovo: ore prima" aria-label="Ritrovo: ore prima">'
       + '<input type="number" data-campo="dopo" min="0" max="12" step="0.25" value="' + (c.dopo === null || c.dopo === undefined ? '' : c.dopo) + '" placeholder="' + A.regole.fineOre + '" title="Fine turno: ore dopo" aria-label="Fine turno: ore dopo">'
+      // colore: quello scelto oppure automatico (calcolato dal nome); «Auto» torna all'automatico
+      + '<span class="colore-comp' + (c.colore ? '' : ' auto') + '"><input type="color" data-campo="colore" value="' + R.coloreCompetizione(c.nome, { competizioni: [c] }) + '" title="Colore nelle Convocazioni" aria-label="Colore">'
+      + '<button type="button" class="link" data-auto="' + i + '" title="Colore automatico"' + (c.colore ? '' : ' hidden') + '>Auto</button></span>'
       + '<label class="spunta"><input type="checkbox" data-campo="uefa"' + (c.uefa ? ' checked' : '') + '><span>UEFA ½</span></label>'
       + '<button type="button" class="icona" data-togli="' + i + '" aria-label="Togli">✕</button></li>').join('');
     if (document.activeElement !== $('reg-sport')) $('reg-sport').value = sport.join(', ');
@@ -72,8 +75,11 @@
   $('reg-competizioni').addEventListener('change', (e) => {
     const li = e.target.closest('li');
     if (li && e.target.dataset.campo) bozzaComp[li.dataset.i][e.target.dataset.campo] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (li && e.target.dataset.campo === 'colore') disegnaCompetizioni();
   });
   $('reg-competizioni').addEventListener('click', (e) => {
+    const auto = e.target.closest('[data-auto]');
+    if (auto) { bozzaComp[auto.dataset.auto].colore = ''; disegnaCompetizioni(); return; }
     const b = e.target.closest('[data-togli]');
     if (!b) return;
     bozzaComp.splice(Number(b.dataset.togli), 1);
@@ -87,7 +93,7 @@
   $('form-competizioni').addEventListener('submit', (e) => {
     e.preventDefault();
     const oreDa = (v) => (v === '' || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v));
-    const competizioni = bozzaComp.filter((c) => c.nome.trim()).map((c) => ({ nome: c.nome.trim(), sport: c.sport || '', uefa: !!c.uefa, prima: oreDa(c.prima), dopo: oreDa(c.dopo) }));
+    const competizioni = bozzaComp.filter((c) => c.nome.trim()).map((c) => ({ nome: c.nome.trim(), sport: c.sport || '', uefa: !!c.uefa, prima: oreDa(c.prima), dopo: oreDa(c.dopo), colore: c.colore || '' }));
     const sport = $('reg-sport').value.split(',').map((s) => s.trim()).filter(Boolean);
     bozzaComp = null;
     salva({ competizioni, sport }, 'Competizioni salvate.');
