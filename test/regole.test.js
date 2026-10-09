@@ -259,3 +259,11 @@ test('nome dei ruoli remoti', () => {
   assert.equal(R.nomeRuolo('OP'), 'Remote OP');
   assert.equal(R.nomeRuolo(''), 'Remote OP');
 });
+
+test('compatibilità con le dashboard della versione precedente: Dimezzato scritto anche come uefa', () => {
+  const r = R.complete({ competizioni: [{ nome: 'Champions League', compenso: 'dimezzato' }, { nome: 'Serie A', compenso: 'notturno' }] });
+  assert.deepEqual(r.competizioni.map((c) => c.uefa), [true, false]);
+  // una dashboard vecchia che risalva { uefa } senza compenso non perde il Dimezzato
+  const risalvato = R.complete({ competizioni: r.competizioni.map((c) => ({ nome: c.nome, uefa: c.uefa })) });
+  assert.equal(risalvato.competizioni[0].compenso, 'dimezzato');
+});

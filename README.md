@@ -8,7 +8,7 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
   - **Disponibilità**: griglia settimanale del team in tempo reale (passando su una casella si leggono nota e impegni del giorno), pannello per ogni giorno, **Richiedi disponibilità** per un periodo.
   - **Aggiornamenti**: invii delle disponibilità, conferme e rifiuti delle convocazioni, stato delle richieste.
   - **Riepilogo**: eventi coperti e compensi netti per operatore, competizione e mese; esportazione in Excel.
-  - **Operatori** (ruolo TL/OP, contratto P.IVA/Coop, codici) e **Impostazioni** (tariffe, competizioni, importazione dal file Excel, email, password).
+  - **Operatori** (ruolo Remote TL/OP, on-site TL/OP, contratto P.IVA/Coop, codici) e **Impostazioni** (tariffe, competizioni, importazione dal file Excel, email, password).
 
 ## Regole
 
@@ -20,14 +20,14 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 | Blocco | quando all'evento mancano N giorni o meno (generale: 3; evento lunedì → da venerdì) l'operatore non cambia più disponibilità né rinuncia: telefona al numero di reperibilità |
 | Notturno | ritrovo dalle 22:00 alle 6:00 |
 | Gettoni netti | P.IVA: diurno 140, notturno 210, maggiorato 210 · Coop: diurno 175, notturno 262,50, maggiorato 262,50 |
-| Maggiorato | si sceglie sul singolo evento e prevale sulle altre regole |
-| UEFA | Champions, Europa e Conference League: metà del diurno |
-| Supervisione | un turno per giorno, solo operatori con ruolo **TL**; le partite vanno a TL o OP |
+| Compenso per competizione | Diurno (notturno se il ritrovo è di notte), Notturno, Maggiorato o Dimezzato (metà del diurno); Champions, Europa e Conference League partono come Dimezzato |
+| Maggiorato | si sceglie anche sul singolo evento e prevale su tutto |
+| Supervisione | un turno per giorno, solo operatori con ruolo **Remote TL**; le partite vanno a Remote TL o Remote OP |
 | Annullati | non contano mai nei riepiloghi |
 | On-site | richiesta con date, attività per giorno (Travel Day, MD-1, MD…), luogo, sport e posti TL/OP, solo agli operatori abilitati; chi accetta per primo occupa il posto, è on-site in quei giorni (non assegnabile al remoto) e non si ritira dal sito; compenso di trasferta = giorni × tariffa on-site (generale: 150 € al giorno), modificabile, visibile solo ai supervisori |
 | Promemoria | ogni mattina tra le 8 e le 9 (nuovo tentativo alle 11 se il primo non riesce), per gli eventi remoti da oggi a X giorni dopo (generale: 3): agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto (da sostituire, senza operatore, da inviare, in attesa) |
 
-Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco), **Competizioni e sport** (ore prima/dopo per competizione, casella *UEFA ½*) , **Notifiche email** (promemoria automatici e giorni) e **Tariffe e regole → Tariffa on-site**; l'abilitazione on-site di ciascuno si imposta nella scheda dell'operatore.
+Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco), **Competizioni e sport** (ore prima/dopo, colore e menu *Compenso* per competizione) , **Notifiche email** (promemoria automatici e giorni) e **Tariffe e regole → Tariffa on-site**; l'abilitazione on-site di ciascuno si imposta nella scheda dell'operatore.
 
 **Esporta mese** (scheda Convocazioni) scarica un Excel con le convocazioni del mese e le presenze per operatore, senza compensi.
 
@@ -86,6 +86,8 @@ Quando cambiano [`firebase/firestore.rules`](firebase/firestore.rules) o [`backe
 1. **sito** (push su `main`): la pagina nuova funziona anche con le regole vecchie;
 2. **regole**, quando il sito nuovo è online (GitHub Pages lo pubblica in un paio di minuti; i telefoni possono tenere la pagina vecchia fino a 10 minuti): pubblicarle prima disconnetterebbe chi ha ancora la pagina vecchia;
 3. **script**: fino a quel momento le email partono con il testo precedente (per esempio senza la fine turno).
+
+Dopo **ogni** pubblicazione del sito, **ricaricare la dashboard** su ogni computer dei supervisori (o chiudere e riaprire la scheda) prima di salvare impostazioni o esportare il Riepilogo: una scheda rimasta aperta da prima continua a usare la versione vecchia.
 
 Come pubblicarli:
 

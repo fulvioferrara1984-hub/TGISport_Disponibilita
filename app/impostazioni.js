@@ -95,7 +95,7 @@
   $('form-competizioni').addEventListener('submit', (e) => {
     e.preventDefault();
     const oreDa = (v) => (v === '' || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v));
-    const competizioni = bozzaComp.filter((c) => c.nome.trim()).map((c) => ({ nome: c.nome.trim(), sport: c.sport || '', compenso: c.compenso || 'diurno', prima: oreDa(c.prima), dopo: oreDa(c.dopo), colore: c.colore || '' }));
+    const competizioni = bozzaComp.filter((c) => c.nome.trim()).map((c) => ({ nome: c.nome.trim(), sport: c.sport || '', compenso: c.compenso || 'diurno', uefa: c.compenso === 'dimezzato', prima: oreDa(c.prima), dopo: oreDa(c.dopo), colore: c.colore || '' }));
     const sport = $('reg-sport').value.split(',').map((s) => s.trim()).filter(Boolean);
     bozzaComp = null;
     salva({ competizioni, sport }, 'Competizioni salvate.');
@@ -158,7 +158,7 @@
     elenco.comp.concat(['Europa League', 'Conference League']).forEach((c) => {
       // competizioni UEFA (Champions, Europa, Conference League): compenso dimezzato
       const uefa = /champions|europa league|conference/i.test(c);
-      if (!regole.competizioni.some((x) => x.nome === c)) regole.competizioni.push({ nome: c, sport: uefa ? 'Calcio' : '', compenso: uefa ? 'dimezzato' : 'diurno' });
+      if (!regole.competizioni.some((x) => x.nome === c)) regole.competizioni.push({ nome: c, sport: uefa ? 'Calcio' : '', compenso: uefa ? 'dimezzato' : 'diurno', uefa });
     });
 
     // operatori: si riconoscono per nome tra quelli già presenti

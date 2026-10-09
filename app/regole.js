@@ -39,11 +39,13 @@
   function complete(r) {
     const x = Object.assign({}, PREDEFINITE, r || {});
     // prima/dopo per competizione: vuoti = valori generali
-    // competizioni salvate prima del tipo di compenso: la vecchia casella «UEFA ½» diventa «dimezzato»
-    x.competizioni = x.competizioni.map(({ uefa, ...c }) => Object.assign({}, c, {
-      prima: ore(c.prima), dopo: ore(c.dopo), colore: coloreValido(c.colore),
-      compenso: TIPI[c.compenso] ? c.compenso : uefa && c.compenso === undefined ? 'dimezzato' : 'diurno',
-    }));
+    // competizioni salvate prima del tipo di compenso: la vecchia casella «UEFA ½» diventa «dimezzato».
+    // «uefa» si continua a scrivere uguale a «dimezzato» perché le dashboard ancora aperte sulla versione
+    // precedente calcolino giusto e, se risalvano, non perdano il Dimezzato.
+    x.competizioni = x.competizioni.map(({ uefa, ...c }) => {
+      const compenso = TIPI[c.compenso] ? c.compenso : uefa && c.compenso === undefined ? 'dimezzato' : 'diurno';
+      return Object.assign({}, c, { prima: ore(c.prima), dopo: ore(c.dopo), colore: coloreValido(c.colore), compenso, uefa: compenso === 'dimezzato' });
+    });
     x.tariffe = {
       'P.IVA': Object.assign({}, PREDEFINITE.tariffe['P.IVA'], (r && r.tariffe && r.tariffe['P.IVA']) || {}),
       Coop: Object.assign({}, PREDEFINITE.tariffe.Coop, (r && r.tariffe && r.tariffe.Coop) || {}),
