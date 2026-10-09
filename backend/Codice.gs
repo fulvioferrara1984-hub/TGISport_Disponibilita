@@ -526,7 +526,7 @@ function testoEmailOnsite(dest, d, sito) {
       + '<table style="border-collapse:collapse">' + righe + '</table>'
       + (d.note ? '<p style="padding:10px 14px;background:#f3f4f6;border-radius:8px">' + esc(String(d.note).slice(0, 500)) + '</p>' : '')
       + (sito ? tasto(sito, 'Rispondi sulla piattaforma') : '')
-      + '<p style="color:#8b919c;font-size:12px">I posti vanno a chi accetta per primo. Per entrare usa il tuo codice personale.</p></div>',
+      + '<p style="color:#8b919c;font-size:12px">I posti vanno a chi accetta prima. Per entrare usa il tuo codice personale.</p></div>',
   };
 }
 
@@ -534,8 +534,10 @@ function emailOnsite(r) {
   verificaSupervisore(r.idToken);
   const sito = /^https:\/\//.test(String(r.urlSito || '')) ? String(r.urlSito) : '';
   const d = r.deployment || {};
-  const esito = { email: 0, nonInviate: [] };
+  const esito = { email: 0, nonInviate: [], senzaPosto: [] };
   (Array.isArray(r.destinatari) ? r.destinatari : []).slice(0, 100).forEach((dest) => {
+    // chi ha un ruolo senza posti non vedrebbe la richiesta sulla sua pagina: niente email
+    if (!(Number((d.posti || {})[dest.ruolo] || 0) > 0)) { esito.senzaPosto.push(dest.nome); return; }
     if (!EMAIL_VALIDA.test(String(dest.email || ''))) { esito.nonInviate.push(dest.nome); return; }
     try {
       MailApp.sendEmail(Object.assign({ name: CONFIG.MITTENTE }, testoEmailOnsite(dest, d, sito)));

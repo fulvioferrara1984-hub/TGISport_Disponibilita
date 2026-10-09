@@ -69,11 +69,14 @@
     const giorni = dateScelte().map((data) => ({ data }));
     const ops = abilitati();
     $('ons-destinatari').innerHTML = ops.length ? ops.map((o) => {
-      const si = preseleziona ? posti[o.onsite] > 0 : gia.has(o.id);
+      // chi ha un ruolo senza posti non vedrebbe la richiesta: non si può scegliere
+      const conPosto = posti[o.onsite] > 0, si = conPosto && (preseleziona || gia.has(o.id));
       const remoti = O.conflittiRemoti({ giorni }, A.eventi.filter((e) => e.operatoreId === o.id), ['assegnato', 'convocato', 'confermato']);
-      return '<li><label><input type="checkbox" value="' + o.id + '"' + (si ? ' checked' : '') + '><span class="chi"><b>' + DO.esc(o.nome) + '</b>'
-        + '<small>on-site ' + o.onsite + (o.email ? '' : ' · senza email') + '</small>'
-        + (remoti.length ? '<em>convocazioni remote in quei giorni: ' + remoti.map(giornoBreve).join(', ') + '</em>' : '') + '</span></label></li>';
+      const onsite = O.conflittiOnsite({ id: null, giorni }, A.onsite, o.id);
+      return '<li><label><input type="checkbox" value="' + o.id + '"' + (si ? ' checked' : '') + (conPosto ? '' : ' disabled') + '><span class="chi"><b>' + DO.esc(o.nome) + '</b>'
+        + '<small>on-site ' + o.onsite + (conPosto ? '' : ' · nessun posto on-site ' + o.onsite + ' in questa richiesta') + (o.email ? '' : ' · senza email') + '</small>'
+        + (remoti.length ? '<em>convocazioni remote in quei giorni: ' + remoti.map(giornoBreve).join(', ') + '</em>' : '')
+        + (onsite.length ? '<em>già on-site in quei giorni: ' + onsite.map(giornoBreve).join(', ') + '</em>' : '') + '</span></label></li>';
     }).join('') : '<li class="nota">Nessun operatore abilitato: imposta «On-site» nella scheda di ciascun operatore.</li>';
     aggiornaBottone();
   }
@@ -241,8 +244,12 @@
     $('onsm-op').value = d.posti.OP;
     $('onsm-compenso').value = A.compensiOnsite[d.id] !== undefined ? A.compensiOnsite[d.id] : '';
     const nuovi = abilitati().filter((o) => !(d.destinatari || []).includes(o.id));
-    $('onsm-aggiungi').innerHTML = nuovi.length ? nuovi.map((o) => '<li><label><input type="checkbox" value="' + o.id + '"><span class="chi"><b>' + DO.esc(o.nome) + '</b>'
-      + '<small>on-site ' + o.onsite + (o.email ? '' : ' · senza email') + '</small></span></label></li>').join('')
+    $('onsm-aggiungi').innerHTML = nuovi.length ? nuovi.map((o) => {
+      const conPosto = d.posti[o.onsite] > 0, onsite = O.conflittiOnsite(d, A.onsite, o.id);
+      return '<li><label><input type="checkbox" value="' + o.id + '"' + (conPosto ? '' : ' disabled') + '><span class="chi"><b>' + DO.esc(o.nome) + '</b>'
+        + '<small>on-site ' + o.onsite + (conPosto ? '' : ' · nessun posto on-site ' + o.onsite) + (o.email ? '' : ' · senza email') + '</small>'
+        + (onsite.length ? '<em>già on-site in quei giorni: ' + onsite.map(giornoBreve).join(', ') + '</em>' : '') + '</span></label></li>';
+    }).join('')
       : '<li class="nota">Tutti gli operatori abilitati hanno già ricevuto la richiesta.</li>';
     $('onsm-email').checked = true;
     $('onss-modifica').hidden = false;

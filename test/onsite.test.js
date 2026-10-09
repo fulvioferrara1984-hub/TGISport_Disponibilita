@@ -144,6 +144,16 @@ test('modifiche del supervisore', () => {
 
 test('messaggi per chi non può accettare', () => {
   assert.equal(O.MESSAGGI.esaurito, 'Posti esauriti');
+  assert.equal(O.MESSAGGI['non-abilitato'], 'Questa richiesta non ha posti per la tua abilitazione on-site.');
   assert.equal(O.MESSAGGI.escluso, 'Il supervisore ti ha tolto da questo deployment.');
   ['accettato', 'annullato', 'scaduta', 'non-abilitato'].forEach((k) => assert.ok(O.MESSAGGI[k], k));
+});
+
+test('conflitti con altri deployment on-site già accettati', () => {
+  const primo = dep({ id: 'd1', accettatiOP: ['a'] });
+  const secondo = dep({ id: 'd2', giorni: [{ data: '2026-10-13', attivita: 'MD', partita: '' }, { data: '2026-10-14', attivita: 'Travel Day', partita: '' }], da: '2026-10-13', a: '2026-10-14' });
+  assert.deepEqual(O.conflittiOnsite(secondo, [primo, secondo], 'a'), ['2026-10-13']);
+  assert.deepEqual(O.conflittiOnsite(secondo, [Object.assign({}, primo, { stato: 'annullata' }), secondo], 'a'), []);
+  assert.deepEqual(O.conflittiOnsite(primo, [primo, secondo], 'a'), []);          // il deployment stesso non conta
+  assert.deepEqual(O.conflittiOnsite(secondo, [primo, secondo], 'b'), []);
 });

@@ -95,10 +95,10 @@ test('on-site: condizioni per accettare', async () => {
   await comeOperatore('DEMO-0005');
   await assert.rejects(D.rispondiOnsite(soloTL, true), /Richiesta non trovata\./);
   await comeOperatore('DEMO-0003');
-  await assert.rejects(D.rispondiOnsite(soloTL, true), /Non sei abilitato/);
+  await assert.rejects(D.rispondiOnsite(soloTL, true), /non ha posti per la tua abilitazione/);
   await abilita('op-demo1', 'OP');                       // abilitazione cambiata dopo l'invio
   await comeOperatore('DEMO-0001');
-  await assert.rejects(D.rispondiOnsite(soloTL, true), /Non sei abilitato/);
+  await assert.rejects(D.rispondiOnsite(soloTL, true), /non ha posti per la tua abilitazione/);
   await abilita('op-demo1', 'TL');
   await comeOperatore('DEMO-0001');
   await D.rispondiOnsite(soloTL, true);

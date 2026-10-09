@@ -93,6 +93,12 @@
     return Array.from(new Set(lista(eventi).filter((e) => giorni.has(e.data) && stati.includes(e.stato)).map((e) => e.data))).sort();
   }
 
+  // giorni del deployment in cui l'operatore id è già on-site con un altro deployment accettato (non annullato)
+  function conflittiOnsite(d, elenco, id) {
+    const giorni = giorniOnsite(lista(elenco).filter((x) => x.id !== d.id), id);
+    return lista(d.giorni).map((g) => g.data).filter((x) => giorni[x]).sort();
+  }
+
   // Cosa vede l'operatore della richiesta (le stesse condizioni delle regole di Firestore)
   function statoPerOperatore(d, op, oggi) {
     if (ruoloAccettato(d, op.id)) return d.stato === 'annullata' ? 'annullato' : 'accettato';
@@ -134,7 +140,7 @@
     annullato: 'Il deployment è annullato.',
     escluso: 'Il supervisore ti ha tolto da questo deployment.',
     scaduta: 'La richiesta non accetta più risposte.',
-    'non-abilitato': 'Non sei abilitato per i posti di questa richiesta.',
+    'non-abilitato': 'Questa richiesta non ha posti per la tua abilitazione on-site.',
     esaurito: 'Posti esauriti',
   };
 
@@ -169,6 +175,6 @@
 
   DO.onsite = {
     ATTIVITA, MESSAGGI, attivitaProposte, giorniDa, normalizza, compensoProposto, compensoValido, modifiche, postiLiberi, etichettaPosti,
-    ruoloAccettato, giorniOnsite, conflittiRemoti, statoPerOperatore, quoteMese, periodoBreve,
+    ruoloAccettato, giorniOnsite, conflittiRemoti, conflittiOnsite, statoPerOperatore, quoteMese, periodoBreve,
   };
 })(window.DO = window.DO || {});

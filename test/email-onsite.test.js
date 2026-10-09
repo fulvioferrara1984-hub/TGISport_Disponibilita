@@ -32,7 +32,7 @@ test('email di richiesta on-site', () => {
   assert.equal(m.to, 'm@x.it');
   assert.equal(m.subject, 'Richiesta on-site: Roma · 12–15 ottobre');
   ['Ciao Marco', 'lunedì 12 ottobre', 'Travel Day', 'MD · Italia-Francia', 'Roma', 'Rugby', 'Sei Nazioni', 'on-site TL', 'Hotel vicino allo stadio',
-    'Rispondi sulla piattaforma', 'href="https://x.github.io/sito/"', 'Per entrare usa il tuo codice personale.'].forEach((t) => assert.ok(m.htmlBody.includes(t), t));
+    'Rispondi sulla piattaforma', 'href="https://x.github.io/sito/"', 'I posti vanno a chi accetta prima.', 'Per entrare usa il tuo codice personale.'].forEach((t) => assert.ok(m.htmlBody.includes(t), t));
   assert.equal(/€|compens/i.test(m.subject + m.htmlBody), false);
   const strano = gs.testoEmailOnsite({ nome: 'Marco', email: 'm@x.it', ruolo: 'OP' }, dep({ titolo: '<b>A&B</b>', note: '"x" < y' }), '');
   assert.ok(strano.htmlBody.includes('&lt;b&gt;A&amp;B&lt;/b&gt;'));
@@ -77,4 +77,14 @@ test('periodo breve ed etichetta dei posti dello script', () => {
   assert.equal(gs.periodoBreve('2026-10-30', '2026-11-02'), '30 ottobre – 2 novembre');
   assert.equal(gs.etichettaPosti(dep({ accettatiOP: ['b'] })), 'TL 1/1 · OP 1/2');
   assert.equal(gs.etichettaPosti(dep({ posti: { TL: 0, OP: 2 }, accettatiTL: [], accettatiOP: ['b'] })), 'OP 1/2');
+});
+
+test('richiesta on-site: niente email a chi ha un ruolo senza posti', () => {
+  const t = carica({ risposte: firestoreFinto(dep()) });
+  const r = j(t.gs.emailOnsite({
+    idToken: 'supervisore', urlSito: 'https://x.github.io/sito/', deployment: dep({ posti: { TL: 0, OP: 2 } }),
+    destinatari: [{ nome: 'Marco Rossi', email: 'm@x.it', ruolo: 'OP' }, { nome: 'Luca Bianchi', email: 'l@x.it', ruolo: 'TL' }],
+  }));
+  assert.deepEqual([r.email, r.nonInviate, r.senzaPosto], [1, [], ['Luca Bianchi']]);
+  assert.deepEqual(t.email.map((m) => m.to), ['m@x.it']);
 });

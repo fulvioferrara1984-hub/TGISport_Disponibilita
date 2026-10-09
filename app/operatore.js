@@ -211,14 +211,15 @@
     box.innerHTML = '<div class="scheda-testa"><h2>Richieste on-site</h2></div>' + visibili.sort((a, b) => a.da.localeCompare(b.da)).map((d) => {
       const stato = DO.onsite.statoPerOperatore(d, operatore, oggi), ruolo = operatore.onsite, g = DO.giorno(d.da);
       const liberi = DO.onsite.postiLiberi(d)[ruolo] || 0;
-      const conflitti = DO.onsite.conflittiRemoti(d, convocazioni);
+      const conflitti = DO.onsite.conflittiRemoti(d, convocazioni), giaOnsite = DO.onsite.conflittiOnsite(d, onsite, operatore.id);
       const accetta = (testo, cls) => '<button type="button" class="' + cls + '" data-onsite="accetta" data-id="' + d.id + '">' + testo + '</button>';
       const nonPosso = '<button type="button" class="bottone" data-onsite="rifiuta" data-id="' + d.id + '">Non posso</button>';
       let azioni;
       if (stato === 'escluso') azioni = '<small class="conv-spiegazione">' + DO.onsite.MESSAGGI.escluso + '</small>';
       else if (stato === 'esaurito') azioni = '<span class="stato-chip">Posti esauriti</span>';
-      else if (conflitti.length) {
-        azioni = '<small class="conv-spiegazione">Hai già convocazioni ' + elencoDate(conflitti) + ': chiama il supervisore</small>'
+      else if (conflitti.length || giaOnsite.length) {
+        azioni = (conflitti.length ? '<small class="conv-spiegazione">Hai già convocazioni ' + elencoDate(conflitti) + ': chiama il supervisore</small>' : '')
+          + (giaOnsite.length ? '<small class="conv-spiegazione">Sei già on-site ' + elencoDate(giaOnsite) + ': chiama il supervisore</small>' : '')
           + tasto('telefona') + (stato === 'da-rispondere' ? nonPosso : '');
       } else if (stato === 'rifiutato') azioni = '<span class="stato-chip st-A">Hai risposto: non posso</span>' + accetta('Ho cambiato idea, accetto', 'link');
       else azioni = nonPosso + accetta('Accetto', 'primario');

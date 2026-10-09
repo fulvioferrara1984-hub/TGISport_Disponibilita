@@ -579,7 +579,7 @@
   const mandaRichiestaOnsite = (scheda, conEmail, urlSito) => (conEmail.length
     ? email('emailOnsite', {
       destinatari: conEmail.map((c) => ({ nome: c.nome, email: c.email, ruolo: c.ruolo || '' })),
-      deployment: { titolo: scheda.titolo, luogo: scheda.luogo, sport: scheda.sport, note: scheda.note, giorni: scheda.giorni, da: scheda.da, a: scheda.a },
+      deployment: { titolo: scheda.titolo, luogo: scheda.luogo, sport: scheda.sport, note: scheda.note, giorni: scheda.giorni, da: scheda.da, a: scheda.a, posti: scheda.posti },
       urlSito,
     })
     : Promise.resolve({ email: 0 }));
