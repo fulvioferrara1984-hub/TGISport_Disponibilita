@@ -67,7 +67,23 @@
         + '<span>' + (evs.length ? plurale(evs.filter((e) => e.stato !== 'annullato').length, 'evento', 'eventi') : 'nessun evento') + '</span>'
         + '<button type="button" class="link" data-nuova-sup="' + d + '">+ supervisione</button>'
         + '<button type="button" class="link" data-nuove="' + d + '">+ partite</button></div>';
-      return '<div class="ev-giorno' + (d < DO.oggi() ? ' passato' : '') + '">' + testa + evs.map(riga).join('') + '</div>';
+      return '<div class="ev-giorno' + (d < DO.oggi() ? ' passato' : '') + '">' + testa + (f ? '' : righeOnsite(d)) + evs.map(riga).join('') + '</div>';
+    }).join('');
+  }
+
+  // giorni dei deployment on-site (non annullati): una riga per giorno, clic → scheda del deployment
+  function righeOnsite(d) {
+    return A.onsite.filter((x) => x.stato !== 'annullata' && (x.giorni || []).some((g) => g.data === d)).map((x) => {
+      const g = x.giorni.find((y) => y.data === d);
+      const nomi = ['TL', 'OP'].flatMap((r) => (x['accettati' + r] || []).map((id) => nomeOp(id) + ' (' + r + ')'));
+      return '<div class="ev-riga onsite" data-onsite="' + x.id + '" role="button" tabindex="0">'
+        + '<div class="ev-ora"><b>On-site</b><small>' + DO.esc(g.attivita) + '</small></div>'
+        + '<div class="ev-info"><b>' + DO.esc([g.attivita, g.partita, x.luogo, x.sport].filter(Boolean).join(' · ')) + '</b>'
+        + (x.titolo ? '<small>' + DO.esc(x.titolo) + '</small>' : '') + '</div>'
+        + '<div class="ev-op"><small>' + (nomi.length ? DO.esc(nomi.join(', ')) : 'nessuno ha ancora accettato') + '</small></div>'
+        + '<div class="ev-stato"><span class="stato-chip st-onsite">' + DO.onsite.etichettaPosti(x) + '</span>'
+        + (x.stato === 'chiusa' ? '<small>richiesta chiusa</small>' : '') + '</div>'
+        + '<span class="ev-modifica" aria-hidden="true"></span></div>';
     }).join('');
   }
 
@@ -198,6 +214,9 @@
   $('ev-filtro-comp').addEventListener('change', disegna);
   $('ev-mese').addEventListener('change', () => { $('ev-mese').dataset.scelto = '1'; });
   $('ev-filtro-attivo').addEventListener('click', (e) => { if (e.target.id === 'ev-torna') { $('ev-filtro-stato').value = ''; disegna(); } });
+  const apriOnsite = (e) => { const r = e.target.closest('[data-onsite]'); if (r) DO.onsiteAdmin.apri(r.dataset.onsite); };
+  $('ev-giorni').addEventListener('click', apriOnsite);
+  $('ev-giorni').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-onsite]')) apriOnsite(e); });
   // all'apertura si parte sempre dalla settimana corrente (il browser altrimenti ricorda l'ultimo filtro)
   $('ev-filtro-stato').value = '';
   $('ev-filtro-comp').value = '';

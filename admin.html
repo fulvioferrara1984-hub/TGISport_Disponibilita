@@ -60,6 +60,7 @@
         <div class="strumenti">
           <input type="month" id="ev-mese" aria-label="Mese da esportare" class="solo-desktop">
           <button type="button" class="bottone solo-desktop" id="ev-esporta" title="Excel con convocazioni e presenze del mese, senza compensi">Esporta mese</button>
+          <button type="button" class="bottone" id="ev-onsite">+ On-site</button>
           <button type="button" class="bottone" id="ev-nuova-sup">+ Supervisione</button>
           <button type="button" class="bottone" id="ev-nuove">+ Partite</button>
           <button type="button" class="primario" id="ev-invia">Invia convocazioni</button>
@@ -356,6 +357,72 @@
     </form>
   </dialog>
 
+  <dialog id="dlg-onsite" class="largo">
+    <form method="dialog" id="form-onsite">
+      <h2>Richiesta deployment on-site</h2>
+      <div class="due-campi">
+        <label class="campo"><span>Primo giorno</span><input type="date" id="ons-da"></label>
+        <label class="campo"><span>Ultimo giorno</span><input type="date" id="ons-a"></label>
+      </div>
+      <ul class="onsite-righe" id="ons-giorni"></ul>
+      <div class="due-campi">
+        <label class="campo"><span>Luogo</span><input type="text" id="ons-luogo" maxlength="80" placeholder="es. Roma, Stadio Olimpico"></label>
+        <label class="campo"><span>Sport</span><input type="text" id="ons-sport" maxlength="40" list="ons-sport-elenco" placeholder="es. Rugby"></label>
+      </div>
+      <datalist id="ons-sport-elenco"></datalist>
+      <label class="campo"><span>Titolo (facoltativo)</span><input type="text" id="ons-titolo" maxlength="120" placeholder="es. Sei Nazioni"></label>
+      <label class="campo"><span>Note (facoltative)</span><textarea id="ons-note" rows="2" maxlength="500"></textarea></label>
+      <div class="due-campi">
+        <label class="campo"><span>Posti on-site TL</span><input type="number" id="ons-tl" min="0" max="20" step="1"></label>
+        <label class="campo"><span>Posti on-site OP</span><input type="number" id="ons-op" min="0" max="20" step="1"></label>
+      </div>
+      <label class="campo"><span>Compenso per persona (€), visibile solo ai supervisori</span><input type="number" id="ons-compenso" min="0" step="0.01"></label>
+      <p class="nota" id="ons-compenso-nota" style="margin: -6px 0 12px;"></p>
+      <div class="destinatari-testa"><span>A chi: operatori abilitati on-site</span></div>
+      <ul class="elenco-conv destinatari" id="ons-destinatari"></ul>
+      <label class="spunta" style="margin-top: 14px;"><input type="checkbox" id="ons-email" checked><span>Invia anche un'email a ciascuno, con il link per rispondere</span></label>
+      <div class="errore" id="ons-errore" hidden></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" data-chiudi>Annulla</button>
+        <button type="submit" class="primario" id="ons-invia">Invia la richiesta</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-onsite-scheda" class="largo">
+    <form method="dialog" id="form-onsite-scheda">
+      <h2 id="onss-titolo"></h2>
+      <p class="nota" id="onss-sotto"></p>
+      <ul class="onsite-giorni" id="onss-giorni"></ul>
+      <div class="destinatari-testa"><span>Risposte</span></div>
+      <ul class="elenco-conv" id="onss-persone"></ul>
+      <div class="onsite-modifica" id="onss-modifica" hidden>
+        <div class="due-campi">
+          <label class="campo"><span>Luogo</span><input type="text" id="onsm-luogo" maxlength="80"></label>
+          <label class="campo"><span>Sport</span><input type="text" id="onsm-sport" maxlength="40" list="ons-sport-elenco"></label>
+        </div>
+        <label class="campo"><span>Titolo</span><input type="text" id="onsm-titolo" maxlength="120"></label>
+        <label class="campo"><span>Note</span><textarea id="onsm-note" rows="2" maxlength="500"></textarea></label>
+        <div class="due-campi">
+          <label class="campo"><span>Posti on-site TL</span><input type="number" id="onsm-tl" min="0" max="20" step="1"></label>
+          <label class="campo"><span>Posti on-site OP</span><input type="number" id="onsm-op" min="0" max="20" step="1"></label>
+        </div>
+        <label class="campo"><span>Compenso per persona (€)</span><input type="number" id="onsm-compenso" min="0" step="0.01"></label>
+        <div class="destinatari-testa"><span>Aggiungi destinatari</span></div>
+        <ul class="elenco-conv destinatari" id="onsm-aggiungi"></ul>
+        <label class="spunta" style="margin-top: 10px;"><input type="checkbox" id="onsm-email" checked><span>Invia l'email ai nuovi destinatari</span></label>
+        <div class="dialog-azioni"><button type="button" class="primario" id="onsm-salva">Salva modifiche</button></div>
+      </div>
+      <div class="errore" id="onss-errore" hidden></div>
+      <div class="dialog-azioni">
+        <button type="button" class="link testo-errore" id="onss-annulla">Annulla deployment</button>
+        <button type="button" class="bottone" id="onss-stato">Chiudi richiesta</button>
+        <button type="button" class="bottone" id="onss-modifica-apri">Modifica</button>
+        <button type="submit" class="primario">Fatto</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dlg-esito">
     <form method="dialog">
       <h2>Richiesta inviata</h2>
@@ -473,11 +540,13 @@
 
   <script src="app/config.js?v=17"></script>
   <script src="app/comune.js?v=17"></script>
+  <script src="app/onsite.js?v=17"></script>
   <script src="app/demo.js?v=17"></script>
   <script src="app/dati-firebase.js?v=17"></script>
   <script src="app/regole.js?v=17"></script>
   <script src="app/admin.js?v=17"></script>
   <script src="app/convocazioni.js?v=17"></script>
+  <script src="app/onsite-admin.js?v=17"></script>
   <script src="app/riepilogo.js?v=17"></script>
   <script src="app/impostazioni.js?v=17"></script>
 </body>
