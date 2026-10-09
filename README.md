@@ -189,8 +189,8 @@ Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(
 
 Ogni venerdì tra le 18 e le 19 i supervisori ricevono `Backup_TGI_Sport_<data>.xlsx` (fogli **Convocazioni**, **On-site**, **Operatori**, **Impostazioni**), con tutti gli eventi della stagione, anche annullati e da assegnare. Per ripristinare: **Impostazioni → Importa dal file Excel** → scegli il file. L'importazione riconosce il backup (colonna *ID evento*):
 
-- gli eventi tornano con il loro ID, stato, tipo (partita, Remote TL, Remote Support), gettone maggiorato, «da sostituire» e orari scritti a mano; quelli già presenti si aggiornano (lo storico resta, con *Ripristinato dal backup del …*), quelli che mancano si ricreano; quelli che non sono nel file non si toccano;
-- gli operatori si riconoscono per nome e riprendono ruolo, contratto, contatti, on-site e stato; i nuovi arrivano senza codice;
+- gli eventi tornano con il loro ID, stato, tipo (partita, Remote TL, Remote Support), gettone maggiorato, «da sostituire», motivo del rifiuto e orari scritti a mano; le convocazioni già inviate tengono gli orari dati all'operatore; quelli già presenti tornano come nel backup (**le modifiche fatte dopo quella data si perdono**: lo storico resta, con *Ripristinato dal backup del …*), quelli che mancano si ricreano; quelli che non sono nel file non si toccano;
+- gli operatori si riconoscono per nome: dei presenti cambia solo ciò che è diverso nel backup (mai con un campo vuoto), e l'anteprima elenca ogni cambiamento, compreso un accesso riattivato; i nuovi arrivano senza codice;
 - tariffe, notturno, sport, competizioni e mansioni tornano come nel file; i deployment on-site no (il foglio è da consultare).
 
 ## Importare il file Excel della stagione

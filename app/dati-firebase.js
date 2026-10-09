@@ -562,7 +562,7 @@
         uid: '', ultimoInvio: '', creato: new Date().toISOString(),
       }]));
       p.eventi.forEach((e) => scritture.push(['set', F.doc(db, 'eventi', e.id), Object.assign(pulisciEvento(e), {
-        operatoreId: e.operatoreId, stato: e.stato, inviata: e.inviata, risposta: '', rispostaIl: '',
+        operatoreId: e.operatoreId, stato: e.stato, inviata: e.inviata, risposta: String(e.risposta || '').slice(0, 200), rispostaIl: '',
         storico: e.storico, creato: new Date().toISOString(), fonte: 'excel',
       })]));
       p.disponibilita.forEach((d) => scritture.push(['set', F.doc(db, 'disponibilita', d.id), { giorni: d.giorni }]));

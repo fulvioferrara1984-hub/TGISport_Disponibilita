@@ -20,15 +20,15 @@ const OPERATORI = [
 ];
 const EVENTI = [
   { id: 'e1', tipo: 'partita', competizione: 'Serie A', round: '9', sport: 'Calcio', data: '2026-10-18', titolo: 'Roma-Lazio', orario: '20:45', convocazione: '',
-    convocazioneCalcolata: '16:45', fine: '', fineCalcolata: '22:45', operatoreId: 'a', stato: 'confermato', gettone: 'maggiorato', note: 'Regia & co', daSostituire: false },
+    convocazioneCalcolata: '16:45', fine: '', fineCalcolata: '22:45', operatoreId: 'a', stato: 'confermato', gettone: 'maggiorato', note: 'Regia & co', daSostituire: false, inviata: true },
   { id: 'e2', tipo: 'supervisione', competizione: 'Serie A', round: '9', sport: 'Calcio', data: '2026-10-18', titolo: 'Supervisione', orario: '',
-    convocazione: '10:00', convocazioneCalcolata: '10:00', fineCalcolata: '16:00', operatoreId: 'a', stato: 'convocato' },
+    convocazione: '10:00', convocazioneCalcolata: '10:00', fineCalcolata: '16:00', operatoreId: 'a', stato: 'convocato', inviata: true },
   { id: 'e3', tipo: 'support', competizione: 'Remote Support', data: '2026-10-17', titolo: 'Remote Support', orario: '', convocazione: '12:00',
     convocazioneCalcolata: '12:00', fineCalcolata: '18:00', operatoreId: '', stato: 'da-assegnare' },
   { id: 'e4', tipo: 'partita', competizione: 'Champions League', round: 'MD3', sport: 'Calcio', data: '2026-10-21', titolo: 'Atalanta-PSG', orario: '21:00',
     convocazione: '', convocazioneCalcolata: '20:00', fineCalcolata: '23:00', operatoreId: '', stato: 'annullato' },
   { id: 'e5', tipo: 'partita', competizione: 'Serie A', round: '9', sport: 'Calcio', data: '2026-10-18', titolo: 'Inter-Monza', orario: '15:00', convocazione: '',
-    convocazioneCalcolata: '11:00', fine: '18:30', fineCalcolata: '18:30', operatoreId: 'c', stato: 'rifiutato', daSostituire: true },
+    convocazioneCalcolata: '11:00', fine: '18:30', fineCalcolata: '18:30', operatoreId: 'c', stato: 'rifiutato', daSostituire: true, inviata: true, risposta: 'Malato' },
 ];
 const ONSITE = [{ id: 'd1', luogo: 'Roma', sport: 'Rugby', titolo: 'Sei Nazioni', da: '2026-11-12', a: '2026-11-13', stato: 'aperta', posti: { TL: 1, OP: 2 },
   giorni: [{ data: '2026-11-12', attivita: 'Travel Day', partita: '' }, { data: '2026-11-13', attivita: 'MD', partita: 'Italia-Francia' }],
@@ -49,14 +49,14 @@ test('foglio Convocazioni', () => {
   assert.equal(titolo, 'Backup eventi · Disponibilità Ops TGI Sport · venerdì 16 ottobre alle 18:04 · stagione 2026/27');
   assert.deepEqual(convocazioni[0], [titolo]);
   assert.deepEqual(convocazioni[1], ['Competizione', 'Round', 'Sport', 'Data', 'Partita / turno', 'Orario evento', 'Ritrovo', 'Operatore', 'Fine turno', 'Conferma',
-    'Note', 'Stato', 'Gettone maggiorato', 'Da sostituire', 'Tipo', 'ID evento', 'Ritrovo scritto a mano', 'Fine scritta a mano']);
+    'Note', 'Stato', 'Gettone maggiorato', 'Da sostituire', 'Tipo', 'ID evento', 'Ritrovo scritto a mano', 'Fine scritta a mano', 'Inviata', 'Motivo del rifiuto']);
   const d = (iso) => ({ data: iso });
   assert.deepEqual(convocazioni.slice(2), [
-    ['Remote Support', '', '', d('2026-10-17'), 'Remote Support', '', '12:00', '', '18:00', '', '', 'Da assegnare', '', '', 'Remote Support', 'e3', '12:00', ''],
-    ['Remote TL', '', '', d('2026-10-18'), 'Remote TL', '', '10:00', 'Anna Neri', '16:00', '', '', 'In attesa di risposta', '', '', 'Remote TL', 'e2', '10:00', ''],
-    ['Serie A', '9', 'Calcio', d('2026-10-18'), 'Inter-Monza', '15:00', '11:00', 'Carla Verdi', '18:30', '', '', 'Rifiutato', '', 'SI', 'Partita', 'e5', '', '18:30'],
-    ['Serie A', '9', 'Calcio', d('2026-10-18'), 'Roma-Lazio', '20:45', '16:45', 'Anna Neri', '22:45', 'SI', 'Regia & co', 'Confermato', 'SI', '', 'Partita', 'e1', '', ''],
-    ['Champions League', 'MD3', 'Calcio', d('2026-10-21'), 'Atalanta-PSG', '21:00', '20:00', '', '23:00', '', '', 'Annullato', '', '', 'Partita', 'e4', '', ''],
+    ['Remote Support', '', '', d('2026-10-17'), 'Remote Support', '', '12:00', '', '18:00', '', '', 'Da assegnare', '', '', 'Remote Support', 'e3', '12:00', '', '', ''],
+    ['Remote TL', '', '', d('2026-10-18'), 'Remote TL', '', '10:00', 'Anna Neri', '16:00', '', '', 'In attesa di risposta', '', '', 'Remote TL', 'e2', '10:00', '', 'SI', ''],
+    ['Serie A', '9', 'Calcio', d('2026-10-18'), 'Inter-Monza', '15:00', '11:00', 'Carla Verdi', '18:30', '', '', 'Rifiutato', '', 'SI', 'Partita', 'e5', '', '18:30', 'SI', 'Malato'],
+    ['Serie A', '9', 'Calcio', d('2026-10-18'), 'Roma-Lazio', '20:45', '16:45', 'Anna Neri', '22:45', 'SI', 'Regia & co', 'Confermato', 'SI', '', 'Partita', 'e1', '', '', 'SI', ''],
+    ['Champions League', 'MD3', 'Calcio', d('2026-10-21'), 'Atalanta-PSG', '21:00', '20:00', '', '23:00', '', '', 'Annullato', '', '', 'Partita', 'e4', '', '', '', ''],
   ]);
   assert.deepEqual(conteggi, { eventi: 5, annullati: 1, deployment: 1 });
 });
@@ -81,18 +81,18 @@ test('foglio Operatori', () => {
 
 test('foglio Impostazioni', () => {
   const imp = righe().impostazioni;
-  assert.deepEqual(imp[0], ['Voce', 'Valore', '', 'Operatore', 'Contratto', '', 'Sport', '', 'Competizione / mansione', 'Compenso', 'Ore prima', 'Ore dopo', 'Colore']);
+  assert.deepEqual(imp[0], ['Voce', 'Valore', '', 'Operatore', 'Contratto', '', 'Sport', '', 'Competizione / mansione', 'Compenso', 'Ore prima', 'Ore dopo', 'Colore', 'Sport della competizione']);
   assert.equal(imp.length, 10);   // intestazione + 9 voci (le più lunghe delle quattro liste)
-  assert.deepEqual(imp[1], ['Netto P.IVA diurno', 140, '', 'Anna Neri', 'P.IVA', '', 'Calcio', '', 'Remote TL', 'Diurno', 0, 6, '']);
-  assert.deepEqual(imp[2], ['Netto P.IVA notturno', 210, '', 'Bruno Blu', 'Coop', '', 'Rugby', '', 'Remote Support', 'Diurno', 0, 6, '']);
-  assert.deepEqual(imp[3], ['Netto P.IVA maggiorato', 210, '', 'Carla Verdi', '', '', '', '', 'Serie A', 'Diurno', 4, 2, '#a16207']);
-  assert.deepEqual(imp[4], ['Netto Coop diurno', 175, '', '', '', '', '', '', 'Champions League', 'Dimezzato', 4, 2, '']);
+  assert.deepEqual(imp[1], ['Netto P.IVA diurno', 140, '', 'Anna Neri', 'P.IVA', '', 'Calcio', '', 'Remote TL', 'Diurno', 0, 6, '', '']);
+  assert.deepEqual(imp[2], ['Netto P.IVA notturno', 210, '', 'Bruno Blu', 'Coop', '', 'Rugby', '', 'Remote Support', 'Diurno', 0, 6, '', '']);
+  assert.deepEqual(imp[3], ['Netto P.IVA maggiorato', 210, '', 'Carla Verdi', '', '', '', '', 'Serie A', 'Diurno', 4, 2, '#a16207', 'Calcio']);
+  assert.deepEqual(imp[4], ['Netto Coop diurno', 175, '', '', '', '', '', '', 'Champions League', 'Dimezzato', 4, 2, '', 'Calcio']);
   assert.deepEqual(imp.slice(5).map((r) => r.slice(0, 2)), [['Netto Coop notturno', 262.5], ['Netto Coop maggiorato', 262.5],
     ['Tariffa on-site (€ al giorno)', 150], ['Notturno dalle', '22:00'], ['Notturno alle', '06:00']]);
   // regole mai salvate: tariffe e righe mansione con i valori iniziali (Remote TL dalla vecchia durata della supervisione)
   const vuote = j(gs.righeBackup({ eventi: [], onsite: [], compensi: {}, operatori: [], regole: { durataSupervisioneOre: 8 } }, ADESSO)).impostazioni;
   assert.deepEqual(vuote[1].slice(0, 2), ['Netto P.IVA diurno', 140]);
-  assert.deepEqual(vuote.slice(1, 3).map((r) => r.slice(8)), [['Remote TL', 'Diurno', 0, 8, ''], ['Remote Support', 'Diurno', 0, 6, '']]);
+  assert.deepEqual(vuote.slice(1, 3).map((r) => r.slice(8)), [['Remote TL', 'Diurno', 0, 8, '', ''], ['Remote Support', 'Diurno', 0, 6, '', '']]);
 });
 
 // ---------------------------------------------------------------- file, invio, attivatore, impostazioni
@@ -112,11 +112,15 @@ test('file xlsx', () => {
   assert.ok(foglio.includes('<c r="A2" t="inlineStr"><is><t xml:space="preserve">Competizione</t></is></c>'));
   assert.ok(foglio.includes('<c r="D3" s="1"><v>46312</v></c>'));   // 17/10/2026 come data di Excel
   assert.ok(parti['xl/styles.xml'].includes('formatCode="dd/mm/yyyy"'));
+  assert.ok(parti['xl/styles.xml'].includes('<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'));
   // caratteri speciali: XML valido, testo intatto
   const strano = gs.fileBackup([{ nome: 'Prova', righe: [['A&B <x> l\'«é» 🙂\u0007', 3.5]] }], 'p.xlsx');
   const xml = leggiZip(strano.getBytes())['xl/worksheets/sheet1.xml'];
   assert.ok(xml.includes('A&amp;B &lt;x&gt; l&apos;«é» 🙂</t>'));
   assert.ok(xml.includes('<c r="B1"><v>3.5</v></c>'));
+  // caratteri vietati in XML tolti; «_x000D_» scritto in una nota resta testo (Excel lo leggerebbe come a capo)
+  const rari = leggiZip(gs.fileBackup([{ nome: 'Prova', righe: [['a\uFFFEb\uFFFF c_x000D_d']] }], 'r.xlsx').getBytes())['xl/worksheets/sheet1.xml'];
+  assert.ok(rari.includes('>ab c_x005F_x000D_d</t>'));
 });
 
 // Firestore simulato per la lettura del backup (account dello script)
@@ -215,5 +219,7 @@ test('impostazioni del backup', () => {
   t.gs.salvaImpostazioni({ emailSupervisori: 's@x.it' });   // dashboard vecchia: la casella resta com'è
   assert.equal(t.prop.get('BACKUP_ATTIVO'), 'NO');
   assert.equal(j(carica({}).gs.impostazioniDashboard()).backupProgrammato, false);
+  // finché nessuno lo spegne il backup è acceso (anche prima di attivaPromemoria)
+  assert.equal(j(carica({}).gs.leggiImpostazioni()).backupAttivo, true);
 });
 

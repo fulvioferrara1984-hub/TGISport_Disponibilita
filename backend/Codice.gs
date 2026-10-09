@@ -230,7 +230,8 @@ function leggiImpostazioni() {
   return {
     emailSupervisori: p.EMAIL_SUPERVISORI || '', emailAttive: p.EMAIL_ATTIVE !== 'NO', urlAdmin: p.URL_ADMIN || '',
     promemoriaAttivi: p.PROMEMORIA_ATTIVI === 'SI', promemoriaGiorni: giorniValidi(giorni) ? giorni : 3, ultimoPromemoria: ultimo,
-    backupAttivo: p.BACKUP_ATTIVO === 'SI', ultimoBackup: backup,
+    // acceso finché qualcuno non lo spegne (anche prima di attivaPromemoria, che poi crea l'attivatore)
+    backupAttivo: p.BACKUP_ATTIVO !== 'NO', ultimoBackup: backup,
   };
 }
 
@@ -707,13 +708,13 @@ function righeBackup(d, adesso) {
 
   const eventi = lista(d.eventi).slice().sort((a, b) => t(a.data).localeCompare(t(b.data)) || ritrovo(a).localeCompare(ritrovo(b)));
   const convocazioni = [[titolo], ['Competizione', 'Round', 'Sport', 'Data', 'Partita / turno', 'Orario evento', 'Ritrovo', 'Operatore', 'Fine turno', 'Conferma',
-    'Note', 'Stato', 'Gettone maggiorato', 'Da sostituire', 'Tipo', 'ID evento', 'Ritrovo scritto a mano', 'Fine scritta a mano']]
+    'Note', 'Stato', 'Gettone maggiorato', 'Da sostituire', 'Tipo', 'ID evento', 'Ritrovo scritto a mano', 'Fine scritta a mano', 'Inviata', 'Motivo del rifiuto']]
     .concat(eventi.map((e) => {
       const turno = eTurno(e), nomeTurno = turno ? TURNI_REMOTI[e.tipo] : '';
       return [turno ? nomeTurno : t(e.competizione), turno ? '' : t(e.round), turno ? '' : t(e.sport), { data: t(e.data) }, turno ? nomeTurno : t(e.titolo),
         turno ? '' : t(e.orario), ritrovo(e), nome(e.operatoreId), t(e.fine || e.fineCalcolata), e.stato === 'confermato' ? 'SI' : '', t(e.note),
         STATI_BACKUP[e.stato] || t(e.stato), e.gettone === 'maggiorato' ? 'SI' : '', e.daSostituire ? 'SI' : '', turno ? nomeTurno : 'Partita', t(e.id),
-        t(e.convocazione), t(e.fine)];
+        t(e.convocazione), t(e.fine), e.inviata ? 'SI' : '', t(e.risposta)];
     }));
 
   const statiOnsite = { aperta: 'Aperta', chiusa: 'Chiusa', annullata: 'Annullata' };
@@ -721,7 +722,7 @@ function righeBackup(d, adesso) {
   lista(d.onsite).slice().sort((a, b) => t(a.da).localeCompare(t(b.da))).forEach((x) => {
     const posti = x.posti || {}, compensi = d.compensi || {};
     lista(x.giorni).forEach((g) => onsite.push([t(x.luogo), t(x.sport), t(x.titolo), { data: t(x.da) }, { data: t(x.a) }, { data: t(g.data) }, t(g.attivita), t(g.partita),
-      Number(posti.TL || 0), Number(posti.OP || 0), lista(x.accettatiTL).map(nome).join(', '), lista(x.accettatiOP).map(nome).join(', '),
+      Number(posti.TL || 0) || 0, Number(posti.OP || 0) || 0, lista(x.accettatiTL).map(nome).join(', '), lista(x.accettatiOP).map(nome).join(', '),
       statiOnsite[x.stato] || t(x.stato), Number(compensi[x.id] || 0)]));
   });
 
@@ -745,15 +746,15 @@ function righeBackup(d, adesso) {
   const durataTL = typeof r.durataSupervisioneOre === 'number' && r.durataSupervisioneOre >= 0.5 && r.durataSupervisioneOre <= 16 ? r.durataSupervisioneOre : 6;
   const mansioni = ['Remote TL', 'Remote Support'].map((n) => {
     const s = salvate.find((c) => c.nome === n) || {};
-    return [n, COMPENSI_BACKUP[s.compenso] || 'Diurno', 0, ore(s.dopo, n === 'Remote TL' ? durataTL : 6) || (n === 'Remote TL' ? durataTL : 6), t(s.colore)];
+    return [n, COMPENSI_BACKUP[s.compenso] || 'Diurno', 0, ore(s.dopo, n === 'Remote TL' ? durataTL : 6) || (n === 'Remote TL' ? durataTL : 6), t(s.colore), ''];
   });
   const competizioni = mansioni.concat(salvate.filter((c) => ['Remote TL', 'Remote Support'].indexOf(c.nome) < 0).map((c) => [t(c.nome),
-    COMPENSI_BACKUP[c.compenso] || (c.uefa ? 'Dimezzato' : 'Diurno'), ore(c.prima, anticipo), ore(c.dopo, dopo), t(c.colore)]));
+    COMPENSI_BACKUP[c.compenso] || (c.uefa ? 'Dimezzato' : 'Diurno'), ore(c.prima, anticipo), ore(c.dopo, dopo), t(c.colore), t(c.sport)]));
   const sport = lista(r.sport);
   const n = Math.max(voci.length, ops.length, sport.length, competizioni.length);
-  const impostazioni = [['Voce', 'Valore', '', 'Operatore', 'Contratto', '', 'Sport', '', 'Competizione / mansione', 'Compenso', 'Ore prima', 'Ore dopo', 'Colore']];
+  const impostazioni = [['Voce', 'Valore', '', 'Operatore', 'Contratto', '', 'Sport', '', 'Competizione / mansione', 'Compenso', 'Ore prima', 'Ore dopo', 'Colore', 'Sport della competizione']];
   for (let i = 0; i < n; i++) {
-    const v = voci[i] || ['', ''], o = ops[i], c = competizioni[i] || ['', '', '', '', ''];
+    const v = voci[i] || ['', ''], o = ops[i], c = competizioni[i] || ['', '', '', '', '', ''];
     impostazioni.push([v[0], v[1], '', o ? t(o.nome) : '', o ? t(o.contratto) : '', '', t(sport[i] || ''), ''].concat(c));
   }
 
@@ -764,8 +765,9 @@ function righeBackup(d, adesso) {
 // ---------------------------------------------------------------- backup: file .xlsx scritto a mano (parti XML in uno zip)
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-// testo per l'XML: entità e niente caratteri di controllo (non ammessi in XML)
-const escXml = (t) => String(t).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+// testo per l'XML: entità, niente caratteri vietati in XML, e «_xHHHH_» scritto da qualcuno resta testo (Excel lo decodificherebbe)
+const escXml = (t) => String(t).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
+  .replace(/_x([0-9A-Fa-f]{4})_/g, '_x005F_x$1_')
   .replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]);
 function colonnaExcel(n) {
   let s = '';
@@ -809,6 +811,7 @@ function fileBackup(fogli, nome) {
       + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
       + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
       + '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>'
+      + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
       + '</styleSheet>'],
   ].concat(fogli.map((f, i) => ['xl/worksheets/sheet' + (i + 1) + '.xml', xmlFoglio(f.righe)]));
   const zip = Utilities.zip(parti.map(([percorso, xml]) => Utilities.newBlob(xml, 'application/xml', percorso)), nome);
