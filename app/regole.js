@@ -10,6 +10,8 @@
       Coop: { diurno: 175, notturno: 262.5, maggiorato: 262.5 },
     },
     anticipoOre: 4,          // convocazione = orario dell'evento meno queste ore
+    fineOre: 2,              // fine turno = orario dell'evento più queste ore
+    durataSupervisioneOre: 6, // fine della supervisione = ritrovo più queste ore
     notteDa: '22:00',        // convocazioni da quest'ora…
     notteA: '06:00',         // …a quest'ora sono notturne
     sport: ['Calcio', 'Basket', 'Tennis', 'Volley', 'Rugby', 'Football Americano', 'Baseball', 'Cricket', 'Hockey su Prato', 'Hockey su Ghiaccio', 'Boxing'],
@@ -20,7 +22,7 @@
       ['Nations League', 'Calcio'], ['Nations League W', 'Calcio'], ['Wcq', 'Calcio'], ['European Qualfiers Women', 'Calcio'],
       ['Amichevoli', 'Calcio'], ['Nazionali', 'Calcio'], ['Dentsu', ''], ['Cev Women', 'Volley'], ['Cev Men', 'Volley'],
       ['Ebu Boxing', 'Boxing'], ['Bjkc', 'Tennis'], ['Ase', ''],
-    ].map(([nome, sport, uefa]) => ({ nome, sport, uefa: !!uefa })),
+    ].map(([nome, sport, uefa]) => ({ nome, sport, uefa: !!uefa, prima: null, dopo: null })),
   };
 
   const TIPI = {
@@ -30,9 +32,13 @@
     uefa: 'UEFA (½ diurno)',
   };
 
+  const ore = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+
   // le regole salvate possono mancare di qualche voce (es. dopo un aggiornamento): si completano
   function complete(r) {
     const x = Object.assign({}, PREDEFINITE, r || {});
+    // prima/dopo per competizione: vuoti = valori generali
+    x.competizioni = x.competizioni.map((c) => Object.assign({}, c, { prima: ore(c.prima), dopo: ore(c.dopo) }));
     x.tariffe = {
       'P.IVA': Object.assign({}, PREDEFINITE.tariffe['P.IVA'], (r && r.tariffe && r.tariffe['P.IVA']) || {}),
       Coop: Object.assign({}, PREDEFINITE.tariffe.Coop, (r && r.tariffe && r.tariffe.Coop) || {}),
@@ -43,11 +49,41 @@
   const minuti = (hhmm) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '')); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
   const hhmm = (min) => { const m = ((min % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
 
-  // orario di ritrovo: quello scritto a mano se c'è, altrimenti orario dell'evento meno l'anticipo
+  // Ritrovo: scritto a mano; altrimenti orario dell'evento meno le ore della competizione (o generali).
+  // La supervisione non segue mai la competizione: le importate hanno solo l'orario di riferimento.
   function convocazione(e, regole) {
     if (minuti(e.convocazione) !== null) return e.convocazione;
+    const r = complete(regole), m = minuti(e.orario);
+    if (m === null) return '';
+    const comp = e.tipo === 'supervisione' ? null : competizione(e.competizione, r);
+    return hhmm(m - (comp && comp.prima !== null ? comp.prima : r.anticipoOre) * 60);
+  }
+
+  // Fine turno: scritta a mano; supervisione = ritrovo + durata; partita = orario + ore della competizione (o generali).
+  function fine(e, regole) {
+    if (minuti(e.fine) !== null) return e.fine;
+    const r = complete(regole);
+    if (e.tipo === 'supervisione') {
+      const inizio = minuti(convocazione(e, r));
+      return inizio === null ? '' : hhmm(inizio + r.durataSupervisioneOre * 60);
+    }
     const m = minuti(e.orario);
-    return m === null ? '' : hhmm(m - complete(regole).anticipoOre * 60);
+    if (m === null) return '';
+    const comp = competizione(e.competizione, r);
+    return hhmm(m + (comp && comp.dopo !== null ? comp.dopo : r.fineOre) * 60);
+  }
+
+  // Intervallo del turno in minuti dalla mezzanotte; una fine mancante o oltre la mezzanotte vale fine giornata.
+  function intervallo(e, regole) {
+    const inizio = minuti(convocazione(e, regole)), f = minuti(fine(e, regole));
+    const da = inizio === null ? 0 : inizio;
+    return { inizio: da, fine: f === null || f <= da ? 1439 : f };
+  }
+
+  function sovrapposti(a, b, regole) {
+    if (a.data !== b.data) return false;
+    const x = intervallo(a, regole), y = intervallo(b, regole);
+    return x.inizio < y.fine && y.inizio < x.fine;
   }
 
   function notturno(e, regole) {
@@ -86,5 +122,5 @@
     return { da: inizio + '-08-01', a: (inizio + 1) + '-07-31', nome: inizio + '/' + String(inizio + 1).slice(2) };
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm };
+  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm };
 })(window.DO = window.DO || {});
