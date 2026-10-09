@@ -245,10 +245,10 @@ const docREST = (coll, o) => ({
   name: 'projects/tgi-availability/databases/(default)/documents/' + coll + '/' + o.id,
   fields: Object.fromEntries(Object.entries(o).filter(([k, v]) => k !== 'id' && v !== undefined).map(([k, v]) => [k, valoreREST(v)])),
 });
-function firestoreFinto({ eventi = [], operatori = OPS, telefono = '+39 333', codiceQuery = 200, rispostaQuery = null } = {}) {
+function firestoreFinto({ eventi = [], operatori = OPS, telefono = '+39 333', codiceQuery = 200, rispostaQuery = null, erroreQuery = null } = {}) {
   return (url) => {
     if (url.endsWith(':runQuery')) {
-      if (codiceQuery !== 200) return { codice: codiceQuery, dati: { error: { status: 'PERMISSION_DENIED' } } };
+      if (codiceQuery !== 200) return { codice: codiceQuery, dati: erroreQuery || { error: { status: 'PERMISSION_DENIED' } } };
       return { codice: 200, dati: rispostaQuery || (eventi.length ? eventi.map((e) => ({ document: docREST('eventi', e), readTime: 't' })) : [{ readTime: 't' }]) };
     }
     if (/\/operatori\?/.test(url)) return { codice: 200, dati: { documents: operatori.map((o) => docREST('operatori', o)) } };
@@ -278,7 +278,7 @@ test('giro completo: email a operatori e riepilogo, esito salvato', () => {
   assert.ok(t.email[0].htmlBody.includes('+39 333'));
   assert.ok(t.email[1].htmlBody.includes('href="https://x.github.io/sito/admin.html#convocazioni"'));
   assert.deepEqual([r.oggi, r.riepilogo, r.operatori], ['2026-10-09', true, 1]);
-  assert.deepEqual(ultimo(t), { giorno: '2026-10-09', quando: ADESSO.toISOString(), riepilogo: true, operatori: 1 });
+  assert.deepEqual(ultimo(t), { giorno: '2026-10-09', quando: ADESSO.toISOString(), riepilogo: true, operatori: 1, nonInviate: 0, inSospeso: 2 });
   const q = query(t);
   assert.equal(q.opzioni.method, 'post');
   assert.equal(q.opzioni.headers.Authorization, 'Bearer gettone-prova');
@@ -290,7 +290,7 @@ test('niente in sospeso: nessuna email, giro registrato', () => {
   const t = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ eventi: [ev({ stato: 'confermato' })] }) });
   t.gs.giroPromemoria(ADESSO);
   assert.equal(t.email.length, 0);
-  assert.deepEqual(ultimo(t), { giorno: '2026-10-09', quando: ADESSO.toISOString(), riepilogo: false, operatori: 0 });
+  assert.deepEqual(ultimo(t), { giorno: '2026-10-09', quando: ADESSO.toISOString(), riepilogo: false, operatori: 0, nonInviate: 0, inSospeso: 0 });
 });
 
 test('secondo giro nello stesso giorno non spedisce', () => {
@@ -427,4 +427,38 @@ test('attivazione con lettura negata: nessun attivatore, messaggio chiaro', () =
   assert.equal(t.creati.length, 0);
   assert.equal(t.prop.has('PROMEMORIA_ATTIVI'), false);
   assert.ok(t.registro.some((r) => r.includes('NON attivato')));
+});
+
+// ---------------------------------------------------------------- correzioni dalla revisione finale
+
+test('email non partite: contate, e se non parte nulla il giro risulta fallito e si può ripetere', () => {
+  let guasto = true;
+  const t = carica({ proprieta: ATTIVI, erroreEmail: () => guasto, risposte: firestoreFinto({ eventi: [ev({}), ev({ operatoreId: '', stato: 'da-assegnare' })] }) });
+  assert.throws(() => t.gs.giroPromemoria(ADESSO), /Nessun promemoria è partito: Invio non riuscito/);
+  assert.deepEqual(ultimo(t), { giorno: '2026-10-09', quando: ADESSO.toISOString(), riepilogo: false, operatori: 0, nonInviate: 2, inSospeso: 2, fallito: true });
+  guasto = false;
+  const r = t.gs.giroPromemoria(new Date('2026-10-09T09:00:00Z'));
+  assert.equal(r.saltato, undefined);
+  assert.deepEqual(t.email.map((m) => m.to), ['anna@x.it', 's@x.it']);
+  assert.equal(ultimo(t).fallito, undefined);
+  assert.equal(t.gs.giroPromemoria(new Date('2026-10-09T10:00:00Z')).saltato, 'già fatto');
+});
+
+test('email in parte non partite: giro fatto, conteggio salvato', () => {
+  const t = carica({ proprieta: ATTIVI, erroreEmail: (m) => m.to === 's@x.it', risposte: firestoreFinto({ eventi: [ev({}), ev({ operatoreId: '', stato: 'da-assegnare' })] }) });
+  t.gs.giroPromemoria(ADESSO);
+  assert.deepEqual([ultimo(t).operatori, ultimo(t).riepilogo, ultimo(t).nonInviate, ultimo(t).fallito], [1, false, 1, undefined]);
+});
+
+test('anteprima con eventi da sistemare ma nessun destinatario lo dice', () => {
+  const t = carica({ risposte: firestoreFinto({ eventi: [ev({ operatoreId: '', stato: 'da-assegnare' })] }) });
+  t.gs.attivaPromemoria();
+  assert.ok(t.registro.some((r) => r.includes('1 evento da sistemare ma nessun destinatario')), t.registro.join('\n'));
+});
+
+test('errori di Firebase: si riporta anche la risposta di Google', () => {
+  const scopi = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ codiceQuery: 403, erroreQuery: { error: { code: 403, message: 'Request had insufficient authentication scopes.' } } }) });
+  assert.throws(() => scopi.gs.giroPromemoria(ADESSO), /aggiungilo come Editor del progetto \(vedi README\)\. Risposta di Google: Request had insufficient authentication scopes\./);
+  const serie = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ codiceQuery: 500, erroreQuery: [{ error: { message: 'Backend non disponibile' } }] }) });
+  assert.throws(() => serie.gs.giroPromemoria(ADESSO), /Lettura di Firebase non riuscita \(500\)\. Risposta di Google: Backend non disponibile/);
 });

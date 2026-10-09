@@ -388,10 +388,15 @@ function firestoreAdmin(metodo, percorso, corpo) {
 }
 
 function leggiDatiPromemoria(oggi, fine) {
+  // il messaggio di Google (permessi mancanti, API spenta, autorizzazioni dello script…) resta nell'errore
+  const google = (d) => {
+    const e = (Array.isArray(d) ? d[0] || {} : d || {}).error;
+    return e && e.message ? ' Risposta di Google: ' + e.message : '';
+  };
   const controlla = (r, ammessi) => {
     if (r.codice === 200 || (ammessi || []).indexOf(r.codice) >= 0) return r;
-    if (r.codice === 401 || r.codice === 403) throw new Error("L'account dello script non può leggere Firebase: aggiungilo come Editor del progetto (vedi README).");
-    throw new Error('Lettura di Firebase non riuscita (' + r.codice + ').');
+    if (r.codice === 401 || r.codice === 403) throw new Error("L'account dello script non può leggere Firebase: aggiungilo come Editor del progetto (vedi README)." + google(r.dati));
+    throw new Error('Lettura di Firebase non riuscita (' + r.codice + ').' + google(r.dati));
   };
   const filtro = (op, valore) => ({ fieldFilter: { field: { fieldPath: 'data' }, op, value: { stringValue: valore } } });
   const q = controlla(firestoreAdmin('post', ':runQuery', { structuredQuery: {
@@ -417,32 +422,40 @@ function giroPromemoria(adesso, opzioni) {
   const imp = leggiImpostazioni();
   const oggi = Utilities.formatDate(adesso, 'Europe/Rome', 'yyyy-MM-dd');
   if (!anteprima && !imp.promemoriaAttivi) return { saltato: 'spenti', oggi };
-  if (!anteprima && imp.ultimoPromemoria && imp.ultimoPromemoria.giorno === oggi) return { saltato: 'già fatto', oggi };
+  // un giro in cui non è partita nessuna email non conta: il successivo riprova
+  if (!anteprima && imp.ultimoPromemoria && imp.ultimoPromemoria.giorno === oggi && !imp.ultimoPromemoria.fallito) return { saltato: 'già fatto', oggi };
   const dati = leggiDatiPromemoria(oggi, aggiungiGiorni(oggi, imp.promemoriaGiorni));
   const scelta = selezionaPromemoria(dati.eventi, dati.operatori, oggi, imp.promemoriaGiorni);
   const link = indirizzi(imp.urlAdmin);
   const email = scelta.operatori.map((op) => emailOperatore(op, op.eventi, { oggi, telefono: dati.telefono, sito: link.sito }));
-  const daSistemare = GRUPPI_PROMEMORIA.some(([chiave]) => scelta.gruppi[chiave].length);
-  const riepilogo = daSistemare && imp.emailSupervisori
+  const inSospeso = GRUPPI_PROMEMORIA.reduce((n, [chiave]) => n + scelta.gruppi[chiave].length, 0);
+  const riepilogo = inSospeso && imp.emailSupervisori
     ? emailSupervisori(scelta.gruppi, { oggi, giorni: imp.promemoriaGiorni, a: imp.emailSupervisori, convocazioni: link.convocazioni })
     : null;
   if (anteprima) {
-    return { oggi, riepilogo: !!riepilogo, operatori: email.length, destinatari: email.concat(riepilogo ? [riepilogo] : []).map((m) => m.to) };
+    return { oggi, riepilogo: !!riepilogo, operatori: email.length, inSospeso, destinatari: email.concat(riepilogo ? [riepilogo] : []).map((m) => m.to) };
   }
+  let ultimoErrore = '';
   const spedisci = (m) => {
     try {
       MailApp.sendEmail(Object.assign({ name: CONFIG.MITTENTE }, m));
       return true;
     } catch (e) {
+      ultimoErrore = e.message;
       console.error('Promemoria non inviato a ' + m.to + ': ' + e.message);
       return false;
     }
   };
   const inviate = email.filter(spedisci);
   const riepilogoInviato = !!riepilogo && spedisci(riepilogo);
-  PropertiesService.getScriptProperties().setProperty('ULTIMO_PROMEMORIA', JSON.stringify({
-    giorno: oggi, quando: adesso.toISOString(), riepilogo: riepilogoInviato, operatori: inviate.length,
-  }));
+  const tentate = email.length + (riepilogo ? 1 : 0);
+  const nonInviate = tentate - inviate.length - (riepilogoInviato ? 1 : 0);
+  const esito = { giorno: oggi, quando: adesso.toISOString(), riepilogo: riepilogoInviato, operatori: inviate.length, nonInviate, inSospeso };
+  // nessuna email partita (per esempio quota di Gmail finita): resta segnato nella dashboard, l'esecuzione
+  // risulta fallita (Google avvisa il proprietario) e il giro si può ripetere lo stesso giorno
+  if (tentate && nonInviate === tentate) esito.fallito = true;
+  PropertiesService.getScriptProperties().setProperty('ULTIMO_PROMEMORIA', JSON.stringify(esito));
+  if (esito.fallito) throw new Error('Nessun promemoria è partito: ' + ultimoErrore + '. Esegui di nuovo inviaPromemoria quando il problema è risolto.');
   return { oggi, riepilogo: riepilogoInviato, operatori: inviate.length, destinatari: inviate.concat(riepilogoInviato ? [riepilogo] : []).map((m) => m.to) };
 }
 
@@ -466,7 +479,9 @@ function attivaPromemoria() {
   if (p.getProperty('PROMEMORIA_ATTIVI') === null) p.setProperty('PROMEMORIA_ATTIVI', 'SI');
   if (p.getProperty('PROMEMORIA_GIORNI') === null) p.setProperty('PROMEMORIA_GIORNI', '3');
   const prova = giroPromemoria(new Date(), { anteprima: true });
-  console.log('Anteprima di oggi, nessuna email spedita: ' + (prova.destinatari.length ? prova.destinatari.join(', ') : 'niente in sospeso.'));
+  console.log('Anteprima di oggi, nessuna email spedita: ' + (prova.destinatari.length ? prova.destinatari.join(', ')
+    : prova.inSospeso ? prova.inSospeso + (prova.inSospeso === 1 ? ' evento' : ' eventi') + ' da sistemare ma nessun destinatario (controlla gli indirizzi dei supervisori).'
+      : 'niente in sospeso.'));
   ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'inviaPromemoria').forEach((t) => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('inviaPromemoria').timeBased().everyDays(1).atHour(8).inTimezone('Europe/Rome').create();
   const imp = leggiImpostazioni();

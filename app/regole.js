@@ -186,9 +186,10 @@
     const fuso = { timeZone: 'Europe/Rome' };
     const quando = d.toLocaleDateString('it-IT', Object.assign({ weekday: 'short', day: 'numeric', month: 'long' }, fuso))
       + ' alle ' + d.toLocaleTimeString('it-IT', Object.assign({ hour: 'numeric', minute: '2-digit' }, fuso));
-    const operatori = u.operatori ? u.operatori + (u.operatori === 1 ? ' operatore' : ' operatori') : '';
-    const cosa = u.riepilogo ? 'riepilogo ai supervisori' + (operatori ? ' + ' + operatori : '') : operatori || 'niente in sospeso, nessuna email';
-    return 'Ultimo promemoria: ' + quando + ' · ' + cosa;
+    const quanti = (n, uno, molti) => n + (n === 1 ? uno : molti);
+    const partite = [u.riepilogo ? 'riepilogo ai supervisori' : '', u.operatori ? quanti(u.operatori, ' operatore', ' operatori') : ''].filter(Boolean).join(' + ');
+    const cosa = partite || (u.inSospeso ? quanti(u.inSospeso, ' evento', ' eventi') + ' da sistemare, nessuna email partita' : 'niente in sospeso, nessuna email');
+    return 'Ultimo promemoria: ' + quando + ' · ' + cosa + (u.nonInviate ? ' · ' + quanti(u.nonInviate, ' email non partita', ' email non partite') : '');
   }
 
   DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria };

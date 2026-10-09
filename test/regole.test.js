@@ -148,3 +148,12 @@ test('stato dei promemoria nelle impostazioni', () => {
   assert.equal(con({ riepilogo: false, operatori: 1 }), inizio + '1 operatore');
   assert.equal(con({ riepilogo: false, operatori: 0 }), inizio + 'niente in sospeso, nessuna email');
 });
+
+test('stato dei promemoria: email non partite ed eventi senza destinatari', () => {
+  const imp = (u) => ({ promemoriaAttivi: true, promemoriaGiorni: 3, promemoriaProgrammato: true, ultimoPromemoria: Object.assign({ giorno: '2026-10-10', quando: '2026-10-10T06:14:00Z' }, u) });
+  const inizio = 'Ultimo promemoria: sab 10 ottobre alle 8:14 · ';
+  assert.equal(R.statoPromemoria(imp({ riepilogo: true, operatori: 2, nonInviate: 1, inSospeso: 4 })), inizio + 'riepilogo ai supervisori + 2 operatori · 1 email non partita');
+  assert.equal(R.statoPromemoria(imp({ riepilogo: false, operatori: 0, nonInviate: 0, inSospeso: 3 })), inizio + '3 eventi da sistemare, nessuna email partita');
+  assert.equal(R.statoPromemoria(imp({ riepilogo: false, operatori: 0, nonInviate: 2, inSospeso: 1, fallito: true })), inizio + '1 evento da sistemare, nessuna email partita · 2 email non partite');
+  assert.equal(R.statoPromemoria(imp({ riepilogo: false, operatori: 0, nonInviate: 0, inSospeso: 0 })), inizio + 'niente in sospeso, nessuna email');
+});
