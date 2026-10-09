@@ -29,7 +29,9 @@
     const cfg = DO.CONFIG;
     // nome diverso per le due pagine: un supervisore può provare il link di un operatore senza uscire dalla dashboard
     app = F.initializeApp(cfg.FIREBASE, ruolo === 'admin' ? 'supervisori' : 'operatori');
-    auth = F.getAuth(app);
+    // come getAuth ma senza i componenti per l'accesso con Google (popup/redirect), che qui non si usa:
+    // sui telefoni getAuth li scarica (apis.google.com e una pagina nascosta) prima di dire se si è già dentro
+    auth = F.initializeAuth(app, { persistence: [F.indexedDBLocalPersistence, F.browserLocalPersistence, F.browserSessionPersistence] });
     auth.languageCode = 'it';   // le email di Firebase (conferma indirizzo, nuova password) in italiano
     // la dashboard tiene una copia dei dati sul computer (solo con "Ricorda"): si apre subito, poi si aggiorna
     cachePersistente = ruolo === 'admin' && DO.ricordato();
@@ -59,6 +61,7 @@
   async function negato(e, messaggio, avvisa = true) {
     if (!e || e.code !== 'permission-denied') throw traduci(e);
     await F.signOut(auth).catch(() => {});
+    operatoreCorrente = null;
     if (avvisa && alloScadere) alloScadere(messaggio);
     throw new Error(messaggio);
   }
@@ -81,8 +84,7 @@
   async function creaAccount() {
     if (!secondaria) {
       const istanza = F.initializeApp(DO.CONFIG.FIREBASE, 'creazione-account');
-      secondaria = F.getAuth(istanza);
-      await F.setPersistence(secondaria, F.inMemoryPersistence);
+      secondaria = F.initializeAuth(istanza, { persistence: F.inMemoryPersistence });
       if (DO.CONFIG.EMULATORI) F.connectAuthEmulator(secondaria, 'http://127.0.0.1:9099', { disableWarnings: true });
     }
     for (let i = 0; i < 5; i++) {
@@ -229,7 +231,8 @@
 
   // ---------- operatore ----------
   async function mieDisponibilita() {
-    const op = await caricaOperatore();
+    // la scheda dell'operatore è appena stata letta all'accesso o all'apertura della pagina: non si rilegge
+    const op = operatoreCorrente || await caricaOperatore();
     const oggi = DO.oggi();
     try {
       const [d, r] = await Promise.all([
