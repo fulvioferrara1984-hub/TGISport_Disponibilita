@@ -80,3 +80,25 @@ test('conflitto: doppio turno o turni sovrapposti nello stesso giorno', () => {
   assert.equal(due.livello, 'sovrapposto');
   assert.equal(due.con.length, 2);
 });
+
+test('esportazione mensile: due fogli, solo presenze, annullati esclusi dalle presenze', () => {
+  const ops = [{ id: 'a', nome: 'Anna Neri', ruolo: 'TL' }, { id: 'b', nome: 'Bruno Blu', ruolo: 'OP' }];
+  const ev = [
+    { id: '1', tipo: 'partita', competizione: 'Serie A', round: '9', sport: 'Calcio', data: '2026-10-18', titolo: 'Roma-Lazio', orario: '20:45', operatoreId: 'b', stato: 'confermato', gettone: 'maggiorato' },
+    { id: '2', tipo: 'supervisione', competizione: 'Serie A', data: '2026-10-18', titolo: 'Supervisione', convocazione: '10:00', operatoreId: 'a', stato: 'confermato' },
+    { id: '3', tipo: 'partita', competizione: 'Serie A', data: '2026-10-05', titolo: 'Inter-Monza', orario: '18:00', operatoreId: 'b', stato: 'annullato' },
+    { id: '4', tipo: 'partita', competizione: 'Serie A', data: '2026-10-20', titolo: 'Milan-Genoa', orario: '15:00', operatoreId: 'b', stato: 'convocato' },
+    { id: '5', tipo: 'partita', competizione: 'Serie A', data: '2026-11-01', titolo: 'Fuori mese', orario: '15:00', operatoreId: 'b', stato: 'confermato' },
+  ];
+  const { convocazioni, presenze } = R.righeMese(ev, ops, regole, '2026-10');
+  assert.deepEqual(convocazioni[0], ['Data', 'Tipo', 'Competizione', 'Round', 'Sport', 'Evento', 'Orario', 'Ritrovo', 'Fine turno', 'Operatore', 'Ruolo', 'Stato']);
+  assert.equal(convocazioni.length, 5);   // intestazione + 4 eventi di ottobre, annullato compreso
+  assert.deepEqual(convocazioni[1], ['05/10/2026', 'Partita', 'Serie A', '', '', 'Inter-Monza', '18:00', '14:00', '20:00', 'Bruno Blu', 'OP', 'Annullato']);
+  assert.deepEqual(convocazioni[2].slice(0, 2).concat(convocazioni[2].slice(7)), ['18/10/2026', 'Supervisione', '10:00', '16:00', 'Anna Neri', 'TL', 'Confermato']);
+  assert.deepEqual(presenze, [
+    ['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa'],
+    ['Anna Neri', 0, 1, 0],
+    ['Bruno Blu', 1, 0, 1],
+  ]);
+  assert.equal(JSON.stringify({ convocazioni, presenze }).match(/€|[Gg]ettone|[Mm]aggiorat/), null);
+});

@@ -44,6 +44,7 @@
 
   function disegna() {
     if (A.vista !== 'convocazioni') return;
+    if (!$('ev-mese').dataset.scelto) $('ev-mese').value = lun.slice(0, 7);
     const f = $('ev-filtro-stato').value;
     $('ev-navigatore').classList.toggle('spento', !!f);
     $('ev-etichetta').textContent = f ? 'Tutte le date' : DO.etichettaSettimana(lun);
@@ -195,6 +196,7 @@
   $('ev-succ').addEventListener('click', () => { lun = DO.aggiungi(lun, 7); disegna(); });
   $('ev-oggi').addEventListener('click', () => { lun = DO.lunedi(DO.oggi()); $('ev-filtro-stato').value = ''; disegna(); });
   $('ev-filtro-comp').addEventListener('change', disegna);
+  $('ev-mese').addEventListener('change', () => { $('ev-mese').dataset.scelto = '1'; });
   $('ev-filtro-attivo').addEventListener('click', (e) => { if (e.target.id === 'ev-torna') { $('ev-filtro-stato').value = ''; disegna(); } });
   // all'apertura si parte sempre dalla settimana corrente (il browser altrimenti ricorda l'ultimo filtro)
   $('ev-filtro-stato').value = '';
@@ -400,6 +402,19 @@
       disegna();
     } catch (err) { mostraErrore('evs-errore', err.message); }
   });
+
+  // ---------- esportazione mensile (solo presenze, nessun compenso) ----------
+  async function esportaMese(mese) {
+    let X;
+    try { X = await DO.caricaXlsx(); } catch (e) { DO.avviso(e.message, 'errore'); return; }
+    const { convocazioni, presenze } = R.righeMese(A.eventi, A.operatori, A.regole, mese);
+    if (convocazioni.length === 1) { DO.avviso('Nessun evento in questo mese.'); return; }
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(convocazioni), 'Convocazioni');
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(presenze), 'Presenze');
+    X.writeFile(wb, 'Convocazioni_' + mese + '.xlsx');
+  }
+  $('ev-esporta').addEventListener('click', () => esportaMese($('ev-mese').value || lun.slice(0, 7)));
 
   // ---------- invio delle convocazioni ----------
   let daInviare = [];

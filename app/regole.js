@@ -120,6 +120,31 @@
   }
 
   // sempre col separatore delle migliaia (in italiano di norma manca sotto 10.000)
+  // Esportazione mensile per l'operatività: solo presenze, nessun compenso.
+  const NOMI_STATO = { 'da-assegnare': 'Da assegnare', assegnato: 'Da inviare', convocato: 'In attesa di risposta', confermato: 'Confermato', rifiutato: 'Rifiutato', annullato: 'Annullato' };
+  function righeMese(eventi, operatori, regole, mese) {
+    const op = (id) => operatori.find((o) => o.id === id) || null;
+    const delMese = eventi.filter((e) => e.data.slice(0, 7) === mese)
+      .sort((a, b) => (a.data + convocazione(a, regole)).localeCompare(b.data + convocazione(b, regole)));
+    const convocazioni = [['Data', 'Tipo', 'Competizione', 'Round', 'Sport', 'Evento', 'Orario', 'Ritrovo', 'Fine turno', 'Operatore', 'Ruolo', 'Stato']]
+      .concat(delMese.map((e) => {
+        const o = op(e.operatoreId), sup = e.tipo === 'supervisione';
+        return [e.data.slice(8) + '/' + e.data.slice(5, 7) + '/' + e.data.slice(0, 4), sup ? 'Supervisione' : 'Partita', e.competizione || '', e.round || '', e.sport || '',
+          sup ? 'Supervisione' : e.titolo || '', e.orario || '', convocazione(e, regole), fine(e, regole), o ? o.nome : '', o ? o.ruolo : '', NOMI_STATO[e.stato] || e.stato];
+      }));
+    const conta = {};
+    delMese.forEach((e) => {
+      if (!e.operatoreId || !op(e.operatoreId)) return;
+      const c = conta[e.operatoreId] = conta[e.operatoreId] || [0, 0, 0];
+      if (e.stato === 'confermato') c[e.tipo === 'supervisione' ? 1 : 0]++;
+      else if (e.stato === 'convocato') c[2]++;
+    });
+    const presenze = [['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa']]
+      .concat(Object.keys(conta).filter((id) => conta[id].some(Boolean)).map((id) => [op(id).nome].concat(conta[id]))
+        .sort((a, b) => a[0].localeCompare(b[0], 'it')));
+    return { convocazioni, presenze };
+  }
+
   const euro = (n) => (Math.round(n * 100) / 100).toLocaleString('it-IT', { style: 'currency', currency: 'EUR', useGrouping: 'always' });
 
   // stagione sportiva: da agosto a luglio
@@ -129,5 +154,5 @@
     return { da: inizio + '-08-01', a: (inizio + 1) + '-07-31', nome: inizio + '/' + String(inizio + 1).slice(2) };
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm };
+  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, righeMese, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm };
 })(window.DO = window.DO || {});
