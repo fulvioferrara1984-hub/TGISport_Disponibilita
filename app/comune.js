@@ -196,39 +196,10 @@
     document.querySelector('.testata').after(b);
   }
 
-  // ---------- misurazione temporanea dei tempi (solo con ?diag nell'indirizzo) ----------
-  const DIAG = typeof location !== 'undefined' && /[?&]diag\b/.test(location.search);
-  const tappe = [];
-  function segna(nome) {
-    if (!DIAG) return;
-    tappe.push([nome, Math.round(performance.now())]);
-    mostraDiag();
-  }
-  function mostraDiag() {
-    let box = document.getElementById('diag');
-    if (!box) {
-      box = document.createElement('pre');
-      box.id = 'diag';
-      box.style.cssText = 'position:fixed;left:8px;right:8px;bottom:84px;z-index:50;max-height:45vh;overflow:auto;margin:0;padding:10px;border-radius:10px;background:#15171c;color:#e8fbe8;font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap';
-      document.body.appendChild(box);
-    }
-    const nav = performance.getEntriesByType('navigation')[0] || {};
-    const risorse = performance.getEntriesByType('resource').filter((r) => /gstatic|\/app\/|Logo/.test(r.name))
-      .map((r) => r.name.split('/').pop().split('?')[0].padEnd(26) + String(Math.round(r.startTime)).padStart(6) + ' → ' + String(Math.round(r.responseEnd)).padStart(6) + ' ms  ' + Math.round((r.transferSize || 0) / 1024) + ' KB');
-    box.textContent = 'MISURA (ms dall\'apertura del link)\n' + navigator.userAgent.replace(/\) .*$/, ')') + '\n'
-      + 'pagina scaricata ' + Math.round(nav.responseEnd || 0) + ' · pronta ' + Math.round(nav.domContentLoadedEventEnd || 0) + '\n\n'
-      + tappe.map(([n, t]) => String(t).padStart(6) + '  ' + n).join('\n') + '\n\nFILE\n' + risorse.join('\n');
-  }
-  if (DIAG) addEventListener('load', () => {
-    segna('pagina caricata del tutto');
-    let volte = 0;
-    const giro = setInterval(() => { mostraDiag(); if (++volte >= 30) clearInterval(giro); }, 1000);
-  });
-
   Object.assign(DO, {
     $, esc, iniziali, iso, daIso, aggiungi, lunedi, settimana, oggi, limite, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
     giorniA, bloccato, OPERATIVO_PREDEFINITO, NON_PIU_RINUNCIABILE, azioniConvocazione,
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
-    inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE, segna,
+    inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
   });
 })(window.DO = window.DO || {});

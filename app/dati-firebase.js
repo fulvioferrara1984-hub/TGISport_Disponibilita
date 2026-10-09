@@ -22,9 +22,7 @@
   // ---------- avvio ----------
   async function avvia() {
     if (db) return;
-    DO.segna('scarico Firebase…');
     const [a, au, fs] = await Promise.all(['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js'].map((f) => import(SDK + f)));
-    DO.segna('Firebase scaricato e letto');
     F = Object.assign({}, a, au, fs);
     const cfg = DO.CONFIG;
     // nome diverso per le due pagine: un supervisore può provare il link di un operatore senza uscire dalla dashboard
@@ -42,9 +40,7 @@
       F.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
       F.connectFirestoreEmulator(db, '127.0.0.1', 8080);
     }
-    DO.segna('Firebase avviato, cerco l\'accesso salvato…');
     await auth.authStateReady();
-    DO.segna('accesso salvato ' + (auth.currentUser ? 'trovato' : 'assente'));
   }
 
   function traduci(e, predefinito) {
@@ -128,9 +124,7 @@
     const scaduto = 'Il tuo codice non è più valido: chiedine uno nuovo ai supervisori.';
     let mappa;
     try {
-      DO.segna('lettura 1: abbinamento codice…');
       mappa = await F.getDoc(F.doc(db, 'utenti', auth.currentUser.uid));
-      DO.segna('lettura 1 fatta');
     } catch (e) {
       return negato(e, scaduto, avvisa);
     }
@@ -138,7 +132,6 @@
     const id = mappa.data().operatoreId;
     try {
       const o = await F.getDoc(F.doc(db, 'operatori', id));
-      DO.segna('lettura 2 fatta (scheda operatore)');
       operatoreCorrente = pubblico(id, o.data());
       return operatoreCorrente;
     } catch (e) {
@@ -152,15 +145,10 @@
     if (codice.length !== 8) throw new Error('Il codice ha 8 caratteri, es. K7QM-4XPA.');
     const email = await emailDaCodice(codice);
     // link personale riaperto da chi è già dentro con lo stesso codice: l'accesso non si ripete
-    if (operatoreCorrente && auth.currentUser && auth.currentUser.email === email) {
-      DO.segna('codice del link già in uso: nessun nuovo accesso');
-      return operatoreCorrente;
-    }
+    if (operatoreCorrente && auth.currentUser && auth.currentUser.email === email) return operatoreCorrente;
     await F.setPersistence(auth, ricorda ? F.browserLocalPersistence : F.browserSessionPersistence);
     try {
-      DO.segna('accesso con il codice…');
       await F.signInWithEmailAndPassword(auth, email, codice);
-      DO.segna('accesso con il codice fatto');
     } catch (e) {
       throw traduci(e, 'Codice non valido.');
     }
