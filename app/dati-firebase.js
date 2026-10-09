@@ -317,7 +317,8 @@
     let fermo = false;
     const errore = (e) => {
       if (fermo) return;
-      if (e.code === 'permission-denied') negato(e, accessoSola ? NO_ACCESSO : 'Sessione scaduta: accedi di nuovo.').catch(() => {});
+      // tutte le letture negate insieme (accesso tolto, sessione scaduta): si esce una volta sola
+      if (e.code === 'permission-denied') { fermo = true; negato(e, accessoSola ? NO_ACCESSO : 'Sessione scaduta: accedi di nuovo.').catch(() => {}); }
       else DO.avviso('Aggiornamento in tempo reale interrotto: ' + traduci(e).message, 'errore');
     };
     // Eventi e regole sono arrivati dopo: se le regole di Firestore non sono ancora aggiornate
