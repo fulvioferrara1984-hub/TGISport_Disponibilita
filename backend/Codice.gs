@@ -224,3 +224,60 @@ function salvaImpostazioni(r) {
   });
   return leggiImpostazioni();
 }
+
+// ---------------------------------------------------------------- promemoria automatici: scelta degli eventi
+
+const EMAIL_VALIDA = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// "2026-10-30" + 3 → "2026-11-02" (a mezzogiorno UTC: il cambio dell'ora non sposta il giorno)
+function aggiungiGiorni(iso, n) {
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Documento dell'API REST di Firestore → oggetto semplice con il suo id
+function daFirestore(doc) {
+  const valore = (v) => {
+    if ('stringValue' in v) return v.stringValue;
+    if ('booleanValue' in v) return v.booleanValue;
+    if ('integerValue' in v) return Number(v.integerValue);
+    if ('doubleValue' in v) return v.doubleValue;
+    if ('timestampValue' in v) return v.timestampValue;
+    if ('mapValue' in v) return campi(v.mapValue.fields);
+    if ('arrayValue' in v) return (v.arrayValue.values || []).map(valore);
+    return null;
+  };
+  const campi = (f) => Object.fromEntries(Object.entries(f || {}).map(([k, v]) => [k, valore(v)]));
+  return Object.assign({ id: String(doc.name || '').split('/').pop() }, campi(doc.fields));
+}
+
+// Eventi remoti da oggi a oggi + giorni, ciascuno in un solo gruppo (in ordine di urgenza),
+// e per ogni operatore raggiungibile le sue convocazioni ancora da confermare.
+function selezionaPromemoria(eventi, operatori, oggi, giorni) {
+  const fine = aggiungiGiorni(oggi, giorni);
+  const perId = Object.fromEntries(operatori.map((o) => [o.id, o]));
+  const ora = (e) => e.orario || e.convocazione || e.convocazioneCalcolata || '';
+  const gruppi = { sostituire: [], senzaOperatore: [], daInviare: [], inAttesa: [] };
+  const avvisati = {};
+  eventi
+    .filter((e) => e.data >= oggi && e.data <= fine && ['partita', 'supervisione'].indexOf(e.tipo || 'partita') >= 0 && e.stato !== 'annullato')
+    .sort((a, b) => a.data.localeCompare(b.data) || ora(a).localeCompare(ora(b)))
+    .forEach((e) => {
+      const op = perId[e.operatoreId] || null;
+      const riga = (gruppo, nota) => gruppi[gruppo].push({ evento: e, operatore: op, nota: nota || '' });
+      if (e.stato === 'rifiutato' || e.daSostituire) riga('sostituire');
+      else if (!op || e.stato === 'da-assegnare') riga('senzaOperatore');
+      else if (e.stato === 'assegnato') riga('daInviare');
+      else if (e.stato === 'convocato') {
+        if (op.attivo === false) riga('inAttesa', '(disattivato)');
+        else if (!EMAIL_VALIDA.test(String(op.email || ''))) riga('inAttesa', '(senza email)');
+        else {
+          riga('inAttesa');
+          avvisati[op.id] = avvisati[op.id] || { id: op.id, nome: op.nome, email: op.email, eventi: [] };
+          avvisati[op.id].eventi.push(e);
+        }
+      }
+    });
+  return { gruppi, operatori: Object.keys(avvisati).map((id) => avvisati[id]) };
+}
