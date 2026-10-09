@@ -16,6 +16,7 @@
   let operativo = Object.assign({}, DO.OPERATIVO_PREDEFINITO);   // telefono di reperibilità e giorni di blocco
   let onsite = [];                // deployment on-site mandati all'operatore
   let giorniOn = {};              // giorni in cui è on-site: data → { luogo, … }
+  let richiesteEvento = [];       // richieste di disponibilità per una singola partita o turno
   const noteAperte = new Set();   // giorni in cui l'operatore ha chiesto di scrivere una nota
 
   const chiaveBozza = () => 'do-bozza-' + operatore.id;
@@ -92,6 +93,7 @@
         + nota + '</div></li>';
     }).join('');
     disegnaRichieste();
+    disegnaRichiesteEvento();
     disegnaOnsite();
     disegnaConvocazioni();
     disegnaBarra();
@@ -253,6 +255,52 @@
     disegna();
   });
 
+  // ---------- richieste di disponibilità per un evento ----------
+  function disegnaRichiesteEvento() {
+    const box = $('richieste-evento');
+    const stato = (r) => DO.richiesteEvento.statoPerOperatore(r, operatore.id, oggi);
+    const visibili = operatore ? richiesteEvento.filter((r) => stato(r) !== 'nascosta') : [];
+    box.hidden = !visibili.length;
+    if (!visibili.length) { box.innerHTML = ''; return; }
+    const chiave = (r) => r.evento.data + (r.evento.ritrovo || '');
+    box.innerHTML = '<div class="scheda-testa"><h2>Ti chiediamo se sei disponibile</h2></div>' + visibili.sort((a, b) => chiave(a).localeCompare(chiave(b))).map((r) => {
+      const e = r.evento, g = DO.giorno(e.data), st = stato(r), sup = e.tipo === 'supervisione';
+      const rispondi = (v, testo, cls) => '<button type="button" class="' + cls + '" data-evento-risposta="' + v + '" data-id="' + DO.esc(r.id) + '">' + testo + '</button>';
+      const orari = sup ? 'turno ' + (e.ritrovo || '—') + (e.fine ? ' – ' + e.fine : '')
+        : (e.orario ? 'evento ' + e.orario + ' · ' : '') + 'ritrovo ' + (e.ritrovo || '—') + (e.fine ? ' – fine ' + e.fine : '');
+      const azioni = {
+        'da-rispondere': rispondi('no', 'No', 'bottone') + rispondi('si', 'Sì, sono disponibile', 'primario'),
+        'risposto-si': '<span class="stato-chip st-D">Hai risposto: sì</span>' + rispondi('no', 'Non sono più disponibile', 'link'),
+        'risposto-no': '<span class="stato-chip st-A">Hai risposto: no</span>' + rispondi('si', 'Ho cambiato idea, sono disponibile', 'link'),
+        coperto: '<span class="stato-chip">Posto già coperto, grazie</span>',
+      }[st];
+      return '<div class="convocazione richiesta-evento' + (st === 'coperto' ? ' coperta' : '') + '">'
+        + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
+        + '<div class="conv-info"><b>' + DO.esc(sup ? 'Turno di supervisione' : e.titolo) + '</b>'
+        + '<span>' + DO.esc([e.competizione, e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(', ')) + '</span>'
+        + '<span>' + g.breve + ' ' + g.num + ' ' + g.mese + ' · <span class="ritrovo">' + orari + '</span></span>'
+        + (r.messaggio ? '<span class="onsite-nota">' + DO.esc(r.messaggio) + '</span>' : '') + '</div>'
+        + '<div class="conv-azioni">' + azioni + '</div></div>';
+    }).join('');
+  }
+
+  $('richieste-evento').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-evento-risposta]');
+    if (!b) return;
+    const risposta = b.dataset.eventoRisposta;
+    if (riallineaOggi()) disegna();
+    b.disabled = true;
+    try {
+      await DO.dati.rispondiRichiestaEvento(b.dataset.id, risposta);
+      DO.avviso(risposta === 'si' ? 'Grazie: i supervisori sanno che sei disponibile.' : 'Risposta inviata ai supervisori.', 'ok');
+    } catch (err) {
+      DO.avviso(err.message, 'errore', 8000);
+    }
+    try { richiesteEvento = await DO.dati.mieRichiesteEvento(); } catch (err) { /* resta la lista di prima */ }
+    salvaCopia();
+    disegna();
+  });
+
   function disegnaRichieste() {
     $('richieste').innerHTML = richieste.map((x) => {
       const giorni = giorniDi(x);
@@ -378,7 +426,7 @@
 
   // ---------- avvio ----------
   function salvaCopia() {
-    DO.salvaCopia({ operatore, giorni: salvati, richieste, convocazioni, operativo, onsite, oggi, limite });
+    DO.salvaCopia({ operatore, giorni: salvati, richieste, convocazioni, operativo, onsite, richiesteEvento, oggi, limite });
   }
 
   function applica(r) {
@@ -390,6 +438,7 @@
     if (r.convocazioni) convocazioni = r.convocazioni;
     if (r.operativo) operativo = Object.assign({}, DO.OPERATIVO_PREDEFINITO, r.operativo);
     if (r.onsite) onsite = r.onsite;
+    if (r.richiesteEvento) richiesteEvento = r.richiesteEvento;
     aggiornaOnsite();
     // la bozza salvata sul dispositivo perde i giorni passati, quelli ormai bloccati e quelli uguali all'inviato
     bozza = DO.leggi(chiaveBozza()) || {};
@@ -430,13 +479,15 @@
       $('giorni').innerHTML = '<li class="caricamento"><span></span></li>';
     }
     try {
-      const [r, conv, op, ons] = await Promise.all([
+      const [r, conv, op, ons, rev] = await Promise.all([
         DO.dati.mieDisponibilita(), DO.dati.mieConvocazioni().catch(() => null),
         DO.dati.leggiOperativo().catch(() => Object.assign({}, DO.OPERATIVO_PREDEFINITO)),
         DO.dati.mieiOnsite().catch(() => null),
+        DO.dati.mieRichiesteEvento().catch(() => null),
       ]);
       if (conv) r.convocazioni = conv;
       if (ons) r.onsite = ons;
+      if (rev) r.richiesteEvento = rev;
       r.operativo = op;
       const settimana = lun;
       applica(r);

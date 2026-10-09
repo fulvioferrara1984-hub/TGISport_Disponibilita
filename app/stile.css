@@ -214,6 +214,8 @@ button.primario:disabled { background: #b7c3ee; cursor: not-allowed; }
 .onsite-giorni b { color: var(--inchiostro); font-weight: 600; }
 .convocazione.onsite .conv-data { background: #efe7ff; color: #5b34c9; }
 .onsite-nota { font-size: 12.5px; color: var(--inchiostro-2); }
+.convocazione.richiesta-evento .conv-data { background: var(--accento-tenue); color: var(--accento); }
+.convocazione.richiesta-evento.coperta { opacity: .7; }
 .aggiungi-nota:hover { color: var(--accento); }
 .giorno-scelte { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .giorno.modificato { background: linear-gradient(90deg, var(--accento-tenue), transparent 40%); }
