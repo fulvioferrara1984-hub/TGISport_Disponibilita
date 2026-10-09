@@ -14,7 +14,10 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 
 | | |
 |---|---|
-| Ritrovo | orario dell'evento meno 4 ore (modificabile sul singolo evento) |
+| Ritrovo | orario dell'evento meno le ore della competizione (generale: 4); modificabile sul singolo evento |
+| Fine turno | orario dell'evento più le ore della competizione (generale: 2); supervisione: ritrovo + 6 ore; modificabile sul singolo evento |
+| Doppio turno | stesso operatore due volte nello stesso giorno: avviso giallo se gli orari non si toccano, rosso "turni sovrapposti" se si sovrappongono |
+| Blocco | quando all'evento mancano N giorni o meno (generale: 3; evento lunedì → da venerdì) l'operatore non cambia più disponibilità né rinuncia: telefona al numero di reperibilità |
 | Notturno | ritrovo dalle 22:00 alle 6:00 |
 | Gettoni netti | P.IVA: diurno 140, notturno 210, maggiorato 210 · Coop: diurno 175, notturno 262,50, maggiorato 262,50 |
 | Maggiorato | si sceglie sul singolo evento e prevale sulle altre regole |
@@ -22,7 +25,9 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 | Supervisione | un turno per giorno, solo operatori con ruolo **TL**; le partite vanno a TL o OP |
 | Annullati | non contano mai nei riepiloghi |
 
-Tutti i valori si cambiano da **Impostazioni → Tariffe e regole** e **Competizioni e sport** (casella *UEFA ½*).
+Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco) e **Competizioni e sport** (ore prima/dopo per competizione, casella *UEFA ½*).
+
+**Esporta mese** (scheda Convocazioni) scarica un Excel con le convocazioni del mese e le presenze per operatore, senza compensi.
 
 ## Come funziona
 

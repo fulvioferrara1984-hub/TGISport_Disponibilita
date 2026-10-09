@@ -32,6 +32,16 @@ service cloud.firestore {
     function operatore() {
       return request.auth != null && exists(abbinamento()) && operatoreAttivo(mioOperatore());
     }
+    // data dell'evento (stringa yyyy-mm-dd) come istante, per la finestra di blocco
+    function dataEvento() {
+      let p = resource.data.data.split('-');
+      return timestamp.date(int(p[0]), int(p[1]), int(p[2]));
+    }
+    // giorni di blocco impostati dai supervisori (3 se non ancora impostati)
+    function giorniBlocco() {
+      let rif = /databases/$(database)/documents/impostazioni/operativo;
+      return exists(rif) ? get(rif).data.get('giorniBlocco', 3) : 3;
+    }
 
     match /utenti/{uid} {
       allow read: if supervisore() || (request.auth != null && request.auth.uid == uid);
@@ -70,7 +80,8 @@ service cloud.firestore {
     }
 
     // Eventi e turni: l'operatore vede solo le proprie convocazioni già inviate,
-    // e può soltanto confermarle o rifiutarle.
+    // e può soltanto confermarle o rifiutarle. Rifiutare si può solo una convocazione in attesa
+    // e fuori dalla finestra di blocco; dopo, si telefona al supervisore.
     match /eventi/{evento} {
       allow read: if supervisore()
         || (operatore() && resource.data.operatoreId == mioOperatore() && resource.data.inviata == true);
@@ -79,12 +90,16 @@ service cloud.firestore {
         || (operatore() && resource.data.operatoreId == mioOperatore() && resource.data.inviata == true
           && resource.data.stato != 'annullato'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stato', 'risposta', 'rispostaIl'])
-          && request.resource.data.stato in ['confermato', 'rifiutato']);
+          && (request.resource.data.stato == 'confermato'
+            || (request.resource.data.stato == 'rifiutato' && resource.data.stato == 'convocato'
+              && request.time < dataEvento() - duration.value(giorniBlocco(), 'd'))));
     }
 
     // Tariffe, competizioni e regole: solo i supervisori (gli operatori non vedono i compensi).
+    // "operativo" (telefono di reperibilità e giorni di blocco) lo leggono anche gli operatori attivi.
     match /impostazioni/{documento} {
-      allow read, write: if supervisore();
+      allow read: if supervisore() || (documento == 'operativo' && operatore());
+      allow write: if supervisore();
     }
   }
 }

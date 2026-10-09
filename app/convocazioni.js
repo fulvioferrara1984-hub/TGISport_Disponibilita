@@ -441,7 +441,7 @@
     const contatti = Object.keys(perOp).map((id) => {
       const o = operatore(id) || {};
       return { nome: o.nome || '', email: o.email || '', eventi: perOp[id].map((e) => ({
-        data: e.data, titolo: titolo(e), tipo: e.tipo, competizione: e.competizione || '', round: e.round || '', orario: e.orario || '', convocazione: e.convocazioneCalcolata,
+        data: e.data, titolo: titolo(e), tipo: e.tipo, competizione: e.competizione || '', round: e.round || '', orario: e.orario || '', convocazione: e.convocazioneCalcolata, fine: e.fineCalcolata,
       })) };
     });
     try {

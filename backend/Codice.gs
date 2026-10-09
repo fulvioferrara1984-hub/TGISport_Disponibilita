@@ -152,7 +152,7 @@ function emailConvocazioni(r) {
     const righe = eventi.map((e) => '<tr><td style="padding:6px 14px 6px 0;white-space:nowrap"><b>' + esc(giornoLungo(String(e.data))) + '</b></td>'
       + '<td style="padding:6px 14px 6px 0">' + esc(e.titolo || '') + '<br><span style="color:#8b919c;font-size:12px">' + esc([e.competizione, e.round].filter(Boolean).join(' · ')) + '</span></td>'
       + '<td style="padding:6px 0;white-space:nowrap">' + (e.tipo === 'supervisione' ? 'inizio turno' : (e.orario ? 'evento ' + esc(e.orario) + '<br>' : '') + 'ritrovo')
-      + ' <b>' + esc(e.convocazione || '') + '</b></td></tr>').join('');
+      + ' <b>' + esc(e.convocazione || '') + '</b>' + (e.fine ? ' – fine <b>' + esc(e.fine) + '</b>' : '') + '</td></tr>').join('');
     try {
       MailApp.sendEmail({
         to: c.email,
