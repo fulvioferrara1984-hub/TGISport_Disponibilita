@@ -483,6 +483,15 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 .storico:empty { display: none; }
 .nuova-versione { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 14px; max-width: calc(100% - 32px); padding: 10px 12px 10px 16px; border-radius: 10px; background: var(--inchiostro); color: #fff; font-size: 13.5px; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
 .nuova-versione .primario { flex: none; height: 32px; }
+/* collega in sola visualizzazione: spariscono i comandi che modificano */
+body.sola-lettura .solo-modifica { display: none !important; }
+.sola-etichetta { margin-left: 12px; background: #fff4e0; color: #9a5b00; white-space: nowrap; }
+.riga-aggiungi { display: flex; gap: 8px; margin-bottom: 10px; }
+.riga-aggiungi input { flex: 1; min-width: 0; }
+.elenco-visualizzatori { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.elenco-visualizzatori li { display: flex; align-items: center; gap: 10px; padding: 7px 9px; border: 1px solid var(--linea); border-radius: 8px; font-size: 13px; }
+.elenco-visualizzatori li .chi { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.elenco-visualizzatori li small { display: block; color: var(--inchiostro-3); font-size: 11.5px; }
 .evd-richiesta { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 9px 11px; border: 1px solid var(--linea); border-radius: 8px; font-size: 12.5px; color: var(--inchiostro-2); }
 .evd-richiesta .evd-risposte { flex: 1; min-width: 0; }
 .evd-richiesta .evd-risposte:empty::before { content: 'Nessuna richiesta di disponibilità per questo evento.'; color: var(--inchiostro-3); }

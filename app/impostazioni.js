@@ -104,6 +104,34 @@
     salva({ competizioni, sport }, 'Competizioni salvate.');
   });
 
+  // ---------- accessi in sola visualizzazione ----------
+  function disegnaVisualizzatori() {
+    const elenco = A.visualizzatori;
+    $('vis-elenco').innerHTML = elenco.length ? elenco.map((v) => '<li><span class="chi"><b>' + DO.esc(v.email) + '</b>'
+      + '<small>aggiunto ' + (v.aggiunto ? DO.quando(v.aggiunto) : '') + (v.da ? ' da ' + DO.esc(v.da) : '') + '</small></span>'
+      + '<button type="button" class="bottone" data-invita="' + DO.esc(v.email) + '">Invia mail</button>'
+      + '<button type="button" class="link testo-errore" data-togli-vis="' + DO.esc(v.email) + '">Togli</button></li>').join('')
+      : '<li class="nota">Nessun collega per ora.</li>';
+  }
+  $('form-visualizzatori').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const email = await DO.dati.aggiungiVisualizzatore($('vis-email').value);
+      $('vis-email').value = '';
+      DO.avviso(email + ' può entrare in sola visualizzazione: mandagli l\'invito con «Invia mail».', 'ok', 6000);
+    } catch (err) { DO.avviso(err.message, 'errore', 8000); }
+  });
+  $('vis-elenco').addEventListener('click', async (e) => {
+    const invita = e.target.closest('[data-invita]');
+    if (invita) { location.href = DO.invitoVisualizzatore(invita.dataset.invita, A.linkDashboard()); return; }
+    const togli = e.target.closest('[data-togli-vis]');
+    if (!togli || !confirm('Togliere l\'accesso a ' + togli.dataset.togliVis + '?')) return;
+    try {
+      await DO.dati.togliVisualizzatore(togli.dataset.togliVis);
+      DO.avviso('Accesso tolto.', 'ok');
+    } catch (err) { DO.avviso(err.message, 'errore', 8000); }
+  });
+
   // ---------- regole per gli operatori (telefono di reperibilità, giorni di blocco) ----------
   function disegnaOperativo() {
     const o = A.operativo;
@@ -314,7 +342,7 @@
   });
 
   A.registra({
-    aggiorna: () => { if (A.vista === 'impostazioni') { disegnaRegole(); disegnaOperativo(); if (!bozzaComp) disegnaCompetizioni(); } },
-    mostra: (nome) => { if (nome === 'impostazioni') { disegnaRegole(); disegnaOperativo(); disegnaCompetizioni(true); } },
+    aggiorna: () => { if (A.vista === 'impostazioni') { disegnaRegole(); disegnaOperativo(); disegnaVisualizzatori(); if (!bozzaComp) disegnaCompetizioni(); } },
+    mostra: (nome) => { if (nome === 'impostazioni') { disegnaRegole(); disegnaOperativo(); disegnaVisualizzatori(); disegnaCompetizioni(true); } },
   });
 })(window.DO);

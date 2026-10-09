@@ -7,7 +7,7 @@
   <title>Supervisori · Disponibilità TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css?v=23">
+  <link rel="stylesheet" href="app/stile.css?v=24">
 </head>
 <body>
   <header class="testata con-schede">
@@ -23,6 +23,7 @@
       <button type="button" role="tab" data-vista="operatori" aria-selected="false">Operatori</button>
       <button type="button" role="tab" data-vista="impostazioni" aria-selected="false">Impostazioni</button>
     </nav>
+    <span class="etichetta sola-etichetta" id="sola-etichetta" hidden>Sola visualizzazione</span>
     <span class="spazio"></span>
     <button type="button" class="esci" id="btn-esci" hidden>Esci</button>
   </header>
@@ -44,7 +45,7 @@
         <button type="button" class="link" id="accesso-modo">Primo accesso? Crea la tua password</button>
         <button type="button" class="link" id="accesso-recupera">Password dimenticata?</button>
       </div>
-      <p class="nota" id="accesso-demo" hidden>Demo: una email qualsiasi e la password <code>demo</code>.</p>
+      <p class="nota" id="accesso-demo" hidden>Demo: una email qualsiasi e la password <code>demo</code> (con <code>collega@esempio.it</code> entri in sola visualizzazione).</p>
     </form>
   </div>
 
@@ -61,11 +62,11 @@
           <input type="month" id="ev-mese" aria-label="Mese da esportare" class="solo-desktop">
           <button type="button" class="bottone solo-desktop" id="ev-esporta" title="Excel con convocazioni e presenze del mese, senza compensi">Esporta mese</button>
           <button type="button" class="bottone" id="ev-calendario">Calendario</button>
-          <button type="button" class="bottone" id="ev-onsite">+ On-site</button>
-          <button type="button" class="bottone" id="ev-nuovo-tl">+ Remote TL</button>
-          <button type="button" class="bottone" id="ev-nuovo-support">+ Remote Support</button>
-          <button type="button" class="bottone" id="ev-nuove">+ Partite</button>
-          <button type="button" class="primario" id="ev-invia">Invia convocazioni</button>
+          <button type="button" class="bottone solo-modifica" id="ev-onsite">+ On-site</button>
+          <button type="button" class="bottone solo-modifica" id="ev-nuovo-tl">+ Remote TL</button>
+          <button type="button" class="bottone solo-modifica" id="ev-nuovo-support">+ Remote Support</button>
+          <button type="button" class="bottone solo-modifica" id="ev-nuove">+ Partite</button>
+          <button type="button" class="primario solo-modifica" id="ev-invia">Invia convocazioni</button>
         </div>
       </div>
       <div class="conteggi-conv" id="ev-conteggi"></div>
@@ -210,7 +211,7 @@
           <h1>Operatori</h1>
           <p>Ogni operatore entra con un codice personale: crealo qui e invialo con il link d'invito.</p>
         </div>
-        <button type="button" class="primario" id="btn-nuovo-op">+ Nuovo operatore</button>
+        <button type="button" class="primario solo-modifica" id="btn-nuovo-op">+ Nuovo operatore</button>
       </div>
       <section class="scheda"><div class="tabella-box" id="tabella-operatori"></div></section>
     </section>
@@ -238,6 +239,14 @@
               <label class="campo"><span>Tariffa on-site (€ al giorno)</span><input type="number" id="reg-tariffa-onsite" min="0" max="2000" step="0.01"></label>
               <p class="nota" style="margin: -4px 0 12px;">Compenso proposto per ogni deployment: giorni × tariffa (4 giorni a 150 € = 600 €), modificabile nella richiesta.</p>
               <button type="submit" class="primario">Salva regole</button>
+            </form>
+          </section>
+          <section class="scheda">
+            <div class="scheda-testa"><h2>Accessi in sola visualizzazione</h2></div>
+            <form class="scheda-corpo" id="form-visualizzatori">
+              <p class="nota" style="margin: 0 0 10px;">Colleghi che vedono Convocazioni, Riepilogo e Operatori senza poter modificare nulla. Al primo accesso premono «Crea account» con questa email.</p>
+              <div class="riga-aggiungi"><input type="email" id="vis-email" placeholder="nome@tgisport.com" aria-label="Email del collega" autocomplete="off"><button type="submit" class="bottone" id="vis-aggiungi">Aggiungi</button></div>
+              <ul class="elenco-visualizzatori" id="vis-elenco"></ul>
             </form>
           </section>
           <section class="scheda">
@@ -415,9 +424,9 @@
       </div>
       <div class="errore" id="onss-errore" hidden></div>
       <div class="dialog-azioni">
-        <button type="button" class="link testo-errore" id="onss-annulla">Annulla deployment</button>
-        <button type="button" class="bottone" id="onss-stato">Chiudi richiesta</button>
-        <button type="button" class="bottone" id="onss-modifica-apri">Modifica</button>
+        <button type="button" class="link testo-errore solo-modifica" id="onss-annulla">Annulla deployment</button>
+        <button type="button" class="bottone solo-modifica" id="onss-stato">Chiudi richiesta</button>
+        <button type="button" class="bottone solo-modifica" id="onss-modifica-apri">Modifica</button>
         <button type="submit" class="primario">Fatto</button>
       </div>
     </form>
@@ -483,16 +492,16 @@
       <label class="spunta"><input type="checkbox" id="evd-sostituire"><span>Da sostituire (l'operatore assegnato va cambiato)</span></label>
       <div class="evd-richiesta" id="evd-richiesta" hidden>
         <span class="evd-risposte" id="evd-risposte"></span>
-        <button type="button" class="bottone" id="evd-chiedi">Chiedi disponibilità</button>
+        <button type="button" class="bottone solo-modifica" id="evd-chiedi">Chiedi disponibilità</button>
       </div>
       <div class="storico" id="evd-storico"></div>
       <div class="errore" id="evd-errore" hidden></div>
       <div class="dialog-azioni separati">
-        <button type="button" class="bottone pericolo" id="evd-elimina">Elimina</button>
-        <button type="button" class="bottone" id="evd-annulla-evento">Annulla evento</button>
+        <button type="button" class="bottone pericolo solo-modifica" id="evd-elimina">Elimina</button>
+        <button type="button" class="bottone solo-modifica" id="evd-annulla-evento">Annulla evento</button>
         <span class="spazio"></span>
         <button type="button" class="bottone" data-chiudi>Chiudi</button>
-        <button type="submit" class="primario">Salva</button>
+        <button type="submit" class="primario solo-modifica">Salva</button>
       </div>
     </form>
   </dialog>
@@ -586,18 +595,18 @@
     </form>
   </dialog>
 
-  <script src="app/config.js?v=23"></script>
-  <script src="app/comune.js?v=23"></script>
-  <script src="app/onsite.js?v=23"></script>
-  <script src="app/richieste-evento.js?v=23"></script>
-  <script src="app/demo.js?v=23"></script>
-  <script src="app/dati-firebase.js?v=23"></script>
-  <script src="app/regole.js?v=23"></script>
-  <script src="app/admin.js?v=23"></script>
-  <script src="app/convocazioni.js?v=23"></script>
-  <script src="app/onsite-admin.js?v=23"></script>
-  <script src="app/calendario.js?v=23"></script>
-  <script src="app/riepilogo.js?v=23"></script>
-  <script src="app/impostazioni.js?v=23"></script>
+  <script src="app/config.js?v=24"></script>
+  <script src="app/comune.js?v=24"></script>
+  <script src="app/onsite.js?v=24"></script>
+  <script src="app/richieste-evento.js?v=24"></script>
+  <script src="app/demo.js?v=24"></script>
+  <script src="app/dati-firebase.js?v=24"></script>
+  <script src="app/regole.js?v=24"></script>
+  <script src="app/admin.js?v=24"></script>
+  <script src="app/convocazioni.js?v=24"></script>
+  <script src="app/onsite-admin.js?v=24"></script>
+  <script src="app/calendario.js?v=24"></script>
+  <script src="app/riepilogo.js?v=24"></script>
+  <script src="app/impostazioni.js?v=24"></script>
 </body>
 </html>

@@ -11,6 +11,8 @@
   let operatori = [], disp = {}, feed = [], richieste = [], nonLettiOps = new Set(), eventi = [], regole = DO.regole.complete(null);
   let onsite = [], compensiOnsite = {};   // deployment on-site e compensi (solo supervisori)
   let richiesteEvento = [];               // richieste di disponibilità per un singolo evento
+  let solaLettura = false, visualizzatori = [];   // collega in sola visualizzazione; elenco dei colleghi (supervisori)
+  const VISTE_SOLA = ['convocazioni', 'riepilogo', 'operatori'];
   // ogni dashboard aperta tiene le richieste per evento allineate agli eventi (scritture idempotenti)
   const allineaRichiesteEvento = DO.richiesteEvento.allineatore((id, campi) => DO.dati.allineaRichiestaEvento(id, campi));
   let operativo = Object.assign({}, DO.OPERATIVO_PREDEFINITO);
@@ -34,6 +36,7 @@
 
   // ---------- schede ----------
   function mostra(nome) {
+    if (solaLettura && !VISTE_SOLA.includes(nome)) nome = 'convocazioni';
     vista = nome;
     nascondiPopup();
     document.querySelectorAll('#schede [data-vista]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.vista === nome)));
@@ -59,7 +62,9 @@
     onsite = stato.onsite || [];
     compensiOnsite = stato.compensiOnsite || {};
     richiesteEvento = stato.richiesteEvento || [];
-    if (stato.sincronizzato) allineaRichiesteEvento(richiesteEvento, eventi, regole, oggi);
+    visualizzatori = stato.visualizzatori || [];
+    // la dashboard di un collega non scrive mai: niente allineamento delle richieste per evento
+    if (stato.sincronizzato && !solaLettura) allineaRichiesteEvento(richiesteEvento, eventi, regole, oggi);
     onsitePerOp = {};
     richieste = statoRichieste(stato.richieste);
     nonLettiOps = new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
@@ -87,6 +92,9 @@
     get onsite() { return onsite; },
     get compensiOnsite() { return compensiOnsite; },
     get richiesteEvento() { return richiesteEvento; },
+    get solaLettura() { return solaLettura; },
+    get visualizzatori() { return visualizzatori; },
+    linkDashboard: () => new URL('admin.html', location.href).href,
     get vista() { return vista; },
     valore, impegni, etichettaGiorno, linkSito, mostra: (n) => mostra(n), esitoRichiesta: (r, email, whatsapp) => esitoRichiesta(r, email, whatsapp),
     // porta le schede (es. Convocazioni) alla settimana che contiene questo giorno
@@ -628,7 +636,7 @@
       $('tabella-operatori').innerHTML = '<div class="griglia-vuota">Nessun operatore. Crea il primo con <b>+ Nuovo operatore</b>.</div>';
       return;
     }
-    $('tabella-operatori').innerHTML = '<table class="tabella"><thead><tr><th>Operatore</th><th>Ruolo</th><th class="solo-desktop">Contratto</th><th class="solo-desktop">Contatti</th><th>Stato</th><th class="solo-desktop">Ultimo invio</th><th></th></tr></thead><tbody>'
+    $('tabella-operatori').innerHTML = '<table class="tabella"><thead><tr><th>Operatore</th><th>Ruolo</th><th class="solo-desktop">Contratto</th><th class="solo-desktop">Contatti</th><th>Stato</th><th class="solo-desktop">Ultimo invio</th><th class="solo-modifica"></th></tr></thead><tbody>'
       + elenco.map((o) => '<tr class="' + (o.attivo ? '' : 'disattivo') + '">'
         + '<td><b>' + DO.esc(o.nome) + '</b><br><small class="tenue">' + DO.esc(o.mansione || '—') + '</small></td>'
         + '<td><span class="etichetta ruolo-' + o.ruolo + '">' + DO.regole.nomeRuolo(o.ruolo) + '</span>'
@@ -638,7 +646,7 @@
         + '<td><span class="etichetta' + (o.attivo ? '' : ' spenta') + '">' + (o.attivo ? 'Attivo' : 'Disattivato') + '</span>'
         + (o.uid === '' ? '<br><small class="testo-errore">senza codice</small>' : '') + '</td>'
         + '<td class="solo-desktop">' + (o.ultimoInvio ? DO.quando(o.ultimoInvio) : '<span class="tenue">mai</span>') + '</td>'
-        + '<td class="azioni"><button type="button" class="bottone" data-modifica="' + o.id + '">Modifica</button> '
+        + '<td class="azioni solo-modifica"><button type="button" class="bottone" data-modifica="' + o.id + '">Modifica</button> '
         + '<button type="button" class="bottone" data-codice="' + o.id + '">' + (o.uid === '' ? 'Crea codice' : 'Nuovo codice') + '</button> '
         + '<button type="button" class="bottone pericolo" data-elimina="' + o.id + '">Elimina</button></td></tr>').join('')
       + '</tbody></table>';
@@ -791,7 +799,7 @@
       return;
     }
     if (!u) {
-      await DO.chiediAccesso(() => {
+      u = await DO.chiediAccesso(() => {
         const email = $('accesso-email').value, password = $('accesso-password').value;
         if (!primoAccesso) return DO.dati.accediSupervisore(email, password, $('accesso-ricorda').checked);
         if (password !== $('accesso-conferma').value) throw new Error('Le due password non coincidono.');
@@ -799,6 +807,11 @@
         return DO.dati.creaSupervisore(email, password).catch((e) => { if (e.info) modoAccesso(false); throw e; });
       });
     }
+    // collega in sola visualizzazione: solo Convocazioni, Riepilogo e Operatori, nessun tasto di modifica
+    solaLettura = !!(u && u.sola);
+    document.body.classList.toggle('sola-lettura', solaLettura);
+    $('sola-etichetta').hidden = !solaLettura;
+    document.querySelectorAll('#schede [data-vista]').forEach((b) => { b.hidden = solaLettura && !VISTE_SOLA.includes(b.dataset.vista); });
     $('pagina').hidden = false;
     $('schede').hidden = false;
     $('btn-esci').hidden = false;

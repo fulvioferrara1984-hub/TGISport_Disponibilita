@@ -199,7 +199,7 @@
       .sort((x, y) => x.ordine - y.ordine || x.nome.localeCompare(y.nome, 'it'));
     $('onss-persone').innerHTML = persone.map((p) => '<li class="persona"><span class="chi"><b>' + DO.esc(p.nome) + '</b></span>'
       + '<span class="stato-chip ' + p.cls + '">' + p.testo + '</span>'
-      + (p.togli ? '<button type="button" class="link testo-errore" data-togli="' + p.id + '">Togli</button>' : '') + '</li>').join('');
+      + (p.togli ? '<button type="button" class="link testo-errore solo-modifica" data-togli="' + p.id + '">Togli</button>' : '') + '</li>').join('');
     const annullata = d.stato === 'annullata';
     $('onss-stato').hidden = $('onss-annulla').hidden = $('onss-modifica-apri').hidden = annullata;
     $('onss-stato').textContent = d.stato === 'chiusa' ? 'Riapri' : 'Chiudi richiesta';

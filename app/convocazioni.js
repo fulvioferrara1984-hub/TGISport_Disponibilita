@@ -70,9 +70,9 @@
       const g = DO.giorno(d);
       const testa = '<div class="ev-giorno-testa' + (d === DO.oggi() ? ' oggi' : '') + '"><b>' + g.nome + ' ' + g.num + ' ' + g.mese + '</b>'
         + '<span>' + (evs.length ? plurale(evs.filter((e) => e.stato !== 'annullato').length, 'evento', 'eventi') : 'nessun evento') + '</span>'
-        + '<button type="button" class="link" data-nuovo-turno="supervisione" data-giorno="' + d + '">+ Remote TL</button>'
-        + '<button type="button" class="link" data-nuovo-turno="support" data-giorno="' + d + '">+ Remote Support</button>'
-        + '<button type="button" class="link" data-nuove="' + d + '">+ partite</button></div>';
+        + '<button type="button" class="link solo-modifica" data-nuovo-turno="supervisione" data-giorno="' + d + '">+ Remote TL</button>'
+        + '<button type="button" class="link solo-modifica" data-nuovo-turno="support" data-giorno="' + d + '">+ Remote Support</button>'
+        + '<button type="button" class="link solo-modifica" data-nuove="' + d + '">+ partite</button></div>';
       return '<div class="ev-giorno' + (d < DO.oggi() ? ' passato' : '') + '">' + testa + (f ? '' : righeOnsite(d)) + evs.map(riga).join('') + '</div>';
     }).join('');
   }
@@ -138,7 +138,7 @@
       const testo = segno + ' ' + o.nome + (si ? ' — ✓ ha detto sì' + vecchio + extra.replace(/^ — /, ' · ') : extra);
       return { o, peso: (si ? -10 : 0) + peso[v.s || ''] + (v.onsite ? 0.9 : livello === 'sovrapposto' ? 0.8 : livello ? 0.5 : 0), testo };
     }).sort((a, b) => a.peso - b.peso || a.o.nome.localeCompare(b.o.nome, 'it'));
-    return '<select data-assegna="' + e.id + '"' + (e.stato === 'annullato' ? ' disabled' : '') + ' aria-label="Operatore">'
+    return '<select data-assegna="' + e.id + '"' + (e.stato === 'annullato' || A.solaLettura ? ' disabled' : '') + ' aria-label="Operatore">'
       + '<option value="">' + R.sceltaOperatore(e.tipo) + '</option>'
       + voci.map((x) => '<option value="' + x.o.id + '"' + (x.o.id === e.operatoreId ? ' selected' : '') + '>' + DO.esc(x.testo) + '</option>').join('')
       + '</select>';
@@ -258,6 +258,8 @@
     inModifica = e;
     const f = $('form-evento');
     riempiElenchi(f);
+    // collega in sola visualizzazione: la finestra si apre solo per leggere
+    f.querySelectorAll('input, select, textarea').forEach((x) => { x.disabled = A.solaLettura; });
     const sup = turno(e);
     // turni remoti: niente competizione, round, partita, orario e sport (conta la mansione)
     $('evd-titolo').textContent = sup ? DO.nomeTurno(e.tipo) : 'Partita';

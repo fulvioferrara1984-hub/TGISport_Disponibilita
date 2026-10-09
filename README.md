@@ -127,6 +127,14 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste on-site non partono e la dashboard lo segnala dopo l'invio.
 4. **Dashboard**: in **Operatori → Modifica** imposta *On-site: TL / OP* per chi può andare in trasferta, e controlla la **Tariffa on-site** in Impostazioni.
 
+### Accessi in sola visualizzazione
+
+Ordine **sito → regole**, lo script delle email non cambia:
+
+1. **Sito**: finché le regole nuove non sono pubblicate i colleghi non riescono a entrare e la dashboard avvisa *Accessi in sola visualizzazione non disponibili: pubblica le nuove regole di Firestore*.
+2. **Regole**: incolla [`firebase/firestore.rules`](firebase/firestore.rules) in Firebase → Firestore Database → Regole → **Pubblica**.
+3. **Dashboard**: ricaricala su ogni computer dei supervisori, poi aggiungi i colleghi da **Impostazioni → Accessi in sola visualizzazione** e manda a ciascuno l'invito con **Invia mail**.
+
 ### Richiesta di disponibilità per evento
 
 Ordine come per ogni aggiornamento, **sito → regole → script**:
@@ -188,6 +196,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 - **On-site**: *Convocazioni → + On-site* → primo e ultimo giorno (si può togliere un giorno), attività di ogni giorno con la partita per gli MD, luogo, sport, posti TL/OP, compenso proposto e destinatari (gli abilitati, con l'avviso se hanno convocazioni remote in quei giorni). Gli operatori rispondono *Accetto* / *Non posso* dalla loro pagina; chi ha convocazioni remote inviate negli stessi giorni deve prima chiamare. I giorni del deployment compaiono nel calendario: clic sulla riga → scheda con risposte, *Togli*, *Modifica*, *Chiudi richiesta* e *Annulla deployment*. Le presenze e i compensi on-site entrano nel Riepilogo e in *Esporta mese*.
 - **Chiedi disponibilità** (per un solo evento): nella finestra dell'evento (⋯) di una partita o di un turno Remote TL / Remote Support ancora senza operatore (o rifiutato, o da sostituire) → elenco degli operatori che possono fare l'evento (secondo il ruolo) con disponibilità del giorno, altri turni e on-site; già spuntati i disponibili e parziali liberi non ancora interpellati → messaggio facoltativo → *Chiedi a N operatori*. Gli operatori trovano in cima alla loro pagina *Ti chiediamo se sei disponibile* e rispondono *Sì, sono disponibile* o *No* (anche via email con il link). Le risposte compaiono nella finestra dell'evento (*Sì: … · No: … · In attesa: N*, con *(prima della modifica)* se l'evento è cambiato dopo), in **Aggiornamenti** e, per i Sì, per email ai supervisori; nel menu di assegnazione chi ha detto sì sale in cima con *✓ ha detto sì*.
 - **Promemoria**: ogni mattina, se ci sono convocazioni da sistemare nei prossimi giorni, arrivano le email (agli operatori solo le loro convocazioni da confermare, con il numero di reperibilità). Un operatore senza email o disattivato compare nel riepilogo dei supervisori con la nota *(senza email)* o *(disattivato)*.
+- **Colleghi in sola visualizzazione**: **Impostazioni → Accessi in sola visualizzazione** → email → **Aggiungi**, poi **Invia mail** (apre Outlook con il link e le istruzioni). Il collega entra dalla dashboard con *Crea account* e quella email, conferma l'indirizzo e poi entra con la sua password: vede solo Convocazioni, Riepilogo (con gli importi e l'Excel) e Operatori, senza tasti di modifica. **Togli** gli toglie l'accesso subito, anche se ha la pagina aperta.
 - **Password dimenticata**: nella schermata di accesso, scrivere l'email e premere *Password dimenticata?*: arriva un'email per sceglierne una nuova.
 - **Aggiungere o togliere un supervisore**: modificare l'elenco delle email sia in [`firebase/firestore.rules`](firebase/firestore.rules) (poi ripubblicare le regole in console) sia in `SUPERVISORI` di `app/config.js`. Per togliere l'accesso basta toglierlo dalle regole; l'account si può eliminare da Authentication → Utenti.
 
@@ -196,6 +205,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 - Le regole di Firestore ricontrollano a ogni lettura e scrittura chi è l'utente: *Nuovo codice* e la disattivazione di un operatore hanno effetto immediato.
 - Un supervisore entra solo dopo aver confermato il proprio indirizzo: chi si registrasse con la sua email non riceverebbe il link.
 - Firebase blocca da solo i tentativi di accesso ripetuti.
+- I colleghi in sola visualizzazione leggono solo i dati delle tre schede (non gli Aggiornamenti né le richieste per periodo) e non possono scrivere nulla: lo controllano le regole di Firestore, non solo la pagina.
 - Uscendo (*Esci*) si cancella anche la copia dei dati salvata sul dispositivo.
 - Le email partono dall'account Google che ha pubblicato lo script (limite di Google: 100 al giorno con Gmail, 1500 con Google Workspace); le notifiche ai supervisori sono al massimo una al minuto per operatore.
 - Il compenso on-site sta in un archivio che leggono solo i supervisori (`onsiteRiservato`): agli operatori non arriva mai, nemmeno nelle email.
