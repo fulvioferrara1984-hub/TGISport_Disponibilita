@@ -92,7 +92,7 @@
 
   function riga(e) {
     const st = STATI[e.stato] || STATI['da-assegnare'];
-    const conv = R.convocazione(e, A.regole), fine = R.fine(e, A.regole), notte = R.notturno(e, A.regole), annullato = e.stato === 'annullato';
+    const conv = DO.esc(R.convocazione(e, A.regole)), fine = DO.esc(R.fine(e, A.regole)), notte = R.notturno(e, A.regole), annullato = e.stato === 'annullato';
     const tag = [];
     if (e.tipo === 'supervisione') tag.push('<span class="tag tag-sup">Supervisione</span>');
     if (R.compensoCompetizione(e.competizione, A.regole) === 'dimezzato') tag.push('<span class="tag">Dimezzato</span>');
@@ -104,7 +104,7 @@
     }
     return '<div class="ev-riga' + (annullato ? ' annullato' : '') + (e.tipo === 'supervisione' ? ' sup' : '') + '" data-id="' + e.id + '" style="--comp: ' + R.coloreCompetizione(e.competizione, A.regole) + '">'
       + '<div class="ev-ora">' + (e.tipo === 'supervisione' ? '<b>' + (conv || '—') + '</b><small>' + (fine ? 'fine ' + fine : 'inizio turno') + '</small>'
-        : '<b>' + (e.orario || '—') + '</b><small>ritrovo ' + (conv || '—') + '</small>' + (fine ? '<small>fine ' + fine + '</small>' : ''))
+        : '<b>' + DO.esc(e.orario || '—') + '</b><small>ritrovo ' + (conv || '—') + '</small>' + (fine ? '<small>fine ' + fine + '</small>' : ''))
         + (notte ? '<small class="notte">notturno</small>' : '') + '</div>'
       + '<div class="ev-info"><b>' + DO.esc(e.tipo === 'supervisione' ? 'Supervisione' : e.titolo) + '</b>'
         + '<small>' + DO.esc([e.competizione, e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(' · ')) + '</small>'
@@ -130,7 +130,8 @@
       const extra = v.onsite ? ' — on-site a ' + v.onsite.luogo
         : (v.s === 'P' && v.n ? ' — ' + v.n : v.s === 'A' ? ' — non disponibile' : !v.s ? ' — disponibilità non indicata' : '')
         + (livello === 'sovrapposto' ? ' · sovrapposto' : livello === 'doppio' ? ' · ha già un turno' : '');
-      const testo = segno + ' ' + o.nome + (si ? ' — ✓ ha detto sì' + extra.replace(/^ — /, ' · ') : extra);
+      const vecchio = si && Q.primaDellaModifica(r, o.id) ? ' (prima della modifica)' : '';
+      const testo = segno + ' ' + o.nome + (si ? ' — ✓ ha detto sì' + vecchio + extra.replace(/^ — /, ' · ') : extra);
       return { o, peso: (si ? -10 : 0) + peso[v.s || ''] + (v.onsite ? 0.9 : livello === 'sovrapposto' ? 0.8 : livello ? 0.5 : 0), testo };
     }).sort((a, b) => a.peso - b.peso || a.o.nome.localeCompare(b.o.nome, 'it'));
     return '<select data-assegna="' + e.id + '"' + (e.stato === 'annullato' ? ' disabled' : '') + ' aria-label="Operatore">'

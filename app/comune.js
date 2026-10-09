@@ -114,6 +114,7 @@
     ruolo = r;
     DO.dati = DO.inDemo ? DO.demo : DO.firebase;
     DO.dati.configura(r, alloScadere);
+    controllaVersione();
   }
 
   // "Ricorda su questo dispositivo": l'accesso e la copia dei dati restano anche chiudendo il browser.
@@ -204,6 +205,38 @@
     });
   }
 
+  // ---------- nuova versione del sito ----------
+  // Una pagina rimasta aperta da prima di una pubblicazione continua a usare il codice vecchio (e può salvare dati
+  // nel formato vecchio): si confronta il ?v= degli script con quello della pagina pubblicata e si propone di ricaricare.
+  const VERSIONE = (typeof document !== 'undefined' && document.currentScript && (/[?&]v=(\d+)/.exec(document.currentScript.src) || [])[1]) || '';
+  const versioneDa = (html) => ((/app\/comune\.js\?v=(\d+)/.exec(String(html || '')) || [])[1] || '');
+  const nuovaVersione = (attuale, html) => { const v = versioneDa(html); return !!attuale && !!v && v !== attuale; };
+
+  function controllaVersione() {
+    if (!VERSIONE || typeof fetch !== 'function') return;
+    let avvisato = false;
+    const controlla = async () => {
+      if (avvisato || document.hidden) return;
+      try {
+        const r = await fetch(location.pathname + '?versione=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok || !nuovaVersione(VERSIONE, await r.text())) return;
+      } catch (e) { return; }
+      avvisato = true;
+      const b = document.createElement('div');
+      b.className = 'nuova-versione';
+      b.setAttribute('role', 'status');
+      b.innerHTML = '<span><b>È uscita una nuova versione del sito.</b> Ricarica la pagina per usarla.</span><button type="button" class="primario">Ricarica</button>';
+      b.querySelector('button').addEventListener('click', () => location.reload());
+      document.body.appendChild(b);
+    };
+    document.addEventListener('visibilitychange', controlla);
+    setInterval(controlla, 15 * 60 * 1000);
+  }
+
+  // Foto di Firestore arrivata solo perché sono cambiati i metadati (scrittura confermata dal server)
+  // senza cambiare provenienza (copia sul computer / server): non c'è niente di nuovo da disegnare.
+  const soloMetadati = (foto, eraDalServer) => !foto.metadata.fromCache === eraDalServer && foto.docChanges().length === 0;
+
   function mostraDemo() {
     if (!DO.inDemo) return;
     const b = document.createElement('div');
@@ -217,5 +250,6 @@
     giorniA, bloccato, OPERATIVO_PREDEFINITO, NON_PIU_RINUNCIABILE, azioniConvocazione,
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
+    versioneDa, nuovaVersione, soloMetadati,
   });
 })(window.DO = window.DO || {});

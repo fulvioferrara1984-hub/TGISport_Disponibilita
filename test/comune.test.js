@@ -75,3 +75,21 @@ test('indirizzo mailto con oggetto e testo', () => {
     "mailto:m@x.it?subject=Oggetto%20%C3%A8&body=Ciao%20Nicol%C3%B2%2C%20l'invito%20%26%20co%0D%0ARiga%202");
   assert.equal(DO.mailto('', 'X', 'Y'), 'mailto:?subject=X&body=Y');
 });
+
+test('nuova versione del sito pubblicata', () => {
+  assert.equal(DO.versioneDa('<script src="app/comune.js?v=23"></script>'), '23');
+  assert.equal(DO.versioneDa('<html></html>'), '');
+  assert.equal(DO.nuovaVersione('22', '<script src="app/comune.js?v=23"></script>'), true);
+  assert.equal(DO.nuovaVersione('22', '<script src="app/comune.js?v=22"></script>'), false);
+  assert.equal(DO.nuovaVersione('', '<script src="app/comune.js?v=23"></script>'), false);   // versione attuale sconosciuta
+  assert.equal(DO.nuovaVersione('22', 'Errore 404'), false);                                  // pagina non letta bene
+});
+
+test('foto di Firestore con soli metadati cambiati', () => {
+  const foto = (cambi, daCache) => ({ metadata: { fromCache: daCache }, docChanges: () => new Array(cambi) });
+  assert.equal(DO.soloMetadati(foto(0, false), true), true);    // scrittura confermata dal server: niente di nuovo
+  assert.equal(DO.soloMetadati(foto(2, false), true), false);   // documenti cambiati
+  assert.equal(DO.soloMetadati(foto(0, false), false), false);  // dalla copia sul computer al server
+  assert.equal(DO.soloMetadati(foto(0, true), true), false);    // rete persa: di nuovo la copia sul computer
+});
+

@@ -158,3 +158,15 @@ test('allineamento: una correzione che fallisce non si ripete a ogni aggiornamen
   } finally { console.warn = avvisi; }
   assert.equal(tentativi, 1);
 });
+
+test('campi da scrivere sulla richiesta com\'è adesso', () => {
+  const c = Q.copiaEvento(partita(), regole), spostata = Q.copiaEvento(partita({ orario: '18:00' }), regole);
+  const r = richiesta({ evento: c });
+  assert.deepEqual(Q.campiDaScrivere(r, { aperta: true, assegnato: '', evento: spostata, aggiornata: true }), { evento: spostata, aggiornata: true });
+  assert.deepEqual(Q.campiDaScrivere(r, { aperta: false, assegnato: 'a' }), { aperta: false, assegnato: 'a' });
+  // un'altra dashboard ha già scritto la stessa correzione: niente da scrivere, «aggiornata» non si sposta
+  assert.equal(Q.campiDaScrivere(richiesta({ evento: spostata }), { aperta: true, assegnato: '', evento: spostata, aggiornata: true }), null);
+  assert.equal(Q.campiDaScrivere(richiesta({ evento: spostata, aperta: false, assegnato: 'a' }), { aperta: false, assegnato: 'a', evento: spostata, aggiornata: true }), null);
+  assert.deepEqual(Q.campiDaScrivere(richiesta({ aperta: false, assegnato: 'a' }), { aperta: false, assegnato: 'b' }), { aperta: false, assegnato: 'b' });
+});
+

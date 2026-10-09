@@ -70,6 +70,17 @@
     return { si: con('si'), no: con('no'), attesa: dest.filter((id) => !risposta(richiesta, id)).length };
   }
 
+  // Correzione da applicare alla richiesta com'è adesso (letta nella transazione): se un'altra dashboard
+  // l'ha già scritta non resta niente, e «aggiornata» non si sposta
+  function campiDaScrivere(attuale, campi) {
+    const out = {};
+    if ('aperta' in campi && (attuale.aperta !== campi.aperta || (attuale.assegnato || '') !== (campi.assegnato || ''))) {
+      Object.assign(out, { aperta: campi.aperta, assegnato: campi.assegnato || '' });
+    }
+    if (campi.evento && copiaDiversa(attuale.evento, campi.evento)) Object.assign(out, { evento: campi.evento, aggiornata: true });
+    return Object.keys(out).length ? out : null;
+  }
+
   // assegnato: l'operatore ha rifiutato questo evento o va sostituito proprio qui
   const preselezione = ({ disponibilita, impegnato, onsite, giaChiesto, assegnato }) =>
     (disponibilita === 'D' || disponibilita === 'P') && !impegnato && !onsite && !giaChiesto && !assegnato;
@@ -93,5 +104,5 @@
     };
   }
 
-  DO.richiesteEvento = { ms, copiaEvento, copiaDiversa, chiedibile, allineamento, allineatore, statoPerOperatore, primaDellaModifica, riassunto, preselezione };
+  DO.richiesteEvento = { ms, copiaEvento, copiaDiversa, chiedibile, allineamento, campiDaScrivere, allineatore, statoPerOperatore, primaDellaModifica, riassunto, preselezione };
 })(window.DO = window.DO || {});

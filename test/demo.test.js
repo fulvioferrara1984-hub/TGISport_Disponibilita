@@ -294,3 +294,26 @@ test('richiesta per evento: richiederla di nuovo senza cambi non segna le rispos
   await D.chiediPerEvento(e, Object.fromEntries(Object.entries(copia).reverse()), ['op-demo3'], { messaggio: '', email: false, contatti: [] });
   assert.equal((await richiestaDi(e.id)).aggiornata, prima);
 });
+
+test('richiesta per evento: due dashboard che correggono insieme non spostano l\'istante della modifica', async () => {
+  const e = await nuovoEvento('Richiesta-Due-Dashboard');
+  await chiedi(e, ['op-demo1']);
+  const spostata = DO.richiesteEvento.copiaEvento(Object.assign({}, e, { orario: '18:00' }), DO.regole.complete(null));
+  const campi = { aperta: true, assegnato: '', evento: spostata, aggiornata: true };
+  await D.allineaRichiestaEvento(e.id, campi);
+  const prima = (await richiestaDi(e.id)).aggiornata;
+  await new Promise((r) => setTimeout(r, 5));
+  await D.allineaRichiestaEvento(e.id, campi);
+  assert.equal((await richiestaDi(e.id)).aggiornata, prima);
+});
+
+test('richiesta per evento: all\'operatore solo quelle da oggi in poi', async () => {
+  const e = await nuovoEvento('Richiesta-Vecchia');
+  await chiedi(e, ['op-demo1']);
+  const salvati = JSON.parse(localStorage.getItem('do-demo-dati'));
+  salvati.richiesteEvento.find((x) => x.id === e.id).evento.data = tra(-2);
+  localStorage.setItem('do-demo-dati', JSON.stringify(salvati));
+  await comeOperatore('DEMO-0001');
+  assert.ok(!(await D.mieRichiesteEvento()).some((r) => r.id === e.id));
+});
+

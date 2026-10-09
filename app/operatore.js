@@ -88,7 +88,7 @@
         + (giorniOn[d] ? '<span class="onsite-tag">On-site · ' + DO.esc(giorniOn[d].luogo) + '</span>'
           : bloccatoOra(d) ? '<span class="bloccato-tag">Bloccato: contatta il supervisore</span>' : '')
         + convocazioni.filter((c) => c.data === d && c.stato !== 'annullato' && c.stato !== 'rifiutato')
-          .map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + (ritrovo(c) || '—') + '</span>').join('') + '</div>'
+          .map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + DO.esc(ritrovo(c) || '—') + '</span>').join('') + '</div>'
         + '<div class="giorno-scelte"><div class="stati" role="radiogroup" aria-label="Disponibilità di ' + g.nome + ' ' + g.num + '">' + stati + '</div>'
         + nota + '</div></li>';
     }).join('');
@@ -151,9 +151,9 @@
 
   function rigaConvocazione(c) {
     const g = DO.giorno(c.data), sup = c.tipo === 'supervisione';
-    const fine = fineTurno(c);
-    const orari = sup ? (fine ? 'Turno <span class="ritrovo">' + (ritrovo(c) || '—') + ' – ' + fine + '</span>' : 'Inizio turno <span class="ritrovo">' + (ritrovo(c) || '—') + '</span>')
-      : (c.orario ? 'Evento alle ' + c.orario + ' · ' : '') + '<span class="ritrovo">Ritrovo ' + (ritrovo(c) || '—') + (fine ? ' – fine turno ' + fine : '') + '</span>';
+    const fine = DO.esc(fineTurno(c)), inizio = DO.esc(ritrovo(c) || '—');
+    const orari = sup ? (fine ? 'Turno <span class="ritrovo">' + inizio + ' – ' + fine + '</span>' : 'Inizio turno <span class="ritrovo">' + inizio + '</span>')
+      : (c.orario ? 'Evento alle ' + DO.esc(c.orario) + ' · ' : '') + '<span class="ritrovo">Ritrovo ' + inizio + (fine ? ' – fine turno ' + fine : '') + '</span>';
     const { azioni: elenco, spiegazione } = DO.azioniConvocazione(c.stato, nellaFinestra(c.data));
     const etichetta = { annullato: '<span class="stato-chip st-annullato">Annullata</span>', confermato: '<span class="stato-chip st-D">Confermata</span>', rifiutato: '<span class="stato-chip st-A">Non puoi</span>' }[c.stato] || '';
     const azioni = etichetta + elenco.map((a) => tasto(a, c)).join('');
@@ -278,7 +278,7 @@
         + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
         + '<div class="conv-info"><b>' + DO.esc(sup ? 'Turno di supervisione' : e.titolo) + '</b>'
         + '<span>' + DO.esc([e.competizione, e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(', ')) + '</span>'
-        + '<span>' + g.breve + ' ' + g.num + ' ' + g.mese + ' · <span class="ritrovo">' + orari + '</span></span>'
+        + '<span>' + g.breve + ' ' + g.num + ' ' + g.mese + ' · <span class="ritrovo">' + DO.esc(orari) + '</span></span>'
         + (r.messaggio ? '<span class="onsite-nota">' + DO.esc(r.messaggio) + '</span>' : '') + '</div>'
         + '<div class="conv-azioni">' + azioni + '</div></div>';
     }).join('');

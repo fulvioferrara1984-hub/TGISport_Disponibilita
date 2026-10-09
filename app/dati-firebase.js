@@ -284,8 +284,10 @@
   function ascolta(cb) {
     const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null, operativo: null, onsite: null, compensiOnsite: null, richiesteEvento: null };
     // eventi e richieste per evento arrivati dal server (non solo dalla copia sul computer): solo allora la dashboard le allinea
-    const dalServer = { eventi: false, richiesteEvento: false };
-    const pronto = () => { if (Object.values(stato).every((v) => v !== null)) cb(Object.assign({ sincronizzato: dalServer.eventi && dalServer.richiesteEvento }, stato)); };
+    // (anche le regole: ritrovo e fine della copia per gli operatori si calcolano da lì)
+    const dalServer = { eventi: false, richiesteEvento: false, regole: false };
+    let ultimeRegole = '';
+    const pronto = () => { if (Object.values(stato).every((v) => v !== null)) cb(Object.assign({ sincronizzato: dalServer.eventi && dalServer.richiesteEvento && dalServer.regole }, stato)); };
     let fermo = false;
     const errore = (e) => {
       if (fermo) return;
@@ -324,11 +326,16 @@
       }, errore),
       // eventi e turni della stagione in corso (da agosto): calendario e riepilogo senza altre letture
       F.onSnapshot(F.query(F.collection(db, 'eventi'), F.where('data', '>=', DO.regole.stagione(DO.oggi()).da)), { includeMetadataChanges: true }, (s) => {
+        if (stato.eventi !== null && DO.soloMetadati(s, dalServer.eventi)) return;
         stato.eventi = s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
         dalServer.eventi = !s.metadata.fromCache;
         pronto();
       }, erroreNuovo('eventi', [])),
-      F.onSnapshot(F.doc(db, 'impostazioni', 'regole'), (d) => {
+      F.onSnapshot(F.doc(db, 'impostazioni', 'regole'), { includeMetadataChanges: true }, (d) => {
+        const daServer = !d.metadata.fromCache, testo = JSON.stringify(d.exists() ? d.data() : null);
+        if (stato.regole !== null && daServer === dalServer.regole && testo === ultimeRegole) return;
+        ultimeRegole = testo;
+        dalServer.regole = daServer;
         stato.regole = DO.regole.complete(d.exists() ? d.data() : null);
         pronto();
       }, erroreNuovo('regole', DO.regole.complete(null))),
@@ -347,6 +354,7 @@
         pronto();
       }, erroreNuovo('compensiOnsite', {}, SENZA_ONSITE)),
       F.onSnapshot(F.query(F.collection(db, 'richiesteEvento'), F.where('evento.data', '>=', DO.regole.stagione(DO.oggi()).da)), { includeMetadataChanges: true }, (s) => {
+        if (stato.richiesteEvento !== null && DO.soloMetadati(s, dalServer.richiesteEvento)) return;
         stato.richiesteEvento = s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
         dalServer.richiesteEvento = !s.metadata.fromCache;
         pronto();
@@ -710,14 +718,17 @@
     const messaggio = String((extra && extra.messaggio) || '').trim().slice(0, 300);
     const rif = F.doc(db, 'richiesteEvento', evento.id);
     try {
-      const d = await F.getDoc(rif);
-      if (!d.exists()) {
-        await F.setDoc(rif, { destinatari: dest, messaggio, evento: copia, aggiornata: F.serverTimestamp(), risposte: {}, aperta: true, assegnato: '', creata: new Date().toISOString() });
-      } else {
+      // in una transazione: due supervisori che chiedono insieme per lo stesso evento si sommano, non si sovrascrivono
+      await F.runTransaction(db, async (t) => {
+        const d = await t.get(rif);
+        if (!d.exists()) {
+          t.set(rif, { destinatari: dest, messaggio, evento: copia, aggiornata: F.serverTimestamp(), risposte: {}, aperta: true, assegnato: '', creata: new Date().toISOString() });
+          return;
+        }
         const cambiata = DO.richiesteEvento.copiaDiversa(d.data().evento, copia);
-        await F.updateDoc(rif, Object.assign({ destinatari: F.arrayUnion(...dest), evento: copia, aperta: true, assegnato: '' },
+        t.update(rif, Object.assign({ destinatari: F.arrayUnion(...dest), evento: copia, aperta: true, assegnato: '' },
           messaggio ? { messaggio } : {}, cambiata ? { aggiornata: F.serverTimestamp() } : {}));
-      }
+      });
     } catch (e) {
       // regole non ancora pubblicate (le impostazioni si leggono ancora) oppure sessione davvero scaduta
       if (e && e.code === 'permission-denied' && await F.getDoc(F.doc(db, 'impostazioni', 'regole')).then(() => true, () => false)) throw new Error(SENZA_REGOLE_EVENTO);
@@ -730,17 +741,32 @@
     return { senzaEmail, inviate };
   }
 
-  // Correzione calcolata da DO.richiesteEvento.allineamento; chi chiama mostra gli errori solo in console
+  // Correzione calcolata da DO.richiesteEvento.allineamento, riletta in una transazione: se un'altra dashboard
+  // l'ha già scritta non si scrive niente. Chi chiama mostra gli errori solo in console.
   function allineaRichiestaEvento(id, campi) {
-    return F.updateDoc(F.doc(db, 'richiesteEvento', id), Object.assign({}, campi, campi.aggiornata ? { aggiornata: F.serverTimestamp() } : {}));
+    const rif = F.doc(db, 'richiesteEvento', id);
+    return F.runTransaction(db, async (t) => {
+      const d = await t.get(rif);
+      const nuovi = d.exists() && DO.richiesteEvento.campiDaScrivere(d.data(), campi);
+      if (nuovi) t.update(rif, Object.assign(nuovi, nuovi.aggiornata ? { aggiornata: F.serverTimestamp() } : {}));
+    });
   }
 
   // Operatori: solo le richieste mandate a loro (le regole lo pretendono anche nella ricerca)
   async function mieRichiesteEvento() {
     const op = operatoreCorrente || await caricaOperatore();
+    const oggi = DO.oggi();
+    const mie = F.query(F.collection(db, 'richiesteEvento'), F.where('destinatari', 'array-contains', op.id));
     try {
-      const s = await F.getDocs(F.query(F.collection(db, 'richiesteEvento'), F.where('destinatari', 'array-contains', op.id)));
-      return s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+      let s;
+      try {
+        // con l'indice composto destinatari + evento.data (vedi README) si leggono solo quelle da oggi in poi
+        s = await F.getDocs(F.query(mie, F.where('evento.data', '>=', oggi)));
+      } catch (e) {
+        if (e.code !== 'failed-precondition') throw e;
+        s = await F.getDocs(mie);
+      }
+      return s.docs.map((d) => Object.assign({ id: d.id }, d.data())).filter((r) => ((r.evento || {}).data || '') >= oggi);
     } catch (e) {
       // regole non ancora pubblicate: la pagina funziona senza richieste per evento
       if (e.code === 'permission-denied') return [];

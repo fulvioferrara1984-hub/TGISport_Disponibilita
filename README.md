@@ -88,7 +88,7 @@ Quando cambiano [`firebase/firestore.rules`](firebase/firestore.rules) o [`backe
 2. **regole**, quando il sito nuovo è online (GitHub Pages lo pubblica in un paio di minuti; i telefoni possono tenere la pagina vecchia fino a 10 minuti): pubblicarle prima disconnetterebbe chi ha ancora la pagina vecchia;
 3. **script**: fino a quel momento le email partono con il testo precedente (per esempio senza la fine turno).
 
-Dopo **ogni** pubblicazione del sito, **ricaricare la dashboard** su ogni computer dei supervisori (o chiudere e riaprire la scheda) prima di salvare impostazioni o esportare il Riepilogo: una scheda rimasta aperta da prima continua a usare la versione vecchia.
+Dopo **ogni** pubblicazione del sito, **ricaricare la dashboard** su ogni computer dei supervisori (o chiudere e riaprire la scheda) prima di salvare impostazioni o esportare il Riepilogo: una scheda rimasta aperta da prima continua a usare la versione vecchia. Dalla versione 22 le pagine aperte (dashboard e pagina operatori) se ne accorgono da sole: in alto compare *È uscita una nuova versione del sito* con il tasto **Ricarica** (controllo quando si torna sulla scheda e ogni 15 minuti).
 
 Come pubblicarli:
 
@@ -132,8 +132,9 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 
 1. **Sito**: finché le regole nuove non sono pubblicate la pagina operatori non mostra le richieste per evento (senza errori), la dashboard avvisa *Richieste per evento non disponibili: pubblica le nuove regole di Firestore* e il tasto *Chiedi disponibilità* risponde *Pubblica le nuove regole di Firestore (vedi README).*
 2. **Regole**: incolla [`firebase/firestore.rules`](firebase/firestore.rules) in Firebase → Firestore Database → Regole → **Pubblica**. Le regole lasciano a ciascun operatore solo la propria risposta, con la richiesta aperta e fino al giorno dell'evento.
-3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste per evento non partono e la dashboard lo segnala dopo l'invio.
-4. **Dashboard**: ricaricala su ogni computer dei supervisori.
+3. **Indice** (una volta): Firebase → Firestore Database → **Indici** → *Composito* → **Crea indice**: raccolta `richiesteEvento`, campi `destinatari` *Array contains* ed `evento.data` *Crescente*, ambito *Raccolta* → **Crea** (pronto in pochi minuti). Senza l'indice la pagina operatori funziona lo stesso, ma legge anche le richieste passate.
+4. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste per evento non partono e la dashboard lo segnala dopo l'invio.
+5. **Dashboard**: ricaricala su ogni computer dei supervisori.
 
 ### Outlook come app di posta
 

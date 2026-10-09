@@ -383,15 +383,16 @@
 
   async function allineaRichiestaEvento(id, campi) {
     const r = dati.richiesteEvento.find((x) => x.id === id);
-    if (!r) return;
-    Object.assign(r, campi, campi.aggiornata ? { aggiornata: new Date().toISOString() } : {});
+    const nuovi = r && DO.richiesteEvento.campiDaScrivere(r, campi);
+    if (!nuovi) return;
+    Object.assign(r, nuovi, nuovi.aggiornata ? { aggiornata: new Date().toISOString() } : {});
     salva();
   }
 
   async function mieRichiesteEvento() {
     await pausa(100);
     const op = operatoreValido();
-    return copia(dati.richiesteEvento.filter((r) => r.destinatari.includes(op.id)));
+    return copia(dati.richiesteEvento.filter((r) => r.destinatari.includes(op.id) && r.evento.data >= DO.oggi()));
   }
 
   async function rispondiRichiestaEvento(id, risposta) {
