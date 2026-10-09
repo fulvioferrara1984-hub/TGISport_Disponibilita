@@ -29,6 +29,8 @@
   const conflitto = (e, idOp) => R.conflitto(e, altriImpegni(e, idOp), A.regole);
   const orariTurno = (x) => { const a = R.convocazione(x, A.regole), b = R.fine(x, A.regole); return (a || '—') + (b ? '–' + b : ''); };
   const elencoTurni = (lista) => lista.map((x) => titolo(x) + ' ' + orariTurno(x)).join(', ');
+  const Q = DO.richiesteEvento;
+  const richiestaDi = (id) => A.richiesteEvento.find((r) => r.id === id) || null;
 
   // ---------- disegno ----------
   function filtroStato(e) {
@@ -120,13 +122,16 @@
   function selettore(e) {
     const ammessi = A.operatori.filter((o) => (o.attivo || o.id === e.operatoreId) && (e.tipo !== 'supervisione' || o.ruolo === 'TL' || o.id === e.operatoreId));
     const peso = { D: 0, P: 1, '': 2, A: 3 };
+    // chi ha risposto «sì» alla richiesta per questo evento sale in cima
+    const r = richiestaDi(e.id), hannoDettoSi = new Set(r ? Q.riassunto(r).si : []);
     const voci = ammessi.map((o) => {
-      const v = A.valore(o.id, e.data), { livello } = conflitto(e, o.id);
+      const v = A.valore(o.id, e.data), { livello } = conflitto(e, o.id), si = hannoDettoSi.has(o.id);
       const segno = v.onsite || livello === 'sovrapposto' ? '⛔' : livello === 'doppio' ? '⚠' : { D: '✓', P: '½', A: '✕' }[v.s] || '·';
       const extra = v.onsite ? ' — on-site a ' + v.onsite.luogo
         : (v.s === 'P' && v.n ? ' — ' + v.n : v.s === 'A' ? ' — non disponibile' : !v.s ? ' — disponibilità non indicata' : '')
         + (livello === 'sovrapposto' ? ' · sovrapposto' : livello === 'doppio' ? ' · ha già un turno' : '');
-      return { o, peso: peso[v.s || ''] + (v.onsite ? 0.9 : livello === 'sovrapposto' ? 0.8 : livello ? 0.5 : 0), testo: segno + ' ' + o.nome + extra };
+      const testo = segno + ' ' + o.nome + (si ? ' — ✓ ha detto sì' + extra.replace(/^ — /, ' · ') : extra);
+      return { o, peso: (si ? -10 : 0) + peso[v.s || ''] + (v.onsite ? 0.9 : livello === 'sovrapposto' ? 0.8 : livello ? 0.5 : 0), testo };
     }).sort((a, b) => a.peso - b.peso || a.o.nome.localeCompare(b.o.nome, 'it'));
     return '<select data-assegna="' + e.id + '"' + (e.stato === 'annullato' ? ' disabled' : '') + ' aria-label="Operatore">'
       + '<option value="">— ' + (e.tipo === 'supervisione' ? 'Scegli un Remote TL' : 'Scegli operatore') + ' —</option>'
@@ -269,8 +274,89 @@
     ritrovoAuto();
     $('evd-storico').innerHTML = (e.storico || []).length ? '<b>Storico</b>' + e.storico.slice().reverse().map((s) =>
       '<span>' + DO.quando(s.quando) + ' · ' + DO.esc(s.testo) + '</span>').join('') : '';
+    disegnaRichiestaEvento();
     $('dlg-evento').showModal();
   }
+
+  // ---------- richiesta di disponibilità per questo evento ----------
+  const eventoAttuale = () => (inModifica && A.eventi.find((x) => x.id === inModifica.id)) || inModifica;
+
+  // «Sì: Marco Rossi (prima della modifica) · No: Luca Bianchi · In attesa: 2», e il tasto solo se l'evento è scoperto
+  function disegnaRichiestaEvento() {
+    const e = eventoAttuale(), r = richiestaDi(e.id), puoChiedere = !Q.chiedibile(e, DO.oggi());
+    $('evd-richiesta').hidden = !r && !puoChiedere;
+    $('evd-chiedi').hidden = !puoChiedere;
+    if (!r) { $('evd-risposte').innerHTML = ''; return; }
+    const { si, no, attesa } = Q.riassunto(r);
+    const parti = [];
+    if (si.length) parti.push('<b>Sì:</b> ' + si.map((id) => DO.esc(nomeOp(id)) + (Q.primaDellaModifica(r, id) ? ' <small>(prima della modifica)</small>' : '')).join(', '));
+    if (no.length) parti.push('<b>No:</b> ' + no.map((id) => DO.esc(nomeOp(id))).join(', '));
+    if (attesa) parti.push('In attesa: ' + attesa);
+    $('evd-risposte').innerHTML = 'Disponibilità chiesta · ' + parti.join(' · ');
+  }
+
+  $('evd-chiedi').addEventListener('click', () => apriChiedi(eventoAttuale()));
+
+  let daChiedere = null;
+  function apriChiedi(e) {
+    daChiedere = e;
+    const g = DO.giorno(e.data), sup = e.tipo === 'supervisione';
+    $('chi-evento').textContent = titolo(e) + ' · ' + g.nome + ' ' + g.num + ' ' + g.mese + ' · ' + (sup ? 'turno ' : 'ritrovo ') + orariTurno(e);
+    $('chi-messaggio').value = '';
+    $('chi-email').checked = true;
+    $('chi-errore').hidden = true;
+    const r = richiestaDi(e.id);
+    const ammessi = A.operatori.filter((o) => o.attivo && (!sup || o.ruolo === 'TL')).sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+    $('chi-destinatari').innerHTML = ammessi.length ? ammessi.map((o) => {
+      const v = A.valore(o.id, e.data), { livello } = conflitto(e, o.id);
+      const chiesto = !!r && r.destinatari.includes(o.id), risposta = r && (r.risposte || {})[o.id];
+      const segni = [{ D: '✓ disponibile', P: '½ parziale' + (v.n ? ' (' + v.n + ')' : ''), A: '✕ non disponibile' }[v.s] || '· disponibilità non indicata'];
+      if (v.onsite) segni[0] = '⛔ on-site a ' + v.onsite.luogo;
+      else if (livello === 'sovrapposto') segni.push('⛔ sovrapposto');
+      else if (livello === 'doppio') segni.push('ha già un turno');
+      if (chiesto) segni.push('già chiesto' + (risposta ? ': ha risposto ' + (risposta.r === 'si' ? 'sì' : 'no') : ''));
+      if (!o.email) segni.push('senza email');
+      const spunta = Q.preselezione({ disponibilita: v.s, impegnato: altriImpegni(e, o.id).length > 0, onsite: !!v.onsite, giaChiesto: chiesto });
+      return '<li><label><input type="checkbox" value="' + o.id + '"' + (spunta ? ' checked' : '') + '><span class="chi"><b>' + DO.esc(o.nome) + '</b><small>'
+        + DO.esc(segni.join(' · ')) + '</small></span></label></li>';
+    }).join('') : '<li class="nota">' + (sup ? 'Nessun Remote TL attivo.' : 'Nessun operatore attivo.') + '</li>';
+    aggiornaBottoneChiedi();
+    $('dlg-chiedi').showModal();
+  }
+
+  function aggiornaBottoneChiedi() {
+    const n = $('chi-destinatari').querySelectorAll('input:checked').length;
+    $('chi-invia').disabled = !n;
+    $('chi-invia').textContent = n ? 'Chiedi a ' + n + (n === 1 ? ' operatore' : ' operatori') : 'Scegli gli operatori';
+  }
+  $('chi-destinatari').addEventListener('change', aggiornaBottoneChiedi);
+  $('chi-tutti').addEventListener('click', () => {
+    const caselle = [...$('chi-destinatari').querySelectorAll('input')];
+    const tutti = caselle.every((x) => x.checked);
+    caselle.forEach((x) => { x.checked = !tutti; });
+    aggiornaBottoneChiedi();
+  });
+
+  $('form-chiedi').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const e = (daChiedere && A.eventi.find((x) => x.id === daChiedere.id)) || daChiedere;
+    const destinatari = [...$('chi-destinatari').querySelectorAll('input:checked')].map((x) => x.value);
+    const messaggio = $('chi-messaggio').value.trim(), email = $('chi-email').checked;
+    const contatti = A.operatori.filter((o) => destinatari.includes(o.id)).map((o) => ({ nome: o.nome, email: o.email }));
+    $('chi-invia').disabled = true;
+    $('chi-invia').textContent = 'Invio in corso…';
+    $('chi-errore').hidden = true;
+    try {
+      const r = await DO.dati.chiediPerEvento(e, Q.copiaEvento(e, A.regole), destinatari, { messaggio, email, contatti, urlSito: A.linkSito() });
+      $('dlg-chiedi').close();
+      const g = DO.giorno(e.data);
+      A.esitoRichiesta(r, email, 'Ciao! I supervisori TGI Sport ti chiedono se sei disponibile per ' + titolo(e) + ' (' + g.breve.toLowerCase() + ' ' + g.num + ' '
+        + g.meseBreve + ', ' + (e.tipo === 'supervisione' ? 'turno ' : 'ritrovo ') + orariTurno(e) + ').' + (messaggio ? '\n' + messaggio : '') + '\n\nRispondi qui: ' + A.linkSito());
+    } catch (err) {
+      mostraErrore('chi-errore', err.message);
+      aggiornaBottoneChiedi();
+    }
+  });
 
   function aggiungiOpzione(sel, valore) {
     if (valore && ![...sel.options].some((o) => o.value === valore)) sel.insertAdjacentHTML('beforeend', '<option>' + DO.esc(valore) + '</option>');
@@ -517,7 +603,7 @@
   });
 
   A.registra({
-    aggiorna: disegna,
+    aggiorna: () => { disegna(); if ($('dlg-evento').open && inModifica) disegnaRichiestaEvento(); },
     mostra: (nome) => { if (nome === 'convocazioni') disegna(); },
     // arrivando da un altro punto (calendario, Aggiornamenti) si toglie ogni filtro: l'evento cercato deve vedersi
     vaiA: (data) => { if (data) inizio = DO.martedi(data); $('ev-filtro-stato').value = ''; $('ev-filtro-comp').value = ''; disegna(); },

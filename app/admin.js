@@ -10,6 +10,8 @@
   let lun = DO.lunedi(oggi);
   let operatori = [], disp = {}, feed = [], richieste = [], nonLettiOps = new Set(), eventi = [], regole = DO.regole.complete(null);
   let onsite = [], compensiOnsite = {};   // deployment on-site e compensi (solo supervisori)
+  let richiesteEvento = [];               // richieste di disponibilità per un singolo evento
+  const allineamentiTentati = new Set();  // correzioni già scritte in questa sessione: nessuna ripetizione se una fallisce
   let operativo = Object.assign({}, DO.OPERATIVO_PREDEFINITO);
   let giornoSel = '', selezionati = new Set();
   let vista = 'griglia', ferma = null, visti = null;
@@ -55,6 +57,8 @@
     operativo = stato.operativo || Object.assign({}, DO.OPERATIVO_PREDEFINITO);
     onsite = stato.onsite || [];
     compensiOnsite = stato.compensiOnsite || {};
+    richiesteEvento = stato.richiesteEvento || [];
+    if (stato.sincronizzato) allineaRichiesteEvento();
     onsitePerOp = {};
     richieste = statoRichieste(stato.richieste);
     nonLettiOps = new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
@@ -69,6 +73,20 @@
     moduli.forEach((m) => m.aggiorna && m.aggiorna());
   }
 
+  // Ogni dashboard aperta tiene le richieste per evento allineate agli eventi (scritture idempotenti):
+  // aperta finché l'evento è scoperto, chiusa all'assegnazione, copia della partita aggiornata se cambia.
+  function allineaRichiesteEvento() {
+    richiesteEvento.forEach((r) => {
+      const e = eventi.find((x) => x.id === r.id) || null;
+      const campi = DO.richiesteEvento.allineamento(r, e, e ? DO.richiesteEvento.copiaEvento(e, regole) : null, oggi);
+      if (!campi) return;
+      const chiave = r.id + JSON.stringify(campi);
+      if (allineamentiTentati.has(chiave)) return;
+      allineamentiTentati.add(chiave);
+      DO.dati.allineaRichiestaEvento(r.id, campi).catch((err) => console.warn('Richiesta per evento non allineata:', r.id, err.message));
+    });
+  }
+
   // Le altre schede (convocazioni, riepilogo, impostazioni) sono in file a parte e leggono da qui.
   const moduli = [];
   const impegni = (id, d) => eventi.filter((e) => e.operatoreId === id && e.data === d && e.stato !== 'annullato');
@@ -81,8 +99,9 @@
     get operativo() { return operativo; },
     get onsite() { return onsite; },
     get compensiOnsite() { return compensiOnsite; },
+    get richiesteEvento() { return richiesteEvento; },
     get vista() { return vista; },
-    valore, impegni, etichettaGiorno, linkSito, mostra: (n) => mostra(n),
+    valore, impegni, etichettaGiorno, linkSito, mostra: (n) => mostra(n), esitoRichiesta: (r, email, whatsapp) => esitoRichiesta(r, email, whatsapp),
     // porta le schede (es. Convocazioni) alla settimana che contiene questo giorno
     vaiA: (data) => moduli.forEach((m) => m.vaiA && m.vaiA(data)),
   };
@@ -431,29 +450,32 @@
     try {
       const r = await DO.dati.creaRichiesta({ da, a, messaggio, destinatari, contatti, email, urlSito: linkSito() });
       $('dlg-richiesta').close();
-      // la richiesta è già sulla pagina degli operatori; le email partono in sottofondo
-      const righe = ['La richiesta compare già sulla pagina di ciascun operatore.'];
-      if (email) righe.push('Email in partenza…');
-      if (r.senzaEmail.length) righe.push('Senza email registrata: ' + r.senzaEmail.join(', ') + '.');
-      $('esito-testo').innerHTML = righe.map((x) => '<p>' + DO.esc(x) + '</p>').join('');
-      $('esito-whatsapp').onclick = () => DO.copia(messaggioWhatsApp(da, a, messaggio), 'Messaggio copiato: incollalo su WhatsApp.');
-      $('dlg-esito').showModal();
-      if (email) {
-        r.inviate.then((x) => {
-          const testo = x.email ? 'Email inviata a ' + x.email + (x.email === 1 ? ' operatore.' : ' operatori.') : 'Nessuna email inviata.';
-          const avvisi = (x.nonInviate && x.nonInviate.length ? ' Non partita per: ' + x.nonInviate.join(', ') + '.' : '')
-            + (x.quotaRestante !== undefined && x.quotaRestante < 20 ? ' Oggi Google permette ancora ' + x.quotaRestante + ' email.' : '');
-          const p = $('esito-testo').querySelector('p:nth-child(2)');
-          if (p && $('dlg-esito').open) p.textContent = testo + avvisi;
-          DO.avviso(testo + avvisi, avvisi ? 'errore' : 'ok', 6000);
-        }).catch((e) => DO.avviso('Richiesta salvata, ma le email non sono partite: ' + e.message, 'errore', 8000));
-      }
+      esitoRichiesta(r, email, messaggioWhatsApp(da, a, messaggio));
     } catch (err) {
       $('ric-errore').textContent = err.message;
       $('ric-errore').hidden = false;
       aggiornaBottoneRichiesta();
     }
   });
+
+  // Esito di una richiesta (per periodo o per evento): è già sulla pagina degli operatori, le email partono in sottofondo.
+  function esitoRichiesta(r, email, whatsapp) {
+    const righe = ['La richiesta compare già sulla pagina di ciascun operatore.'];
+    if (email) righe.push('Email in partenza…');
+    if (r.senzaEmail.length) righe.push('Senza email registrata: ' + r.senzaEmail.join(', ') + '.');
+    $('esito-testo').innerHTML = righe.map((x) => '<p>' + DO.esc(x) + '</p>').join('');
+    $('esito-whatsapp').onclick = () => DO.copia(whatsapp, 'Messaggio copiato: incollalo su WhatsApp.');
+    $('dlg-esito').showModal();
+    if (!email) return;
+    r.inviate.then((x) => {
+      const testo = x.email ? 'Email inviata a ' + x.email + (x.email === 1 ? ' operatore.' : ' operatori.') : 'Nessuna email inviata.';
+      const avvisi = (x.nonInviate && x.nonInviate.length ? ' Non partita per: ' + x.nonInviate.join(', ') + '.' : '')
+        + (x.quotaRestante !== undefined && x.quotaRestante < 20 ? ' Oggi Google permette ancora ' + x.quotaRestante + ' email.' : '');
+      const p = $('esito-testo').querySelector('p:nth-child(2)');
+      if (p && $('dlg-esito').open) p.textContent = testo + avvisi;
+      DO.avviso(testo + avvisi, avvisi ? 'errore' : 'ok', 6000);
+    }).catch((e) => DO.avviso('Richiesta salvata, ma le email non sono partite: ' + e.message, 'errore', 8000));
+  }
 
   function schedaRichiesta(x, compatta) {
     const tot = x.destinatari.length, fatti = x.destinatari.filter((o) => !o.mancanti).length;
@@ -515,6 +537,7 @@
     $('feed').innerHTML = feed.map((x) => {
       if (x.tipo === 'convocazione') return vocePerConvocazione(x);
       if (x.tipo === 'onsite') return vocePerOnsite(x);
+      if (x.tipo === 'risposta-evento') return vocePerRispostaEvento(x);
       const n = x.modifiche.length;
       const modifiche = x.modifiche.slice(0, 14).map((m) => {
         const g = DO.giorno(m.d);
@@ -548,6 +571,16 @@
       + ' · ' + DO.esc(ev.luogo || '') + periodo + (si && ev.ruolo ? ' (' + DO.esc(ev.ruolo) + ')' : '') + '</p>'
       + '<span class="feed-quando">' + DO.quando(x.quando) + '</span></div>'
       + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-onsite="' + DO.esc(ev.id || '') + '" data-id="' + x.id + '">Vedi deployment</button>'
+      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
+  }
+
+  function vocePerRispostaEvento(x) {
+    const ev = x.evento || {}, si = ev.risposta === 'si', g = ev.data ? DO.giorno(ev.data) : null;
+    return '<li class="feed-voce' + (x.letto ? '' : ' non-letto') + '"><span class="iniziali">' + DO.esc(DO.iniziali(x.nome)) + '</span>'
+      + '<div><p class="feed-titolo"><b>' + DO.esc(x.nome) + '</b> ' + (si ? 'è disponibile' : '<span class="testo-errore">non è disponibile</span>') + ' per '
+      + DO.esc(ev.titolo || '') + (g ? ' (' + g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ')' : '') + '</p>'
+      + '<span class="feed-quando">' + DO.quando(x.quando) + '</span></div>'
+      + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-evento="' + DO.esc(ev.data || '') + '" data-id="' + x.id + '">Vedi evento</button>'
       + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
   }
 

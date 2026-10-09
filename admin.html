@@ -485,6 +485,10 @@
       </div>
       <label class="spunta"><input type="checkbox" id="evd-maggiorato"><span>Gettone maggiorato</span></label>
       <label class="spunta"><input type="checkbox" id="evd-sostituire"><span>Da sostituire (l'operatore assegnato va cambiato)</span></label>
+      <div class="evd-richiesta" id="evd-richiesta" hidden>
+        <span class="evd-risposte" id="evd-risposte"></span>
+        <button type="button" class="bottone" id="evd-chiedi">Chiedi disponibilità</button>
+      </div>
       <div class="storico" id="evd-storico"></div>
       <div class="errore" id="evd-errore" hidden></div>
       <div class="dialog-azioni separati">
@@ -493,6 +497,25 @@
         <span class="spazio"></span>
         <button type="button" class="bottone" data-chiudi>Chiudi</button>
         <button type="submit" class="primario">Salva</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Richiesta di disponibilità per un singolo evento -->
+  <dialog id="dlg-chiedi" class="largo">
+    <form method="dialog" id="form-chiedi">
+      <h2>Chiedi disponibilità</h2>
+      <p class="nota" id="chi-evento"></p>
+      <div class="destinatari-testa"><span>A chi</span></div>
+      <ul class="elenco-conv destinatari" id="chi-destinatari"></ul>
+      <button type="button" class="link" id="chi-tutti" style="margin-top: 6px;">Seleziona / deseleziona tutti</button>
+      <label class="campo" style="margin-top: 14px;"><span>Messaggio (facoltativo)</span>
+        <textarea id="chi-messaggio" rows="2" maxlength="300" placeholder="es. Ci serve un operatore camera"></textarea></label>
+      <label class="spunta"><input type="checkbox" id="chi-email" checked><span>Invia anche un'email</span></label>
+      <div class="errore" id="chi-errore" hidden></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" data-chiudi>Annulla</button>
+        <button type="submit" class="primario" id="chi-invia">Chiedi</button>
       </div>
     </form>
   </dialog>
@@ -571,6 +594,7 @@
   <script src="app/config.js?v=21"></script>
   <script src="app/comune.js?v=21"></script>
   <script src="app/onsite.js?v=21"></script>
+  <script src="app/richieste-evento.js?v=21"></script>
   <script src="app/demo.js?v=21"></script>
   <script src="app/dati-firebase.js?v=21"></script>
   <script src="app/regole.js?v=21"></script>
