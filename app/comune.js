@@ -33,6 +33,26 @@
   const mailto = (a, oggetto, testo) => 'mailto:' + encodeURIComponent(a || '').replace(/%40/g, '@')
     + '?subject=' + encodeURIComponent(oggetto) + '&body=' + encodeURIComponent(String(testo).replace(/\r?\n/g, '\r\n'));
 
+  // ---------- accessi alla dashboard: supervisori e colleghi in sola visualizzazione ----------
+  const normalizzaEmail = (e) => String(e || '').trim().toLowerCase();
+  const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  // supervisori: elenco nel codice; colleghi: elenco in Firestore (inElenco); sempre con l'indirizzo confermato
+  function tipoAccesso({ email, verificata, supervisori, inElenco }) {
+    if (!verificata) return 'nessuno';
+    if ((supervisori || []).map(normalizzaEmail).includes(normalizzaEmail(email))) return 'supervisore';
+    return inElenco ? 'sola' : 'nessuno';
+  }
+  function controllaVisualizzatore(email, elenco, supervisori) {
+    const e = normalizzaEmail(email);
+    if (!EMAIL.test(e)) return { errore: 'Scrivi un\'email valida.' };
+    if ((supervisori || []).map(normalizzaEmail).includes(e)) return { errore: 'È già un supervisore.' };
+    if ((elenco || []).map(normalizzaEmail).includes(e)) return { errore: 'È già nell\'elenco.' };
+    return { email: e };
+  }
+  const invitoVisualizzatore = (email, link) => mailto(email, 'TGI Sport · accesso alla dashboard in sola visualizzazione',
+    'Ciao, puoi consultare la dashboard di TGI Sport (Convocazioni, Riepilogo, Operatori) qui:\n' + link
+    + '\n\nAl primo accesso premi "Crea account" con questa email (' + email + '), conferma l\'indirizzo con il link che ricevi e poi entra con la tua password.');
+
   // il calendario si apre sul mese di oggi se la settimana mostrata contiene oggi (a inizio mese il martedì è ancora nel mese prima)
   const giornoDiRiferimento = (inizio, oggiIso) => (oggiIso >= inizio && oggiIso <= aggiungi(inizio, 6) ? oggiIso : inizio);
   // calendario mensile: settimane da lunedì a domenica che coprono tutto il mese "aaaa-mm" (da 4 a 6)
@@ -260,6 +280,6 @@
     giorniA, bloccato, OPERATIVO_PREDEFINITO, NON_PIU_RINUNCIABILE, azioniConvocazione,
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
-    versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno, tipoEvento,
+    versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno, tipoEvento, normalizzaEmail, tipoAccesso, controllaVisualizzatore, invitoVisualizzatore,
   });
 })(window.DO = window.DO || {});

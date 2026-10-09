@@ -105,3 +105,35 @@ test('tipo di evento valido', () => {
     ['partita', 'supervisione', 'support', 'partita', 'partita', 'partita']);
 });
 
+
+// ---------------------------------------------------------------- accessi in sola visualizzazione
+const SUP = ['fferrara@tgisport.com', 'ssolera@tgisport.com'];
+
+test('chi entra nella dashboard', () => {
+  const t = (campi) => DO.tipoAccesso(Object.assign({ email: 'x@y.it', verificata: true, supervisori: SUP, inElenco: false }, campi));
+  assert.equal(t({ email: 'fferrara@tgisport.com' }), 'supervisore');
+  assert.equal(t({ email: 'FFerrara@TGIsport.com ' }), 'supervisore');
+  assert.equal(t({ inElenco: true }), 'sola');
+  assert.equal(t({ email: 'ssolera@tgisport.com', inElenco: true }), 'supervisore');
+  assert.equal(t({ email: 'fferrara@tgisport.com', verificata: false }), 'nessuno');
+  assert.equal(t({ inElenco: true, verificata: false }), 'nessuno');
+  assert.equal(t({}), 'nessuno');
+});
+
+test('controlli dell\'elenco in sola visualizzazione', () => {
+  const c = (email, elenco = ['anna@x.it']) => DO.controllaVisualizzatore(email, elenco, SUP);
+  assert.deepEqual(c(' Mario.Rossi@TGIsport.com '), { email: 'mario.rossi@tgisport.com' });
+  assert.deepEqual(c('mario'), { errore: 'Scrivi un\'email valida.' });
+  assert.deepEqual(c(''), { errore: 'Scrivi un\'email valida.' });
+  assert.deepEqual(c('SSolera@tgisport.com'), { errore: 'È già un supervisore.' });
+  assert.deepEqual(c('Anna@X.it'), { errore: 'È già nell\'elenco.' });
+  assert.equal(DO.normalizzaEmail(' A@B.IT '), 'a@b.it');
+});
+
+test('invito in sola visualizzazione', () => {
+  const u = DO.invitoVisualizzatore('mario.rossi@tgisport.com', 'https://x.github.io/sito/admin.html');
+  assert.ok(u.startsWith('mailto:mario.rossi@tgisport.com?subject='));
+  const testo = decodeURIComponent(u);
+  ['TGI Sport · accesso alla dashboard in sola visualizzazione', 'Convocazioni, Riepilogo, Operatori', 'https://x.github.io/sito/admin.html',
+    '"Crea account" con questa email (mario.rossi@tgisport.com)', 'entra con la tua password'].forEach((x) => assert.ok(testo.includes(x), x));
+});
