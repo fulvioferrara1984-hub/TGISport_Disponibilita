@@ -28,6 +28,7 @@
   // Finestra di blocco: mancano N giorni o meno (N = 3: evento lunedì → bloccato da venerdì)
   const bloccato = (data, oggiIso, giorniBlocco) => giorniA(data, oggiIso) <= giorniBlocco;
   const OPERATIVO_PREDEFINITO = Object.freeze({ telefono: '', giorniBlocco: 3 });
+  const NON_PIU_RINUNCIABILE = 'Non è più possibile rinunciare da qui: chiama il supervisore.';
 
   // Tasti di una convocazione per l'operatore, da sinistra a destra. Rinunciare si può solo a una
   // convocazione in attesa e fuori dalla finestra di blocco; altrimenti si telefona al supervisore.
@@ -197,7 +198,7 @@
 
   Object.assign(DO, {
     $, esc, iniziali, iso, daIso, aggiungi, lunedi, settimana, oggi, limite, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
-    giorniA, bloccato, OPERATIVO_PREDEFINITO, azioniConvocazione,
+    giorniA, bloccato, OPERATIVO_PREDEFINITO, NON_PIU_RINUNCIABILE, azioniConvocazione,
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
   });

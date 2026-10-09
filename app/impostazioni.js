@@ -34,9 +34,14 @@
       const k = i.dataset.tariffa, punto = k.lastIndexOf('.');
       tariffe[k.slice(0, punto)][k.slice(punto + 1)] = Math.max(0, Number(i.value) || 0);
     });
+    const anticipoOre = R.numero($('reg-anticipo').value, { min: 0, max: 12 }), fineOre = R.numero($('reg-fine').value, { min: 0, max: 12 });
+    const durataSupervisioneOre = R.numero($('reg-durata-sup').value, { min: 1, max: 16 });
+    if (anticipoOre === null || fineOre === null || durataSupervisioneOre === null) {
+      DO.avviso('Compila le ore: ritrovo e fine turno da 0 a 12, durata della supervisione da 1 a 16.', 'errore');
+      return;
+    }
     salva({
-      tariffe, anticipoOre: Number($('reg-anticipo').value) || 0, fineOre: Number($('reg-fine').value) || 0,
-      durataSupervisioneOre: Number($('reg-durata-sup').value) || R.PREDEFINITE.durataSupervisioneOre,
+      tariffe, anticipoOre, fineOre, durataSupervisioneOre,
       notteDa: $('reg-notte-da').value || '22:00', notteA: $('reg-notte-a').value || '06:00',
     }, 'Regole salvate.');
   });
@@ -93,8 +98,8 @@
   }
   $('form-operativo').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const giorni = Math.round(Number($('op-giorni-blocco').value));
-    if (!(giorni >= 0 && giorni <= 14)) { DO.avviso('I giorni di blocco vanno da 0 a 14.', 'errore'); return; }
+    const giorni = R.numero($('op-giorni-blocco').value, { min: 0, max: 14, intero: true });
+    if (giorni === null) { DO.avviso('Indica i giorni di blocco: un numero intero da 0 a 14.', 'errore'); return; }
     try {
       await DO.dati.salvaOperativo({ telefono: $('op-telefono-rep').value.trim(), giorniBlocco: giorni });
       DO.avviso('Regole per gli operatori salvate.', 'ok');

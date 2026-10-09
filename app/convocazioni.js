@@ -283,10 +283,10 @@
     }
     campi.fine = $('evd-fine').value;
     if (!campi.data) { mostraErrore('evd-errore', 'Indica la data.'); return; }
-    campi.convocazioneCalcolata = R.convocazione(Object.assign({}, e, campi), A.regole);
-    campi.fineCalcolata = R.fine(Object.assign({}, e, campi), A.regole);
-    // una convocazione già inviata con data o orari cambiati va rimandata all'operatore
-    const cambiato = e.inviata && (campi.data !== e.data || campi.orario !== (e.orario || '') || campi.convocazioneCalcolata !== R.convocazione(e, A.regole));
+    // una convocazione già inviata con data o orari cambiati va rimandata all'operatore;
+    // se gli orari non cambiano restano quelli salvati all'invio, anche se nel frattempo sono cambiate le regole
+    const { cambiato, calcolati } = R.ricalcoloInvio(e, campi, A.regole);
+    if (calcolati) Object.assign(campi, calcolati);
     if (cambiato && e.stato !== 'annullato') Object.assign(campi, { inviata: false, stato: 'assegnato', risposta: '' });
     try {
       await DO.dati.aggiornaEvento(e.id, campi, cambiato ? 'Modificati data/orari: convocazione da rimandare' : 'Modificato');

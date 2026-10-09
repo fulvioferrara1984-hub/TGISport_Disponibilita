@@ -79,7 +79,13 @@ window.DO_CONFIG = {
 
 ### Aggiornamenti successivi
 
-Quando cambiano [`firebase/firestore.rules`](firebase/firestore.rules) o [`backend/Codice.gs`](backend/Codice.gs):
+Quando cambiano [`firebase/firestore.rules`](firebase/firestore.rules) o [`backend/Codice.gs`](backend/Codice.gs), l'ordine è **sito → regole → script**:
+
+1. **sito** (push su `main`): la pagina nuova funziona anche con le regole vecchie;
+2. **regole**, quando il sito nuovo è online (GitHub Pages lo pubblica in un paio di minuti; i telefoni possono tenere la pagina vecchia fino a 10 minuti): pubblicarle prima disconnetterebbe chi ha ancora la pagina vecchia;
+3. **script**: fino a quel momento le email partono con il testo precedente (per esempio senza la fine turno).
+
+Come pubblicarli:
 
 - **regole**: Firebase → Firestore Database → Regole → incolla il file → **Pubblica**;
 - **script**: incolla il codice nell'editor di Apps Script, salva, poi **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione** (l'URL resta lo stesso).

@@ -88,7 +88,8 @@
 
   // Altri impegni dello stesso giorno: 'doppio' se gli orari non si toccano, 'sovrapposto' se sì.
   function conflitto(e, altri, regole) {
-    const stessoGiorno = altri.filter((x) => x.data === e.data);
+    // un turno rifiutato o annullato non impegna l'operatore
+    const stessoGiorno = altri.filter((x) => x.data === e.data && x.stato !== 'rifiutato' && x.stato !== 'annullato');
     if (!stessoGiorno.length) return { livello: '', con: [] };
     return { livello: stessoGiorno.some((x) => sovrapposti(e, x, regole)) ? 'sovrapposto' : 'doppio', con: stessoGiorno };
   }
@@ -120,6 +121,27 @@
   }
 
   // sempre col separatore delle migliaia (in italiano di norma manca sotto 10.000)
+  // Modifica di un evento: orari da salvare e se la convocazione già inviata va rimandata.
+  // Conta solo ciò che vede l'operatore (data, orario della partita, ritrovo, fine) calcolato prima e
+  // dopo la modifica con le stesse regole: una nota non tocca gli orari salvati all'invio.
+  function ricalcoloInvio(e, campi, regole) {
+    const dopo = Object.assign({}, e, campi);
+    const calcolati = { convocazioneCalcolata: convocazione(dopo, regole), fineCalcolata: fine(dopo, regole) };
+    if (!e.inviata) return { cambiato: false, calcolati };
+    const cambiato = dopo.data !== e.data
+      || calcolati.convocazioneCalcolata !== convocazione(e, regole) || calcolati.fineCalcolata !== fine(e, regole)
+      || (e.tipo !== 'supervisione' && (dopo.orario || '') !== (e.orario || ''));
+    return { cambiato, calcolati: cambiato ? calcolati : null };
+  }
+
+  // Numero scritto in un campo delle impostazioni: vuoto, fuori limite o non intero (se richiesto) → null.
+  function numero(valore, { min, max, intero = false }) {
+    if (String(valore).trim() === '') return null;
+    const n = Number(valore);
+    if (!isFinite(n) || n < min || n > max || (intero && !Number.isInteger(n))) return null;
+    return n;
+  }
+
   // Esportazione mensile per l'operatività: solo presenze, nessun compenso.
   const NOMI_STATO = { 'da-assegnare': 'Da assegnare', assegnato: 'Da inviare', convocato: 'In attesa di risposta', confermato: 'Confermato', rifiutato: 'Rifiutato', annullato: 'Annullato' };
   function righeMese(eventi, operatori, regole, mese) {
@@ -154,5 +176,5 @@
     return { da: inizio + '-08-01', a: (inizio + 1) + '-07-31', nome: inizio + '/' + String(inizio + 1).slice(2) };
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, righeMese, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm };
+  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm };
 })(window.DO = window.DO || {});

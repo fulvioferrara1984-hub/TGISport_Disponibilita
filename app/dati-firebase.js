@@ -536,6 +536,13 @@
       });
       await batch.commit();
     } catch (e) {
+      // Le regole rifiutano una rinuncia nella finestra di blocco: se l'accesso è ancora valido
+      // non si esce, si chiede di telefonare. Solo un accesso davvero revocato riporta al login.
+      if (e && e.code === 'permission-denied' && stato === 'rifiutato') {
+        let valido = true;
+        try { await caricaOperatore(false); } catch (x) { valido = false; }
+        if (valido) throw new Error(DO.NON_PIU_RINUNCIABILE);
+      }
       return negato(e, 'Il tuo accesso non è più valido: contatta i supervisori.');
     }
     if (stato === 'rifiutato') {

@@ -248,7 +248,11 @@
   async function rispondiConvocazione(ev, stato, motivo) {
     await pausa(150);
     const op = operatoreValido();
-    Object.assign(dati.eventi.find((e) => e.id === ev.id), { stato, risposta: motivo || '', rispostaIl: new Date().toISOString() });
+    const evento = dati.eventi.find((e) => e.id === ev.id);
+    // come le regole di Firebase: si rinuncia solo a una convocazione in attesa e fuori dalla finestra di blocco
+    const giorni = (dati.operativo && Number.isInteger(dati.operativo.giorniBlocco)) ? dati.operativo.giorniBlocco : DO.OPERATIVO_PREDEFINITO.giorniBlocco;
+    if (stato === 'rifiutato' && (evento.stato !== 'convocato' || DO.bloccato(evento.data, DO.oggi(), giorni))) throw new Error(DO.NON_PIU_RINUNCIABILE);
+    Object.assign(evento, { stato, risposta: motivo || '', rispostaIl: new Date().toISOString() });
     dati.invii.push({ id: 'inv' + Date.now(), quando: new Date().toISOString(), operatoreId: op.id, nome: op.nome, modifiche: [], letto: false, tipo: 'convocazione',
       evento: { id: ev.id, titolo: ev.titolo, data: ev.data, competizione: ev.competizione, stato, motivo: motivo || '' } });
     salva();

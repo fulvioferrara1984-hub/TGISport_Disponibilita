@@ -102,3 +102,35 @@ test('esportazione mensile: due fogli, solo presenze, annullati esclusi dalle pr
   ]);
   assert.equal(JSON.stringify({ convocazioni, presenze }).match(/€|[Gg]ettone|[Mm]aggiorat/), null);
 });
+
+test('modifica di una convocazione inviata: orari salvati intatti se l\'evento non cambia', () => {
+  const inviata = { tipo: 'partita', competizione: 'Serie A', data: '2026-10-18', orario: '20:45', inviata: true, convocazioneCalcolata: '16:45', fineCalcolata: '22:45' };
+  const nuoveRegole = R.complete({ competizioni: [{ nome: 'Serie A', prima: 3, dopo: 2 }] });
+  assert.deepEqual(R.ricalcoloInvio(inviata, { note: 'solo una nota' }, nuoveRegole), { cambiato: false, calcolati: null });
+  const fineAMano = R.ricalcoloInvio(inviata, { fine: '23:30' }, regole);
+  assert.equal(fineAMano.cambiato, true);
+  assert.deepEqual(fineAMano.calcolati, { convocazioneCalcolata: '16:45', fineCalcolata: '23:30' });
+  assert.equal(R.ricalcoloInvio(inviata, { orario: '18:00' }, regole).cambiato, true);
+  assert.equal(R.ricalcoloInvio(inviata, { data: '2026-10-19' }, regole).cambiato, true);
+  const nonInviata = R.ricalcoloInvio(Object.assign({}, inviata, { inviata: false }), { note: 'x' }, regole);
+  assert.deepEqual(nonInviata, { cambiato: false, calcolati: { convocazioneCalcolata: '16:45', fineCalcolata: '22:45' } });
+  const supImportata = { tipo: 'supervisione', data: '2026-10-18', orario: '18:00', convocazione: '', inviata: true, convocazioneCalcolata: '14:00' };
+  assert.equal(R.ricalcoloInvio(supImportata, { orario: '', convocazione: '14:00' }, regole).cambiato, false);
+});
+
+test('conflitto: turni rifiutati o annullati non contano', () => {
+  const g = '2026-10-17';
+  const partita = { competizione: 'Serie A', orario: '20:45', data: g };
+  const rifiutata = { competizione: 'Serie A', orario: '20:45', data: g, stato: 'rifiutato' };
+  const annullata = { competizione: 'Serie A', orario: '20:45', data: g, stato: 'annullato' };
+  assert.deepEqual(R.conflitto(partita, [rifiutata, annullata], regole), { livello: '', con: [] });
+});
+
+test('numeri dalle impostazioni: vuoto o fuori limite non valgono', () => {
+  assert.equal(R.numero('', { min: 0, max: 14, intero: true }), null);
+  assert.equal(R.numero('3', { min: 0, max: 14, intero: true }), 3);
+  assert.equal(R.numero('15', { min: 0, max: 14, intero: true }), null);
+  assert.equal(R.numero('2.5', { min: 0, max: 14, intero: true }), null);
+  assert.equal(R.numero('2.5', { min: 0, max: 12 }), 2.5);
+  assert.equal(R.numero('-1', { min: 0, max: 12 }), null);
+});

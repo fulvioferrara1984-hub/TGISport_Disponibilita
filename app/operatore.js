@@ -25,6 +25,15 @@
   const bloccatoOra = (d) => d >= oggi && d <= limite && nellaFinestra(d);
   const modificabile = (d) => d >= oggi && d <= limite && !nellaFinestra(d);
   const nModifiche = () => Object.keys(bozza).length;
+  // pagina rimasta aperta da ieri: prima di agire si riallinea la data di oggi (e quindi la finestra di blocco)
+  function riallineaOggi() {
+    const adesso = DO.iso(new Date());
+    if (adesso <= oggi) return false;
+    oggi = adesso;
+    Object.keys(bozza).forEach((d) => { if (!modificabile(d)) delete bozza[d]; });
+    salvaBozza();
+    return true;
+  }
   const richiesto = (d) => modificabile(d) && richieste.some((x) => d >= x.da && d <= x.a);
 
   function giorniDi(x) {
@@ -131,6 +140,12 @@
     const b = e.target.closest('[data-rispondi]');
     if (!b) return;
     const c = convocazioni.find((x) => x.id === b.dataset.id), stato = b.dataset.rispondi;
+    if (riallineaOggi()) disegna();
+    if (stato === 'rifiutato' && !DO.azioniConvocazione(c.stato, nellaFinestra(c.data)).azioni.includes('rifiuta')) {
+      DO.avviso(DO.NON_PIU_RINUNCIABILE, 'errore', 8000);
+      disegna();
+      return;
+    }
     let motivo = '';
     if (stato === 'rifiutato') {
       motivo = prompt('Perché non puoi? (facoltativo, lo leggono i supervisori)', '');
@@ -144,8 +159,8 @@
       disegna();
       DO.avviso(stato === 'confermato' ? 'Convocazione confermata.' : 'Abbiamo avvisato i supervisori.', 'ok');
     } catch (err) {
-      DO.avviso(err.message, 'errore');
-      b.disabled = false;
+      DO.avviso(err.message, 'errore', 8000);
+      disegna();
     }
   });
 
@@ -240,6 +255,7 @@
   // Si inviano le modifiche di tutte le settimane più i giorni della settimana in vista:
   // così premere Invia vale anche come conferma, quando non c'è nulla da cambiare.
   $('btn-invia').addEventListener('click', async () => {
+    if (riallineaOggi()) { disegna(); DO.avviso('È cambiato il giorno: le modifiche sui giorni ormai bloccati sono state tolte.', 'errore', 8000); }
     const giorni = {};
     DO.settimana(lun).filter(modificabile).forEach((d) => { giorni[d] = valore(d); });
     Object.keys(bozza).forEach((d) => { if (modificabile(d)) giorni[d] = bozza[d]; });
