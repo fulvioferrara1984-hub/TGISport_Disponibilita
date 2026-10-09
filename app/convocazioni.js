@@ -121,10 +121,11 @@
     const peso = { D: 0, P: 1, '': 2, A: 3 };
     const voci = ammessi.map((o) => {
       const v = A.valore(o.id, e.data), { livello } = conflitto(e, o.id);
-      const segno = livello === 'sovrapposto' ? '⛔' : livello === 'doppio' ? '⚠' : { D: '✓', P: '½', A: '✕' }[v.s] || '·';
-      const extra = (v.s === 'P' && v.n ? ' — ' + v.n : v.s === 'A' ? ' — non disponibile' : !v.s ? ' — disponibilità non indicata' : '')
+      const segno = v.onsite || livello === 'sovrapposto' ? '⛔' : livello === 'doppio' ? '⚠' : { D: '✓', P: '½', A: '✕' }[v.s] || '·';
+      const extra = v.onsite ? ' — on-site a ' + v.onsite.luogo
+        : (v.s === 'P' && v.n ? ' — ' + v.n : v.s === 'A' ? ' — non disponibile' : !v.s ? ' — disponibilità non indicata' : '')
         + (livello === 'sovrapposto' ? ' · sovrapposto' : livello === 'doppio' ? ' · ha già un turno' : '');
-      return { o, peso: peso[v.s || ''] + (livello === 'sovrapposto' ? 0.8 : livello ? 0.5 : 0), testo: segno + ' ' + o.nome + extra };
+      return { o, peso: peso[v.s || ''] + (v.onsite ? 0.9 : livello === 'sovrapposto' ? 0.8 : livello ? 0.5 : 0), testo: segno + ' ' + o.nome + extra };
     }).sort((a, b) => a.peso - b.peso || a.o.nome.localeCompare(b.o.nome, 'it'));
     return '<select data-assegna="' + e.id + '"' + (e.stato === 'annullato' ? ' disabled' : '') + ' aria-label="Operatore">'
       + '<option value="">— ' + (e.tipo === 'supervisione' ? 'Scegli un TL' : 'Scegli operatore') + ' —</option>'
@@ -137,7 +138,8 @@
     const out = [], v = A.valore(e.operatoreId, e.data), c = conflitto(e, e.operatoreId);
     if (c.livello === 'sovrapposto') out.push('<small class="avviso-op rosso">⛔ Turni sovrapposti con ' + DO.esc(elencoTurni(c.con)) + '</small>');
     else if (c.livello === 'doppio') out.push('<small class="avviso-op giallo">⚠ Doppio turno: anche ' + DO.esc(elencoTurni(c.con)) + '</small>');
-    if (v.s === 'A') out.push('<small class="avviso-op rosso">✕ Ha indicato non disponibile' + (v.n ? ': ' + DO.esc(v.n) : '') + '</small>');
+    if (v.onsite) out.push('<small class="avviso-op rosso">⛔ in on-site a ' + DO.esc(v.onsite.luogo) + '</small>');
+    else if (v.s === 'A') out.push('<small class="avviso-op rosso">✕ Ha indicato non disponibile' + (v.n ? ': ' + DO.esc(v.n) : '') + '</small>');
     else if (v.s === 'P') out.push('<small class="avviso-op giallo">½ Parziale' + (v.n ? ': ' + DO.esc(v.n) : '') + '</small>');
     const o = operatore(e.operatoreId);
     if (o && !o.contratto) out.push('<small class="avviso-op">Contratto non indicato</small>');
@@ -189,7 +191,8 @@
       const avvisi = [], quando = DO.giorno(e.data).nome.toLowerCase() + ' ' + DO.giorno(e.data).num;
       if (c.livello === 'sovrapposto') avvisi.push('TURNI SOVRAPPOSTI: ' + o.nome + ' il ' + quando + ' ha già un turno in orari che si sovrappongono (' + elencoTurni(c.con) + '; questo turno ' + orariTurno(e) + ').');
       else if (c.livello === 'doppio') avvisi.push('DOPPIO TURNO: ' + o.nome + ' ha già un turno il ' + quando + ' (' + elencoTurni(c.con) + '; questo turno ' + orariTurno(e) + ').');
-      if (v.s === 'A') avvisi.push(o.nome + ' ha indicato NON DISPONIBILE per questo giorno' + (v.n ? ' (' + v.n + ')' : '') + '.');
+      if (v.onsite) avvisi.push(o.nome + ' è in on-site a ' + v.onsite.luogo + '.');
+      else if (v.s === 'A') avvisi.push(o.nome + ' ha indicato NON DISPONIBILE per questo giorno' + (v.n ? ' (' + v.n + ')' : '') + '.');
       if (avvisi.length && !confirm(avvisi.join('\n\n') + '\n\nAssegnare comunque?')) { sel.value = e.operatoreId || ''; return; }
     }
     const nota = !nuovo ? 'Tolto ' + nomeOp(e.operatoreId)

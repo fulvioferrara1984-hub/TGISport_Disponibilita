@@ -635,6 +635,8 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 .ev-riga.onsite { background: linear-gradient(90deg, #efe7ff, transparent 60%); cursor: pointer; }
 .ev-riga.onsite .ev-ora b { color: #5b34c9; }
 .st-onsite { --st: #5b34c9; --st-tenue: #efe7ff; }
+.chip.st-onsite { background: #efe7ff; color: #5b34c9; }
+.etichetta.etichetta-onsite { background: #efe7ff; color: #5b34c9; }
 .onsite-modifica { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--linea); }
 .elenco-conv .persona { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border: 1px solid var(--linea); border-radius: 8px; }
 .elenco-conv .persona .chi { flex: 1; }

@@ -239,6 +239,8 @@
                 <label class="campo"><span>Notturno: ritrovo dalle</span><input type="time" id="reg-notte-da"></label>
                 <label class="campo"><span>alle</span><input type="time" id="reg-notte-a"></label>
               </div>
+              <label class="campo"><span>Tariffa on-site (€ al giorno)</span><input type="number" id="reg-tariffa-onsite" min="0" max="2000" step="0.01"></label>
+              <p class="nota" style="margin: -4px 0 12px;">Compenso proposto per ogni deployment: giorni × tariffa (4 giorni a 150 € = 600 €), modificabile nella richiesta.</p>
               <button type="submit" class="primario">Salva regole</button>
             </form>
           </section>
@@ -315,6 +317,7 @@
         <label class="campo"><span>Ruolo</span><select id="op-ruolo"><option value="OP">OP – operatore</option><option value="TL">TL – team leader (anche supervisione)</option></select></label>
         <label class="campo"><span>Contratto</span><select id="op-contratto"><option>P.IVA</option><option>Coop</option></select></label>
       </div>
+      <label class="campo"><span>On-site</span><select id="op-onsite"><option value="">No</option><option value="TL">On-site TL</option><option value="OP">On-site OP</option></select></label>
       <label class="spunta" id="op-attivo-riga"><input type="checkbox" id="op-attivo" checked><span>Attivo (può entrare e compare nella griglia)</span></label>
       <div class="errore" id="op-errore" hidden></div>
       <div class="dialog-azioni">

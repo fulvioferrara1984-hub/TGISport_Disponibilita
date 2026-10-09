@@ -17,6 +17,7 @@
     $('reg-durata-sup').value = r.durataSupervisioneOre;
     $('reg-notte-da').value = r.notteDa;
     $('reg-notte-a').value = r.notteA;
+    if (document.activeElement !== $('reg-tariffa-onsite')) $('reg-tariffa-onsite').value = r.tariffaOnsite;
   }
 
   async function salva(modifiche, messaggio) {
@@ -40,8 +41,10 @@
       DO.avviso('Compila le ore: ritrovo e fine turno da 0 a 12, durata della supervisione da 1 a 16.', 'errore');
       return;
     }
+    const tariffaOnsite = R.numero($('reg-tariffa-onsite').value, { min: 0, max: 2000 });
+    if (tariffaOnsite === null) { DO.avviso('La tariffa on-site va da 0 a 2000 € al giorno.', 'errore'); return; }
     salva({
-      tariffe, anticipoOre, fineOre, durataSupervisioneOre,
+      tariffe, anticipoOre, fineOre, durataSupervisioneOre, tariffaOnsite,
       notteDa: $('reg-notte-da').value || '22:00', notteA: $('reg-notte-a').value || '06:00',
     }, 'Regole salvate.');
   });

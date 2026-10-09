@@ -19,7 +19,13 @@
     return operatori.filter((o) => o.attivo && (!mansione || o.mansione === mansione) && (!testo || (o.nome + ' ' + o.mansione).toLowerCase().includes(testo)))
       .sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
   };
-  const valore = (id, d) => (disp[id] && disp[id][d]) || { s: '', n: '' };
+  // Nei giorni on-site la disponibilità vale «non disponibile · On-site · luogo»: calcolata, mai salvata.
+  let onsitePerOp = {};
+  const giorniOnsite = (id) => onsitePerOp[id] || (onsitePerOp[id] = DO.onsite.giorniOnsite(onsite, id));
+  const valore = (id, d) => {
+    const on = giorniOnsite(id)[d];
+    return on ? { s: 'A', n: 'On-site · ' + on.luogo, onsite: on } : (disp[id] && disp[id][d]) || { s: '', n: '' };
+  };
   const etichettaGiorno = (d) => { const g = DO.giorno(d); return g.nome + ' ' + g.num + ' ' + g.mese; };
   const linkSito = () => new URL('index.html', location.href).href;
 
@@ -49,6 +55,7 @@
     operativo = stato.operativo || Object.assign({}, DO.OPERATIVO_PREDEFINITO);
     onsite = stato.onsite || [];
     compensiOnsite = stato.compensiOnsite || {};
+    onsitePerOp = {};
     richieste = statoRichieste(stato.richieste);
     nonLettiOps = new Set(feed.filter((x) => !x.letto).map((x) => x.operatoreId));
     impostaNonLetti(feed.filter((x) => !x.letto).length);
@@ -144,7 +151,8 @@
     const corpo = ops.map((o) => {
       const celle = giorni.map((d) => {
         const v = valore(o.id, d);
-        const chip = v.s
+        const chip = v.onsite ? '<span class="chip st-onsite"><span class="lungo">On-site</span><span class="corto">OS</span></span>'
+          : v.s
           ? '<span class="chip st-' + v.s + '"><span class="lungo">' + DO.STATI[v.s].breve + '</span><span class="corto">' + SIMBOLI[v.s] + '</span>' + (v.n ? '<span class="con-nota"></span>' : '') + '</span>'
           : '<span class="chip vuoto"><span class="lungo">' + (v.n ? 'Nota' : '—') + '</span><span class="corto">·</span>' + (v.n ? '<span class="con-nota"></span>' : '') + '</span>';
         const imp = impegni(o.id, d).length;
@@ -504,6 +512,7 @@
     if (!feed.length) { $('feed').innerHTML = '<li class="griglia-vuota">Nessun invio per ora.</li>'; return; }
     $('feed').innerHTML = feed.map((x) => {
       if (x.tipo === 'convocazione') return vocePerConvocazione(x);
+      if (x.tipo === 'onsite') return vocePerOnsite(x);
       const n = x.modifiche.length;
       const modifiche = x.modifiche.slice(0, 14).map((m) => {
         const g = DO.giorno(m.d);
@@ -529,6 +538,17 @@
       + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
   }
 
+  function vocePerOnsite(x) {
+    const ev = x.evento || {}, si = ev.stato === 'accettato';
+    const periodo = ev.da && ev.a ? ' ' + DO.onsite.periodoBreve(ev.da, ev.a) : '';
+    return '<li class="feed-voce' + (x.letto ? '' : ' non-letto') + '"><span class="iniziali">' + DO.esc(DO.iniziali(x.nome)) + '</span>'
+      + '<div><p class="feed-titolo"><b>' + DO.esc(x.nome) + '</b> ' + (si ? 'ha accettato l\'on-site' : '<span class="testo-errore">non può per l\'on-site</span>')
+      + ' · ' + DO.esc(ev.luogo || '') + periodo + (si && ev.ruolo ? ' (' + DO.esc(ev.ruolo) + ')' : '') + '</p>'
+      + '<span class="feed-quando">' + DO.quando(x.quando) + '</span></div>'
+      + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-onsite="' + DO.esc(ev.id || '') + '" data-id="' + x.id + '">Vedi deployment</button>'
+      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
+  }
+
   async function segnaLetti(ids) {
     const daSegnare = (ids || feed.filter((x) => !x.letto).map((x) => x.id));
     if (!daSegnare.length) return;
@@ -544,6 +564,13 @@
       if (x && !x.letto) segnaLetti([x.id]);
       mostra('convocazioni');
       moduli.forEach((m) => m.vaiA && m.vaiA(vediEv.dataset.vediEvento));
+    }
+    const vediOn = e.target.closest('[data-vedi-onsite]');
+    if (vediOn) {
+      const x = feed.find((v) => v.id === vediOn.dataset.id), dep = onsite.find((d) => d.id === vediOn.dataset.vediOnsite);
+      if (x && !x.letto) segnaLetti([x.id]);
+      mostra('convocazioni');
+      if (dep) { moduli.forEach((m) => m.vaiA && m.vaiA(dep.da)); DO.onsiteAdmin.apri(dep.id); } else DO.avviso('Deployment non più disponibile.', 'errore');
     }
     const vedi = e.target.closest('[data-vedi]');
     if (vedi) {
@@ -579,7 +606,8 @@
     $('tabella-operatori').innerHTML = '<table class="tabella"><thead><tr><th>Operatore</th><th>Ruolo</th><th class="solo-desktop">Contratto</th><th class="solo-desktop">Contatti</th><th>Stato</th><th class="solo-desktop">Ultimo invio</th><th></th></tr></thead><tbody>'
       + elenco.map((o) => '<tr class="' + (o.attivo ? '' : 'disattivo') + '">'
         + '<td><b>' + DO.esc(o.nome) + '</b><br><small class="tenue">' + DO.esc(o.mansione || '—') + '</small></td>'
-        + '<td><span class="etichetta ruolo-' + o.ruolo + '">' + o.ruolo + '</span></td>'
+        + '<td><span class="etichetta ruolo-' + o.ruolo + '">' + o.ruolo + '</span>'
+        + (o.onsite ? ' <span class="etichetta etichetta-onsite">on-site ' + o.onsite + '</span>' : '') + '</td>'
         + '<td class="solo-desktop">' + (o.contratto ? DO.esc(o.contratto) : '<span class="testo-errore">da indicare</span>') + '</td>'
         + '<td class="solo-desktop">' + DO.esc(o.email || '—') + '<br><small class="tenue">' + DO.esc(o.telefono || '') + '</small></td>'
         + '<td><span class="etichetta' + (o.attivo ? '' : ' spenta') + '">' + (o.attivo ? 'Attivo' : 'Disattivato') + '</span>'
@@ -601,6 +629,7 @@
     $('op-telefono').value = o ? o.telefono : '';
     $('op-contratto').value = o ? o.contratto : 'P.IVA';
     $('op-ruolo').value = o ? o.ruolo : 'OP';
+    $('op-onsite').value = o ? o.onsite || '' : '';
     $('op-attivo').checked = o ? o.attivo : true;
     $('op-attivo-riga').hidden = !o;
     $('op-errore').hidden = true;
@@ -617,7 +646,7 @@
       const r = await DO.dati.salvaOperatore({
         id: inModifica && inModifica.id, nome: $('op-nome').value, mansione: $('op-mansione').value,
         email: $('op-email').value, telefono: $('op-telefono').value, attivo: $('op-attivo').checked,
-        contratto: $('op-contratto').value, ruolo: $('op-ruolo').value,
+        contratto: $('op-contratto').value, ruolo: $('op-ruolo').value, onsite: $('op-onsite').value,
       });
       $('dlg-operatore').close();
       if (r.codice) mostraCodice(r.operatore, r.codice);
