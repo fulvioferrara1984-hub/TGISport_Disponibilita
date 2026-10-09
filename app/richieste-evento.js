@@ -89,18 +89,26 @@
   // Allineamento eseguito dalla dashboard a ogni aggiornamento: scrive le correzioni con scrivi(id, campi) → Promise.
   // Una correzione in corso non si riscrive; una fallita non si ripete (resta in console), una riuscita libera il posto
   // per i passaggi successivi dell'evento (assegnato → rifiutato → riassegnato…).
+  // Se un'altra dashboard (per esempio una scheda rimasta sulla versione precedente) riscrive a modo suo la copia
+  // appena scritta da qui, non la si riscrive di nuovo: niente tira e molla senza fine; si riscrive quando l'evento cambia.
   function allineatore(scrivi) {
-    const bloccate = new Set();
+    const bloccate = new Set(), copieScritte = new Map(), avvisate = new Set();
     return (richieste, eventi, regole, oggi) => {
       lista(richieste).forEach((r) => {
         const e = lista(eventi).find((x) => x.id === r.id) || null;
-        const campi = allineamento(r, e, e ? copiaEvento(e, regole) : null, oggi);
+        let campi = allineamento(r, e, e ? copiaEvento(e, regole) : null, oggi);
+        if (campi && campi.evento && copieScritte.get(r.id) === JSON.stringify(campi.evento)) {
+          if (!avvisate.has(r.id)) { avvisate.add(r.id); console.warn('Richiesta per evento riscritta da un\'altra dashboard (ricaricala):', r.id); }
+          const { evento, aggiornata, ...resto } = campi;
+          campi = resto.aperta !== r.aperta || resto.assegnato !== (r.assegnato || '') ? resto : null;
+        }
         if (!campi) return;
         const chiave = r.id + JSON.stringify(campi);
         if (bloccate.has(chiave)) return;
         bloccate.add(chiave);
         Promise.resolve().then(() => scrivi(r.id, campi))
-          .then(() => bloccate.delete(chiave), (err) => console.warn('Richiesta per evento non allineata:', r.id, err && err.message));
+          .then(() => { bloccate.delete(chiave); if (campi.evento) copieScritte.set(r.id, JSON.stringify(campi.evento)); },
+            (err) => console.warn('Richiesta per evento non allineata:', r.id, err && err.message));
       });
     };
   }

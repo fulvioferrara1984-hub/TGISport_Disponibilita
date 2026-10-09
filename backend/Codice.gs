@@ -167,7 +167,7 @@ function emailConvocazioni(r) {
       MailApp.sendEmail({
         to: c.email,
         name: CONFIG.MITTENTE,
-        subject: eventi.length === 1 ? 'Convocazione: ' + eventi[0].titolo + ' · ' + giornoLungo(String(eventi[0].data)) : 'Convocazioni TGI Sport (' + eventi.length + ')',
+        subject: eventi.length === 1 ? 'Convocazione: ' + (eTurno(eventi[0]) ? TURNI_REMOTI[eventi[0].tipo] : eventi[0].titolo) + ' · ' + giornoLungo(String(eventi[0].data)) : 'Convocazioni TGI Sport (' + eventi.length + ')',
         htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p>Ciao ' + esc(String(c.nome || '').split(' ')[0]) + ',</p>'
           + '<p>' + (eventi.length === 1 ? 'sei convocato per:' : 'sei convocato per questi eventi:') + '</p><table style="border-collapse:collapse">' + righe + '</table>'
           + (sito ? '<p><a href="' + esc(sito) + '" style="display:inline-block;padding:10px 18px;background:#1740f0;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">Conferma sulla piattaforma</a></p>' : '')
@@ -187,13 +187,13 @@ function notificaRisposta(r) {
   const op = verificaOperatore(r.idToken);
   const imp = leggiImpostazioni();
   if (r.stato !== 'rifiutato' || !imp.emailAttive || !imp.emailSupervisori) return { inviata: false };
-  const ev = r.evento || {};
+  const ev = r.evento || {}, nome = eTurno(ev) ? TURNI_REMOTI[ev.tipo] : ev.titolo || '';
   MailApp.sendEmail({
     to: imp.emailSupervisori,
     name: CONFIG.MITTENTE,
-    subject: 'Convocazione rifiutata: ' + op.nome + ' · ' + (ev.titolo || ''),
+    subject: 'Convocazione rifiutata: ' + op.nome + ' · ' + nome,
     htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p><b>' + esc(op.nome) + '</b> non può partecipare a <b>'
-      + esc(ev.titolo || '') + '</b>' + (ev.data ? ' (' + esc(giornoLungo(String(ev.data))) + ')' : '') + '.</p>'
+      + esc(nome) + '</b>' + (ev.data ? ' (' + esc(giornoLungo(String(ev.data))) + ')' : '') + '.</p>'
       + (r.motivo ? '<p style="padding:10px 14px;background:#f3f4f6;border-radius:8px">' + esc(String(r.motivo).slice(0, 200)) + '</p>' : '')
       + (imp.urlAdmin ? '<p><a href="' + esc(imp.urlAdmin.replace(/#.*$/, '')) + '#convocazioni" style="color:#1740f0">Trova un sostituto</a></p>' : '') + '</div>',
   });

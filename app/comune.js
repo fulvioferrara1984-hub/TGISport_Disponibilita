@@ -17,6 +17,8 @@
   const mansione = (tipo) => MANSIONI[tipo] || '';
   const turnoRemoto = (tipo) => !!MANSIONI[tipo];
   const nomeTurno = (tipo) => (MANSIONI[tipo] ? 'Turno ' + MANSIONI[tipo] : '');
+  // tipo da salvare: i due turni remoti, altrimenti partita
+  const tipoEvento = (tipo) => (MANSIONI[tipo] ? tipo : 'partita');
 
   // ---------- date (sempre stringhe yyyy-mm-dd, settimane da lunedì) ----------
   const due = (n) => String(n).padStart(2, '0');
@@ -258,6 +260,6 @@
     giorniA, bloccato, OPERATIVO_PREDEFINITO, NON_PIU_RINUNCIABILE, azioniConvocazione,
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
-    versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno,
+    versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno, tipoEvento,
   });
 })(window.DO = window.DO || {});

@@ -447,7 +447,7 @@
 
   function pulisciEvento(e) {
     return {
-      tipo: e.tipo === 'supervisione' ? 'supervisione' : 'partita',
+      tipo: DO.tipoEvento(e.tipo),
       competizione: String(e.competizione || '').slice(0, 80), round: String(e.round == null ? '' : e.round).slice(0, 40),
       sport: String(e.sport || '').slice(0, 40), data: e.data, titolo: String(e.titolo || '').trim().slice(0, 120),
       orario: e.orario || '', convocazione: e.convocazione || '', note: String(e.note || '').slice(0, 300),
@@ -562,12 +562,14 @@
   async function rispondiConvocazione(ev, stato, motivo) {
     const op = operatoreCorrente || await caricaOperatore();
     const adesso = new Date().toISOString();
+    // per i turni remoti il nome della mansione (i vecchi turni di supervisione hanno ancora il titolo «Supervisione»)
+    const voce = { titolo: DO.mansione(ev.tipo) || ev.titolo, tipo: DO.tipoEvento(ev.tipo), data: ev.data, competizione: DO.turnoRemoto(ev.tipo) ? '' : ev.competizione || '' };
     try {
       const batch = F.writeBatch(db);
       batch.update(F.doc(db, 'eventi', ev.id), { stato, risposta: String(motivo || '').slice(0, 200), rispostaIl: adesso });
       batch.set(F.doc(F.collection(db, 'invii')), {
         quando: adesso, operatoreId: op.id, nome: op.nome, modifiche: [], letto: false, tipo: 'convocazione',
-        evento: { id: ev.id, titolo: ev.titolo, data: ev.data, competizione: ev.competizione || '', stato, motivo: String(motivo || '').slice(0, 200) },
+        evento: Object.assign({ id: ev.id }, voce, { stato, motivo: String(motivo || '').slice(0, 200) }),
       });
       await batch.commit();
     } catch (e) {
@@ -581,7 +583,7 @@
       return negato(e, 'Il tuo accesso non è più valido: contatta i supervisori.');
     }
     if (stato === 'rifiutato') {
-      email('notificaRisposta', { evento: { titolo: ev.titolo, data: ev.data, competizione: ev.competizione || '' }, stato, motivo })
+      email('notificaRisposta', { evento: voce, stato, motivo })
         .catch((e) => console.warn('Email ai supervisori non inviata:', e.message));
     }
   }

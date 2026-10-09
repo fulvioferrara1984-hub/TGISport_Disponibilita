@@ -173,3 +173,25 @@ test('campi da scrivere sulla richiesta com\'è adesso', () => {
   assert.deepEqual(Q.campiDaScrivere(richiesta({ aperta: false, assegnato: 'a' }), { aperta: false, assegnato: 'b' }), { aperta: false, assegnato: 'b' });
 });
 
+test('allineamento: niente tira e molla con una dashboard vecchia che scrive un\'altra copia', async () => {
+  const archivio = { e1: richiesta() };
+  const scritture = [];
+  const allinea = Q.allineatore(async (id, campi) => { scritture.push(campi); Object.assign(archivio[id], campi); });
+  const giro = async (e) => { allinea([archivio.e1], [e], regole, OGGI); await new Promise((r) => setImmediate(r)); };
+  const avvisi = console.warn;
+  console.warn = () => {};
+  try {
+    await giro(partita({ orario: '18:00' }));                 // copia nuova scritta
+    assert.equal(scritture.length, 1);
+    archivio.e1.evento = Object.assign({}, archivio.e1.evento, { titolo: 'Copia vecchia' });   // un'altra dashboard la riscrive a modo suo
+    await giro(partita({ orario: '18:00' }));
+    await giro(partita({ orario: '18:00' }));
+    assert.equal(scritture.length, 1);                        // non la si riscrive all'infinito
+    await giro(partita({ orario: '19:00' }));                 // l'evento cambia davvero: si scrive
+    assert.equal(scritture.length, 2);
+    assert.equal(archivio.e1.evento.orario, '19:00');
+    await giro(partita({ orario: '19:00', operatoreId: 'a', stato: 'assegnato' }));   // chiusura sempre scritta
+    assert.deepEqual([archivio.e1.aperta, archivio.e1.assegnato], [false, 'a']);
+  } finally { console.warn = avvisi; }
+});
+

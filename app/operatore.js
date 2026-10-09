@@ -277,7 +277,7 @@
       return '<div class="convocazione richiesta-evento' + (st === 'coperto' ? ' coperta' : '') + '">'
         + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
         + '<div class="conv-info"><b>' + DO.esc(sup ? DO.nomeTurno(e.tipo) : e.titolo) + '</b>'
-        + '<span>' + DO.esc([e.competizione, e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(', ')) + '</span>'
+        + (sup ? '' : '<span>' + DO.esc([e.competizione, e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(', ')) + '</span>')
         + '<span>' + g.breve + ' ' + g.num + ' ' + g.mese + ' · <span class="ritrovo">' + DO.esc(orari) + '</span></span>'
         + (r.messaggio ? '<span class="onsite-nota">' + DO.esc(r.messaggio) + '</span>' : '') + '</div>'
         + '<div class="conv-azioni">' + azioni + '</div></div>';

@@ -77,3 +77,16 @@ test('notifica di risposta: niente email per i no, senza risposta o con le notif
   assert.throws(() => altra.gs.notificaRispostaEvento({ idToken: gettone, id: 'e1' }), /Accesso non consentito\./);
   assert.equal(no.email.length + nessuna.email.length + spente.email.length + altra.email.length, 0);
 });
+
+test('turni remoti con il nome nuovo nelle email di convocazione e di rifiuto', () => {
+  const t = carica({ proprieta: NOTIFICHE, risposte: firestoreFinto(null) });
+  t.gs.emailConvocazioni({ idToken: 'supervisore', urlSito: '', convocazioni: [{ nome: 'Marco Rossi', email: 'm@x.it',
+    eventi: [{ tipo: 'supervisione', titolo: 'Supervisione Serie A', competizione: 'Serie A', data: '2026-10-18', convocazione: '10:00', fine: '16:00' }] }] });
+  assert.equal(t.email[0].subject, 'Convocazione: Remote TL · domenica 18 ottobre');
+  assert.ok(!/Supervisione|Serie A/.test(t.email[0].htmlBody));
+  t.gs.notificaRisposta({ idToken: gettone, stato: 'rifiutato', motivo: '', evento: { tipo: 'support', titolo: 'Remote Support', data: '2026-10-18' } });
+  t.gs.notificaRisposta({ idToken: gettone, stato: 'rifiutato', motivo: '', evento: { tipo: 'supervisione', titolo: 'Supervisione', data: '2026-10-18' } });
+  assert.deepEqual(t.email.slice(1).map((m) => m.subject), ['Convocazione rifiutata: Marco Rossi · Remote Support', 'Convocazione rifiutata: Marco Rossi · Remote TL']);
+  assert.ok(!/Supervisione/.test(t.email[2].htmlBody));
+});
+

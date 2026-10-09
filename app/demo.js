@@ -221,7 +221,7 @@
   const voce = (testo) => ({ quando: new Date().toISOString(), testo });
   async function creaEventi(lista) {
     lista.forEach((e, i) => dati.eventi.push(Object.assign({ convocazione: '', note: '', gettone: '', daSostituire: false, risposta: '' }, e, {
-      id: 'ev' + Date.now().toString(36) + i, operatoreId: e.operatoreId || '', stato: e.operatoreId ? 'assegnato' : 'da-assegnare', inviata: false, storico: [voce('Creato')],
+      id: 'ev' + Date.now().toString(36) + i, tipo: DO.tipoEvento(e.tipo), operatoreId: e.operatoreId || '', stato: e.operatoreId ? 'assegnato' : 'da-assegnare', inviata: false, storico: [voce('Creato')],
     })));
     salva();
   }
@@ -261,7 +261,8 @@
     if (stato === 'rifiutato' && (evento.stato !== 'convocato' || DO.bloccato(evento.data, DO.oggi(), giorni))) throw new Error(DO.NON_PIU_RINUNCIABILE);
     Object.assign(evento, { stato, risposta: motivo || '', rispostaIl: new Date().toISOString() });
     dati.invii.push({ id: 'inv' + Date.now(), quando: new Date().toISOString(), operatoreId: op.id, nome: op.nome, modifiche: [], letto: false, tipo: 'convocazione',
-      evento: { id: ev.id, titolo: ev.titolo, data: ev.data, competizione: ev.competizione, stato, motivo: motivo || '' } });
+      evento: { id: ev.id, titolo: DO.mansione(ev.tipo) || ev.titolo, tipo: DO.tipoEvento(ev.tipo), data: ev.data,
+        competizione: DO.turnoRemoto(ev.tipo) ? '' : ev.competizione || '', stato, motivo: motivo || '' } });
     salva();
   }
 

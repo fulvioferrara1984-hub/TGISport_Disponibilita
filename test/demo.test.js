@@ -326,3 +326,26 @@ test('ruolo Remote Support salvato', async () => {
   await D.salvaOperatore(Object.assign({}, o, { ruolo: 'boh' }));
   assert.equal((await statoDemo()).operatori.find((x) => x.id === 'op-demo4').ruolo, 'OP');
 });
+
+test('eventi: il tipo Remote Support si salva, uno sconosciuto diventa partita', async () => {
+  comeSupervisore();
+  await D.creaEventi([{ tipo: 'support', competizione: 'Remote Support', data: tra(4), titolo: 'Tipo-Support', convocazione: '12:00' },
+    { tipo: 'boh', competizione: 'Serie A', data: tra(4), titolo: 'Tipo-Boh', orario: '15:00' }]);
+  const ev = (await statoDemo()).eventi;
+  assert.equal(ev.find((e) => e.titolo === 'Tipo-Support').tipo, 'support');
+  assert.equal(ev.find((e) => e.titolo === 'Tipo-Boh').tipo, 'partita');
+});
+
+
+test('risposta a un vecchio turno di supervisione: in Aggiornamenti si chiama Remote TL', async () => {
+  comeSupervisore();
+  await D.creaEventi([{ tipo: 'supervisione', competizione: 'Serie A', data: tra(12), titolo: 'Supervisione', convocazione: '10:00', operatoreId: 'op-demo1' }]);
+  const e = (await statoDemo()).eventi.find((x) => x.data === tra(12) && x.tipo === 'supervisione');
+  await D.inviaConvocazioni([{ id: e.id, convocazioneCalcolata: '10:00', fineCalcolata: '16:00' }], []);
+  await comeOperatore('DEMO-0001');
+  const mia = (await D.mieConvocazioni()).find((x) => x.id === e.id);
+  await D.rispondiConvocazione(mia, 'confermato', '');
+  comeSupervisore();
+  const voce = (await statoDemo()).invii.find((x) => x.tipo === 'convocazione' && x.evento.id === e.id);
+  assert.deepEqual([voce.evento.titolo, voce.evento.tipo], ['Remote TL', 'supervisione']);
+});

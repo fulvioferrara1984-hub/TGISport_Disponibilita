@@ -543,7 +543,7 @@
   let daInviare = [];
   const rigaInvio = (e) => {
     const g = DO.giorno(e.data);
-    return g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (!turno(e) && e.competizione ? ' · ' + e.competizione : '') + ' · ritrovo ' + (R.convocazione(e, A.regole) || '—');
+    return g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (!turno(e) && e.competizione ? ' · ' + e.competizione : '') + (turno(e) ? ' · dalle ' : ' · ritrovo ') + (R.convocazione(e, A.regole) || '—');
   };
   function contaScelte() {
     const n = $('evi-elenco').querySelectorAll('input[data-evento]:checked').length;

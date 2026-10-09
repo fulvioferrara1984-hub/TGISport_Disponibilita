@@ -141,7 +141,7 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 
 Ordine **sito → script**, nessuna regola di Firestore da cambiare:
 
-1. **Sito**: le pagine aperte mostrano *È uscita una nuova versione del sito*: premere **Ricarica**.
+1. **Sito**: subito dopo la pubblicazione **ricarica (o chiudi) la dashboard su ogni computer dei supervisori**, anche le schede rimaste aperte in secondo piano: una dashboard della versione precedente toglierebbe il ruolo Remote Support a chi modifica e riscriverebbe le richieste per evento dei turni. Le pagine in primo piano mostrano anche *È uscita una nuova versione del sito*: premere **Ricarica**.
 2. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, i promemoria ignorano i turni Remote Support e le email dei turni usano ancora i nomi vecchi.
 3. **Dashboard**: in **Operatori → Modifica** scegli *Remote Support* per chi fa quei turni; in **Impostazioni → Competizioni e sport** controlla colore, compenso e durata delle righe *Remote TL* e *Remote Support*.
 
@@ -173,7 +173,7 @@ Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(
 **Impostazioni → Importa dal file Excel** → scegli `Convocazioni_Operatori_2026-27.xlsx`. Il file viene letto solo nel browser; prima di importare compare un'anteprima.
 
 - operatori (ruolo Remote TL a chi ha fatto turni *Supporto* o *Remote TL*, Remote Support a chi ha fatto turni *Remote Support*; il ruolo si alza soltanto; contratto dal foglio Impostazioni), tariffe, sport e competizioni;
-- ogni riga del foglio Convocazioni diventa un evento: *Supporto* o *Remote TL* → turno Remote TL (ritrovo 4 ore prima dell'orario della riga); *Remote Support* → turno Remote Support; *Deleted* → annullato (con lo storico di chi è stato tolto); *Cambiare …* → da sostituire; *Gettone maggiorato* → maggiorato; le partite di Europa e Conference League segnate come Champions passano alla loro competizione; con operatore e CONFERMA = SI → confermato, altrimenti in attesa di conferma;
+- ogni riga del foglio Convocazioni diventa un evento: *Supporto* o *Remote TL* → turno Remote TL; *Remote Support* → turno Remote Support (per entrambi il ritrovo è 4 ore prima dell'orario della riga); *Deleted* → annullato (con lo storico di chi è stato tolto); *Cambiare …* → da sostituire; *Gettone maggiorato* → maggiorato; le partite di Europa e Conference League segnate come Champions passano alla loro competizione; con operatore e CONFERMA = SI → confermato, altrimenti in attesa di conferma;
 - le assenze diventano giorni *Non disponibile* (senza toccare ciò che l'operatore ha già indicato).
 
 Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operatori importati arrivano **senza codice**: crealo dalla scheda Operatori (*Crea codice*) quando li inviti.

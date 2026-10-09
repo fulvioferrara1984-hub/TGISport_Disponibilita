@@ -197,10 +197,11 @@
       const titoloRiga = testo(r[4]);
       const tipo = /^remote\s*support/i.test(titoloRiga) ? 'support' : /^(supporto|remote\s*tl)/i.test(titoloRiga) ? 'supervisione' : 'partita';
       const sup = tipo !== 'partita';
-      // (ai turni la competizione non serve: conta la mansione)
-      if (!comp && !sup && precedente && precedente.round === round) {
+      // competizione vuota: quella della riga sopra (anche per i turni, che la usano solo nella chiave dell'evento;
+      // l'avviso serve solo per le partite)
+      if (!comp && precedente && precedente.round === round) {
         comp = precedente.competizione;
-        avvisi.push('Riga ' + riga + ': competizione mancante, presa dalla riga sopra (' + comp + ').');
+        if (!sup) avvisi.push('Riga ' + riga + ': competizione mancante, presa dalla riga sopra (' + comp + ').');
       }
       // Europa e Conference League erano registrate sotto "Champions League"
       if (comp === 'Champions League' && /europa/i.test(nota + ' ' + round)) comp = 'Europa League';

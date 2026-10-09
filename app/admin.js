@@ -221,8 +221,8 @@
       + '<div class="popup-stato st-' + v.s + '"><span class="pallino"></span>' + DO.nomeStato(v.s) + '</div>'
       + (v.n ? '<p class="popup-nota">' + DO.esc(v.n) + '</p>' : v.s ? '<p class="popup-vuota">Nessuna nota</p>' : '')
       + (v.t ? '<small>Aggiornato ' + DO.quando(v.t) + '</small>' : '')
-      + impegni(o.id, d).map((e) => '<p class="popup-impegno">' + (e.tipo === 'supervisione' ? 'Supervisione' : DO.esc(e.titolo))
-        + ' · ritrovo ' + DO.regole.convocazione(e, regole) + '</p>').join('')
+      + impegni(o.id, d).map((e) => '<p class="popup-impegno">' + DO.esc(DO.mansione(e.tipo) || e.titolo)
+        + (DO.turnoRemoto(e.tipo) ? ' · dalle ' : ' · ritrovo ') + DO.esc(DO.regole.convocazione(e, regole)) + '</p>').join('')
       + (o.telefono ? '<small>' + DO.esc(o.telefono) + '</small>' : '');
     popup.hidden = false;
     const r = td.getBoundingClientRect(), w = popup.offsetWidth, h = popup.offsetHeight;
@@ -539,11 +539,14 @@
     }).join('');
   }
 
+  // nome dell'evento in una voce di Aggiornamenti: le voci vecchie dei turni dicono ancora «Supervisione»
+  const nomeVoce = (ev) => DO.mansione(ev.tipo) || (ev.titolo === 'Supervisione' ? 'Remote TL' : ev.titolo || '');
+
   function vocePerConvocazione(x) {
     const ev = x.evento || {}, si = ev.stato === 'confermato', g = ev.data ? DO.giorno(ev.data) : null;
     return '<li class="feed-voce' + (x.letto ? '' : ' non-letto') + '"><span class="iniziali">' + DO.esc(DO.iniziali(x.nome)) + '</span>'
       + '<div><p class="feed-titolo"><b>' + DO.esc(x.nome) + '</b> ' + (si ? 'ha confermato' : '<span class="testo-errore">non può partecipare</span>') + ': '
-      + DO.esc(ev.titolo || '') + (g ? ' · ' + g.breve + ' ' + g.num + ' ' + g.meseBreve : '') + '</p>'
+      + DO.esc(nomeVoce(ev)) + (g ? ' · ' + g.breve + ' ' + g.num + ' ' + g.meseBreve : '') + '</p>'
       + '<span class="feed-quando">' + DO.quando(x.quando) + '</span>'
       + (ev.motivo ? '<ul class="modifiche"><li>' + DO.esc(ev.motivo) + '</li></ul>' : '') + '</div>'
       + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-evento="' + DO.esc(ev.data || '') + '" data-id="' + x.id + '">Vedi convocazione</button>'
@@ -565,7 +568,7 @@
     const ev = x.evento || {}, si = ev.risposta === 'si', g = ev.data ? DO.giorno(ev.data) : null;
     return '<li class="feed-voce' + (x.letto ? '' : ' non-letto') + '"><span class="iniziali">' + DO.esc(DO.iniziali(x.nome)) + '</span>'
       + '<div><p class="feed-titolo"><b>' + DO.esc(x.nome) + '</b> ' + (si ? 'è disponibile' : '<span class="testo-errore">non è disponibile</span>') + ' per '
-      + DO.esc(ev.titolo || '') + (g ? ' (' + g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ')' : '') + '</p>'
+      + DO.esc(nomeVoce(ev)) + (g ? ' (' + g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ')' : '') + '</p>'
       + '<span class="feed-quando">' + DO.quando(x.quando) + '</span></div>'
       + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-evento="' + DO.esc(ev.data || '') + '" data-id="' + x.id + '">Vedi evento</button>'
       + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';

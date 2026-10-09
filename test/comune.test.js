@@ -100,3 +100,8 @@ test('nomi dei turni remoti', () => {
   assert.deepEqual(DO.RUOLI, { OP: 'Remote OP', SUP: 'Remote Support', TL: 'Remote TL' });
 });
 
+test('tipo di evento valido', () => {
+  assert.deepEqual(['partita', 'supervisione', 'support', 'boh', undefined, 'constructor'].map(DO.tipoEvento),
+    ['partita', 'supervisione', 'support', 'partita', 'partita', 'partita']);
+});
+
