@@ -123,6 +123,16 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste on-site non partono e la dashboard lo segnala dopo l'invio.
 4. **Dashboard**: in **Operatori → Modifica** imposta *On-site: TL / OP* per chi può andare in trasferta, e controlla la **Tariffa on-site** in Impostazioni.
 
+### Outlook come app di posta
+
+Il tasto **Invia mail** (codice personale di un operatore) apre una nuova email nell'app di posta predefinita del computer, già compilata. Perché sia Outlook:
+
+- **Mac**: Outlook → **Impostazioni** (o **Preferenze**) → **Generali** → **Imposta come predefinita**; in alternativa app **Mail** → Impostazioni → Generali → *Lettore email predefinito* → Microsoft Outlook.
+- **Windows 11**: Start → **Impostazioni → App → App predefinite** → nel campo in alto scrivi **MAILTO** → scegli **Outlook**.
+- **Windows 10**: Start → **Impostazioni → App → App predefinite → Posta elettronica** → **Outlook**.
+
+Prova: aprendo `mailto:prova@esempio.it` dal browser deve aprirsi una nuova email in Outlook.
+
 ### 4. GitHub Pages
 
 Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(root)`.

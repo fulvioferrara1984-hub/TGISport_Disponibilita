@@ -666,9 +666,13 @@
     $('cod-nome').textContent = o.nome;
     $('cod-codice').textContent = codice;
     $('cod-link').value = link;
+    const testo = 'Ciao ' + o.nome.split(' ')[0] + ', da ora puoi indicare le tue disponibilità settimanali per TGI Sport qui:\n'
+      + link + '\n\nIl tuo codice personale è ' + codice + ': non condividerlo.';
     $('cod-copia-link').onclick = () => DO.copia(link, 'Link copiato.');
-    $('cod-copia-msg').onclick = () => DO.copia('Ciao ' + o.nome.split(' ')[0] + ', da ora puoi indicare le tue disponibilità settimanali per TGI Sport qui:\n'
-      + link + '\n\nIl tuo codice personale è ' + codice + ': non condividerlo.', 'Messaggio copiato: incollalo su WhatsApp o in una email.');
+    // apre una nuova email nell'app di posta predefinita (Outlook): la manda il supervisore
+    $('cod-invia-mail').onclick = () => { location.href = DO.mailto(o.email, 'TGI Sport · il tuo codice per le disponibilità', testo); };
+    $('cod-senza-email').hidden = !!o.email;
+    $('cod-copia-msg').onclick = () => DO.copia(testo, 'Testo copiato: incollalo su WhatsApp o in una email.');
     $('dlg-codice').showModal();
   }
 

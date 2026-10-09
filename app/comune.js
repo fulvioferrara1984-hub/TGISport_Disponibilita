@@ -19,6 +19,10 @@
   const settimana = (lun) => Array.from({ length: 7 }, (_, i) => aggiungi(lun, i));
   // scheda Convocazioni: la settimana parte di martedì, così una giornata di campionato (venerdì–lunedì) sta tutta insieme
   const martedi = (s) => aggiungi(s, -((daIso(s).getDay() + 5) % 7));
+  // nuova email nell'app di posta predefinita (Outlook, se impostato): destinatario, oggetto e testo già scritti
+  const mailto = (a, oggetto, testo) => 'mailto:' + encodeURIComponent(a || '').replace(/%40/g, '@')
+    + '?subject=' + encodeURIComponent(oggetto) + '&body=' + encodeURIComponent(String(testo).replace(/\r?\n/g, '\r\n'));
+
   // il calendario si apre sul mese di oggi se la settimana mostrata contiene oggi (a inizio mese il martedì è ancora nel mese prima)
   const giornoDiRiferimento = (inizio, oggiIso) => (oggiIso >= inizio && oggiIso <= aggiungi(inizio, 6) ? oggiIso : inizio);
   // calendario mensile: settimane da lunedì a domenica che coprono tutto il mese "aaaa-mm" (da 4 a 6)
@@ -209,7 +213,7 @@
   }
 
   Object.assign(DO, {
-    $, esc, iniziali, iso, daIso, aggiungi, lunedi, martedi, grigliaMese, giornoDiRiferimento, settimana, oggi, limite, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
+    $, esc, iniziali, iso, daIso, aggiungi, lunedi, martedi, grigliaMese, giornoDiRiferimento, mailto, settimana, oggi, limite, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
     giorniA, bloccato, OPERATIVO_PREDEFINITO, NON_PIU_RINUNCIABILE, azioniConvocazione,
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,

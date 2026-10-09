@@ -69,3 +69,9 @@ test('giorno di riferimento del calendario: oggi se è nella settimana mostrata'
   assert.equal(DO.giornoDiRiferimento('2026-10-06', '2026-10-02'), '2026-10-06');
   assert.equal(DO.giornoDiRiferimento('2026-09-22', '2026-10-02'), '2026-09-22');
 });
+
+test('indirizzo mailto con oggetto e testo', () => {
+  assert.equal(DO.mailto('m@x.it', 'Oggetto è', "Ciao Nicolò, l'invito & co\nRiga 2"),
+    "mailto:m@x.it?subject=Oggetto%20%C3%A8&body=Ciao%20Nicol%C3%B2%2C%20l'invito%20%26%20co%0D%0ARiga%202");
+  assert.equal(DO.mailto('', 'X', 'Y'), 'mailto:?subject=X&body=Y');
+});

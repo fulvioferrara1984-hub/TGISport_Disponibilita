@@ -7,7 +7,7 @@
   <title>Supervisori · Disponibilità TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css?v=20">
+  <link rel="stylesheet" href="app/stile.css?v=21">
 </head>
 <body>
   <header class="testata con-schede">
@@ -559,24 +559,26 @@
       <span class="codice-grande" id="cod-codice"></span>
       <label class="campo"><span>Link d'invito (entra senza digitare il codice)</span></label>
       <div class="copia-riga"><input type="text" id="cod-link" readonly><button type="button" class="bottone" id="cod-copia-link">Copia</button></div>
+      <p class="nota testo-errore" id="cod-senza-email" hidden style="margin: 8px 0 0;">Nessuna email registrata: scrivi tu il destinatario.</p>
       <div class="dialog-azioni">
-        <button type="button" class="bottone" id="cod-copia-msg">Copia messaggio d'invito</button>
+        <button type="button" class="link" id="cod-copia-msg">Copia il testo</button>
+        <button type="button" class="bottone" id="cod-invia-mail">Invia mail</button>
         <button type="submit" class="primario">Fatto</button>
       </div>
     </form>
   </dialog>
 
-  <script src="app/config.js?v=20"></script>
-  <script src="app/comune.js?v=20"></script>
-  <script src="app/onsite.js?v=20"></script>
-  <script src="app/demo.js?v=20"></script>
-  <script src="app/dati-firebase.js?v=20"></script>
-  <script src="app/regole.js?v=20"></script>
-  <script src="app/admin.js?v=20"></script>
-  <script src="app/convocazioni.js?v=20"></script>
-  <script src="app/onsite-admin.js?v=20"></script>
-  <script src="app/calendario.js?v=20"></script>
-  <script src="app/riepilogo.js?v=20"></script>
-  <script src="app/impostazioni.js?v=20"></script>
+  <script src="app/config.js?v=21"></script>
+  <script src="app/comune.js?v=21"></script>
+  <script src="app/onsite.js?v=21"></script>
+  <script src="app/demo.js?v=21"></script>
+  <script src="app/dati-firebase.js?v=21"></script>
+  <script src="app/regole.js?v=21"></script>
+  <script src="app/admin.js?v=21"></script>
+  <script src="app/convocazioni.js?v=21"></script>
+  <script src="app/onsite-admin.js?v=21"></script>
+  <script src="app/calendario.js?v=21"></script>
+  <script src="app/riepilogo.js?v=21"></script>
+  <script src="app/impostazioni.js?v=21"></script>
 </body>
 </html>
