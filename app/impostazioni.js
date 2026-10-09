@@ -63,14 +63,16 @@
       // colore: quello scelto oppure automatico (calcolato dal nome); «Auto» torna all'automatico
       + '<span class="colore-comp' + (c.colore ? '' : ' auto') + '"><input type="color" data-campo="colore" value="' + R.coloreCompetizione(c.nome, { competizioni: [c] }) + '" title="Colore nelle Convocazioni" aria-label="Colore">'
       + '<button type="button" class="link" data-auto="' + i + '" title="Colore automatico"' + (c.colore ? '' : ' hidden') + '>Auto</button></span>'
-      + '<label class="spunta"><input type="checkbox" data-campo="uefa"' + (c.uefa ? ' checked' : '') + '><span>UEFA ½</span></label>'
+      // tipo di compenso della competizione (Diurno = notturno da solo se il ritrovo è di notte)
+      + '<select data-campo="compenso" aria-label="Compenso" title="Compenso">' + Object.keys(R.TIPI).map((k) => '<option value="' + k + '"' + (k === (c.compenso || 'diurno') ? ' selected' : '') + '>'
+        + (k === 'dimezzato' ? 'Dimezzato' : R.TIPI[k]) + '</option>').join('') + '</select>'
       + '<button type="button" class="icona" data-togli="' + i + '" aria-label="Togli">✕</button></li>').join('');
     if (document.activeElement !== $('reg-sport')) $('reg-sport').value = sport.join(', ');
   }
   $('reg-competizioni').addEventListener('input', (e) => {
     const li = e.target.closest('li'), campo = e.target.dataset.campo;
     if (!li || !campo) return;
-    bozzaComp[li.dataset.i][campo] = campo === 'uefa' ? e.target.checked : e.target.value;
+    bozzaComp[li.dataset.i][campo] = e.target.value;
   });
   $('reg-competizioni').addEventListener('change', (e) => {
     const li = e.target.closest('li');
@@ -86,14 +88,14 @@
     disegnaCompetizioni();
   });
   $('reg-aggiungi-comp').addEventListener('click', () => {
-    bozzaComp.push({ nome: '', sport: '', uefa: false });
+    bozzaComp.push({ nome: '', sport: '', compenso: 'diurno' });
     disegnaCompetizioni();
     $('reg-competizioni').lastElementChild.querySelector('input').focus();
   });
   $('form-competizioni').addEventListener('submit', (e) => {
     e.preventDefault();
     const oreDa = (v) => (v === '' || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v));
-    const competizioni = bozzaComp.filter((c) => c.nome.trim()).map((c) => ({ nome: c.nome.trim(), sport: c.sport || '', uefa: !!c.uefa, prima: oreDa(c.prima), dopo: oreDa(c.dopo), colore: c.colore || '' }));
+    const competizioni = bozzaComp.filter((c) => c.nome.trim()).map((c) => ({ nome: c.nome.trim(), sport: c.sport || '', compenso: c.compenso || 'diurno', prima: oreDa(c.prima), dopo: oreDa(c.dopo), colore: c.colore || '' }));
     const sport = $('reg-sport').value.split(',').map((s) => s.trim()).filter(Boolean);
     bozzaComp = null;
     salva({ competizioni, sport }, 'Competizioni salvate.');
@@ -154,8 +156,9 @@
     });
     elenco.sport.forEach((s) => { if (!regole.sport.includes(s)) regole.sport.push(s); });
     elenco.comp.concat(['Europa League', 'Conference League']).forEach((c) => {
+      // competizioni UEFA (Champions, Europa, Conference League): compenso dimezzato
       const uefa = /champions|europa league|conference/i.test(c);
-      if (!regole.competizioni.some((x) => x.nome === c)) regole.competizioni.push({ nome: c, sport: uefa ? 'Calcio' : '', uefa });
+      if (!regole.competizioni.some((x) => x.nome === c)) regole.competizioni.push({ nome: c, sport: uefa ? 'Calcio' : '', compenso: uefa ? 'dimezzato' : 'diurno' });
     });
 
     // operatori: si riconoscono per nome tra quelli già presenti
@@ -264,7 +267,7 @@
           return DO.esc(o.nome) + ' (' + [m.ruolo && 'ruolo TL', m.contratto && 'contratto ' + m.contratto].filter(Boolean).join(', ') + ')';
         }).join(', ') + '</li>' : '')
         + '<li><b>' + pacchetto.assenze + '</b> giorni di assenza da segnare come "Non disponibile"</li>'
-        + '<li>Tariffe, sport e competizioni (aggiunte Europa League e Conference League come UEFA ½)</li></ul>'
+        + '<li>Tariffe, sport e competizioni (Europa League e Conference League con compenso dimezzato)</li></ul>'
         + (pacchetto.avvisi.length ? '<p class="nota"><b>Da controllare:</b> ' + pacchetto.avvisi.map(DO.esc).join(' ') + '</p>' : '')
         + '<p class="nota">Gli operatori nuovi arrivano senza codice di accesso: crealo dalla scheda Operatori quando vuoi invitarli. Gli eventi con operatore risultano già inviati, con la conferma del file.</p>'
         + '<div class="dialog-azioni"><button type="button" class="bottone" id="imp-annulla">Annulla</button><button type="button" class="primario" id="imp-conferma">Importa</button></div>';

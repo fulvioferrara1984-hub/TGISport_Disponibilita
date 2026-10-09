@@ -93,7 +93,7 @@
     const conv = R.convocazione(e, A.regole), fine = R.fine(e, A.regole), notte = R.notturno(e, A.regole), annullato = e.stato === 'annullato';
     const tag = [];
     if (e.tipo === 'supervisione') tag.push('<span class="tag tag-sup">Supervisione</span>');
-    if (R.uefa(e.competizione, A.regole)) tag.push('<span class="tag">UEFA ½</span>');
+    if (R.compensoCompetizione(e.competizione, A.regole) === 'dimezzato') tag.push('<span class="tag">Dimezzato</span>');
     if (e.gettone === 'maggiorato') tag.push('<span class="tag tag-magg">Maggiorato</span>');
     if (e.daSostituire && !annullato) tag.push('<span class="tag tag-errore">Da sostituire</span>');
     // nella finestra di blocco gli operatori non possono più cambiare: ciò che manca va sistemato ora

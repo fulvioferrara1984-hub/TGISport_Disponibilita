@@ -16,21 +16,21 @@
     notteDa: '22:00',        // convocazioni da quest'ora…
     notteA: '06:00',         // …a quest'ora sono notturne
     sport: ['Calcio', 'Basket', 'Tennis', 'Volley', 'Rugby', 'Football Americano', 'Baseball', 'Cricket', 'Hockey su Prato', 'Hockey su Ghiaccio', 'Boxing'],
-    // uefa: il gettone vale metà del diurno
+    // compenso: diurno (notturno se il ritrovo è di notte), notturno, maggiorato, dimezzato (metà del diurno)
     competizioni: [
       ['Serie A', 'Calcio'], ['Coppa Italia', 'Calcio'], ['Supercoppa Italiana', 'Calcio'], ['Ligue 1', 'Calcio'],
       ['Champions League', 'Calcio', true], ['Europa League', 'Calcio', true], ['Conference League', 'Calcio', true],
       ['Nations League', 'Calcio'], ['Nations League W', 'Calcio'], ['Wcq', 'Calcio'], ['European Qualfiers Women', 'Calcio'],
       ['Amichevoli', 'Calcio'], ['Nazionali', 'Calcio'], ['Dentsu', ''], ['Cev Women', 'Volley'], ['Cev Men', 'Volley'],
       ['Ebu Boxing', 'Boxing'], ['Bjkc', 'Tennis'], ['Ase', ''],
-    ].map(([nome, sport, uefa]) => ({ nome, sport, uefa: !!uefa, prima: null, dopo: null })),
+    ].map(([nome, sport, dimezzato]) => ({ nome, sport, compenso: dimezzato ? 'dimezzato' : 'diurno', prima: null, dopo: null })),
   };
 
   const TIPI = {
     diurno: 'Diurno',
     notturno: 'Notturno',
     maggiorato: 'Maggiorato',
-    uefa: 'UEFA (½ diurno)',
+    dimezzato: 'Dimezzato (½ diurno)',
   };
 
   const ore = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
@@ -39,7 +39,11 @@
   function complete(r) {
     const x = Object.assign({}, PREDEFINITE, r || {});
     // prima/dopo per competizione: vuoti = valori generali
-    x.competizioni = x.competizioni.map((c) => Object.assign({}, c, { prima: ore(c.prima), dopo: ore(c.dopo), colore: coloreValido(c.colore) }));
+    // competizioni salvate prima del tipo di compenso: la vecchia casella «UEFA ½» diventa «dimezzato»
+    x.competizioni = x.competizioni.map(({ uefa, ...c }) => Object.assign({}, c, {
+      prima: ore(c.prima), dopo: ore(c.dopo), colore: coloreValido(c.colore),
+      compenso: TIPI[c.compenso] ? c.compenso : uefa && c.compenso === undefined ? 'dimezzato' : 'diurno',
+    }));
     x.tariffe = {
       'P.IVA': Object.assign({}, PREDEFINITE.tariffe['P.IVA'], (r && r.tariffe && r.tariffe['P.IVA']) || {}),
       Coop: Object.assign({}, PREDEFINITE.tariffe.Coop, (r && r.tariffe && r.tariffe.Coop) || {}),
@@ -104,7 +108,7 @@
   }
 
   const competizione = (nome, regole) => complete(regole).competizioni.find((c) => c.nome === nome) || null;
-  const uefa = (nome, regole) => !!(competizione(nome, regole) || {}).uefa;
+  const compensoCompetizione = (nome, regole) => (competizione(nome, regole) || {}).compenso || 'diurno';
 
   // Colori delle competizioni: quello scelto nelle impostazioni, altrimenti uno della tavolozza ricavato dal nome
   const PALETTE = ['#2563eb', '#0d9488', '#c2410c', '#be185d', '#4d7c0f', '#0369a1', '#a16207', '#7c2d12', '#b91c1c', '#15803d', '#475569', '#0891b2'];
@@ -135,11 +139,13 @@
   function gettone(e, operatore, regole) {
     const r = complete(regole);
     const t = r.tariffe[operatore && operatore.contratto] || null;
+    // ordine: maggiorato sull'evento, poi il tipo della competizione; «diurno» diventa notturno se il ritrovo è di notte
+    const comp = compensoCompetizione(e.competizione, r);
     let tipo = 'diurno';
-    if (e.gettone === 'maggiorato') tipo = 'maggiorato';
-    else if (uefa(e.competizione, r)) tipo = 'uefa';
-    else if (notturno(e, r)) tipo = 'notturno';
-    const importo = !t ? 0 : tipo === 'uefa' ? t.diurno / 2 : t[tipo];
+    if (e.gettone === 'maggiorato' || comp === 'maggiorato') tipo = 'maggiorato';
+    else if (comp === 'dimezzato') tipo = 'dimezzato';
+    else if (comp === 'notturno' || notturno(e, r)) tipo = 'notturno';
+    const importo = !t ? 0 : tipo === 'dimezzato' ? t.diurno / 2 : t[tipo];
     return { tipo, etichetta: TIPI[tipo], importo: Math.round(importo * 100) / 100, senzaContratto: !t };
   }
 
@@ -230,6 +236,6 @@
       + (fermo >= 2 ? ' · ⚠ nessun giro da ' + fermo + ' giorni: controlla lo script delle email' : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria,
+  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});

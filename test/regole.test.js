@@ -225,3 +225,31 @@ test('colori automatici distinti per le competizioni principali', () => {
   const colori = principali.map((n) => R.coloreCompetizione(n, r));
   assert.equal(new Set(colori).size, principali.length, JSON.stringify(colori));
 });
+
+test('compenso per tipo di competizione', () => {
+  const r = R.complete({ competizioni: [
+    { nome: 'Serie A', compenso: 'diurno' }, { nome: 'Champions League', compenso: 'dimezzato' },
+    { nome: 'Coppa', compenso: 'notturno' }, { nome: 'Finale', compenso: 'maggiorato' },
+  ] });
+  const piva = { contratto: 'P.IVA' };
+  const g = (competizione, orario, campi) => { const x = R.gettone(Object.assign({ competizione, orario }, campi), piva, r); return [x.tipo, x.importo]; };
+  assert.deepEqual(g('Serie A', '20:45'), ['diurno', 140]);
+  assert.deepEqual(g('Serie A', '02:00'), ['notturno', 210]);
+  assert.deepEqual(g('Champions League', '02:00'), ['dimezzato', 70]);
+  assert.deepEqual(g('Coppa', '15:00'), ['notturno', 210]);
+  assert.deepEqual(g('Finale', '15:00'), ['maggiorato', 210]);
+  assert.deepEqual(g('Champions League', '21:00', { gettone: 'maggiorato' }), ['maggiorato', 210]);
+  assert.deepEqual(g('Coppa', '15:00', { gettone: 'maggiorato' }), ['maggiorato', 210]);
+  assert.deepEqual(g('Sconosciuta', '15:00'), ['diurno', 140]);
+  assert.equal(R.compensoCompetizione('Champions League', r), 'dimezzato');
+  assert.equal(R.compensoCompetizione('Sconosciuta', r), 'diurno');
+});
+
+test('migrazione da UEFA ½ al tipo di compenso', () => {
+  const r = R.complete({ competizioni: [{ nome: 'A', uefa: true }, { nome: 'B' }, { nome: 'C', uefa: true, compenso: 'diurno' }, { nome: 'D', compenso: 'boh' }] });
+  assert.deepEqual(r.competizioni.map((c) => c.compenso), ['dimezzato', 'diurno', 'diurno', 'diurno']);
+  assert.equal(R.TIPI.dimezzato, 'Dimezzato (½ diurno)');
+  assert.equal(R.TIPI.uefa, undefined);
+  assert.equal(R.uefa, undefined);
+  assert.equal(R.compensoCompetizione('Champions League', R.complete(null)), 'dimezzato');
+});

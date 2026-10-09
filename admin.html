@@ -229,7 +229,7 @@
                   <tr><td>Coop</td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.diurno"></td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.notturno"></td><td><input type="number" step="0.01" min="0" data-tariffa="Coop.maggiorato"></td></tr>
                 </tbody>
               </table>
-              <p class="nota" style="margin: 8px 0 14px;">Competizioni UEFA: metà del diurno. Il maggiorato si sceglie sul singolo evento.</p>
+              <p class="nota" style="margin: 8px 0 14px;">Il tipo di compenso si sceglie per competizione (Competizioni e sport); il maggiorato anche sul singolo evento.</p>
               <div class="tre-campi">
                 <label class="campo"><span>Ritrovo: ore prima</span><input type="number" id="reg-anticipo" min="0" max="12" step="0.25"></label>
                 <label class="campo"><span>Fine turno: ore dopo</span><input type="number" id="reg-fine" min="0" max="12" step="0.25"></label>
@@ -275,7 +275,7 @@
           <section class="scheda">
             <div class="scheda-testa"><h2>Competizioni e sport</h2></div>
             <form class="scheda-corpo" id="form-competizioni">
-              <div class="intestazione-competizioni" aria-hidden="true"><span>Competizione</span><span>Sport</span><span title="Ritrovo: ore prima">−h</span><span title="Fine turno: ore dopo">+h</span><span>Colore</span><span>UEFA</span><span></span></div>
+              <div class="intestazione-competizioni" aria-hidden="true"><span>Competizione</span><span>Sport</span><span title="Ritrovo: ore prima">−h</span><span title="Fine turno: ore dopo">+h</span><span>Colore</span><span>Compenso</span><span></span></div>
               <ul class="elenco-competizioni" id="reg-competizioni"></ul>
               <button type="button" class="link" id="reg-aggiungi-comp" style="margin: 8px 0 14px;">+ Aggiungi competizione</button>
               <label class="campo"><span>Sport (separati da virgola)</span><textarea id="reg-sport" rows="3"></textarea></label>
