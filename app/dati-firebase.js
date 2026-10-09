@@ -99,6 +99,7 @@
   const pubblico = (id, o) => ({
     id, nome: o.nome || '', mansione: o.mansione || '', email: o.email || '', telefono: o.telefono || '',
     attivo: o.attivo !== false, ultimoInvio: o.ultimoInvio || '', contratto: o.contratto || '', ruolo: o.ruolo || 'OP',
+    onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
   });
 
   // ---------- sessione ----------
@@ -281,7 +282,7 @@
   // ---------- supervisori ----------
   // Ascolto in tempo reale: alla prima lettura arrivano tutti i dati, poi solo ciò che cambia.
   function ascolta(cb) {
-    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null, operativo: null };
+    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null, operativo: null, onsite: null, compensiOnsite: null };
     const pronto = () => { if (Object.values(stato).every((v) => v !== null)) cb(Object.assign({}, stato)); };
     let fermo = false;
     const errore = (e) => {
@@ -291,14 +292,15 @@
     };
     // Eventi e regole sono arrivati dopo: se le regole di Firestore non sono ancora aggiornate
     // il resto della dashboard funziona lo stesso, con un avviso invece di far uscire.
-    const erroreNuovo = (chiave, vuoto) => (e) => {
+    const erroreNuovo = (chiave, vuoto, messaggio = 'Convocazioni non disponibili: pubblica le nuove regole di Firestore (vedi README).') => (e) => {
       if (fermo) return;
       if (e.code !== 'permission-denied') { errore(e); return; }
       stato[chiave] = vuoto;
       pronto();
-      if (!avvisato) { avvisato = true; DO.avviso('Convocazioni non disponibili: pubblica le nuove regole di Firestore (vedi README).', 'errore', 12000); }
+      if (!avvisati.has(messaggio)) { avvisati.add(messaggio); DO.avviso(messaggio, 'errore', 12000); }
     };
-    let avvisato = false;
+    const avvisati = new Set();
+    const SENZA_ONSITE = 'On-site non disponibile: pubblica le nuove regole di Firestore (vedi README).';
     const ferma = [
       F.onSnapshot(F.collection(db, 'operatori'), (s) => {
         stato.operatori = s.docs.map((d) => Object.assign(pubblico(d.id, d.data()), { uid: d.data().uid }));
@@ -331,6 +333,16 @@
         stato.operativo = operativoDa(d);
         pronto();
       }, erroreNuovo('operativo', Object.assign({}, DO.OPERATIVO_PREDEFINITO))),
+      F.onSnapshot(F.query(F.collection(db, 'onsite'), F.where('a', '>=', DO.regole.stagione(DO.oggi()).da)), (s) => {
+        stato.onsite = s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+        pronto();
+      }, erroreNuovo('onsite', [], SENZA_ONSITE)),
+      F.onSnapshot(F.collection(db, 'onsiteRiservato'), (s) => {
+        const m = {};
+        s.docs.forEach((d) => { m[d.id] = d.data().compenso; });
+        stato.compensiOnsite = m;
+        pronto();
+      }, erroreNuovo('compensiOnsite', {}, SENZA_ONSITE)),
     ];
     return () => { fermo = true; ferma.forEach((f) => f()); };
   }
@@ -352,6 +364,7 @@
       nome: String(o.nome || '').trim().slice(0, 80), mansione: String(o.mansione || '').trim().slice(0, 60),
       email: String(o.email || '').trim().slice(0, 120), telefono: String(o.telefono || '').trim().slice(0, 30), attivo: o.attivo !== false,
       contratto: ['P.IVA', 'Coop'].includes(o.contratto) ? o.contratto : '', ruolo: o.ruolo === 'TL' ? 'TL' : 'OP',
+      onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
     };
     if (!campi.nome) throw new Error('Il nome è obbligatorio.');
     if (o.id) {
@@ -557,6 +570,127 @@
     }
   }
 
+  // ---------- deployment on-site ----------
+  // Supervisori: scheda in onsite/{id}, compenso a parte in onsiteRiservato/{id} (gli operatori non lo leggono).
+  const contattiEmail = (extra) => {
+    const contatti = extra && extra.email ? extra.contatti || [] : [];
+    return { senzaEmail: contatti.filter((c) => !c.email).map((c) => c.nome), conEmail: contatti.filter((c) => c.email) };
+  };
+  const mandaRichiestaOnsite = (scheda, conEmail, urlSito) => (conEmail.length
+    ? email('emailOnsite', {
+      destinatari: conEmail.map((c) => ({ nome: c.nome, email: c.email, ruolo: c.ruolo || '' })),
+      deployment: { titolo: scheda.titolo, luogo: scheda.luogo, sport: scheda.sport, note: scheda.note, giorni: scheda.giorni, da: scheda.da, a: scheda.a },
+      urlSito,
+    })
+    : Promise.resolve({ email: 0 }));
+
+  async function creaOnsite(d, extra) {
+    const scheda = DO.onsite.normalizza(d, DO.oggi());
+    const destinatari = Array.from(new Set(d.destinatari || []));
+    if (!destinatari.length) throw new Error('Scegli almeno un operatore.');
+    const compenso = DO.onsite.compensoValido(extra && extra.compenso);
+    const rif = F.doc(F.collection(db, 'onsite'));
+    const completa = Object.assign({ creato: new Date().toISOString() }, scheda,
+      { destinatari, accettatiTL: [], accettatiOP: [], rifiuti: [], esclusi: [], stato: 'aperta' });
+    await scrivi(async () => {
+      const batch = F.writeBatch(db);
+      batch.set(rif, completa);
+      batch.set(F.doc(db, 'onsiteRiservato', rif.id), { compenso });
+      await batch.commit();
+    });
+    const { senzaEmail, conEmail } = contattiEmail(extra);
+    return { id: rif.id, senzaEmail, inviate: mandaRichiestaOnsite(completa, conEmail, extra.urlSito) };
+  }
+
+  async function leggiOnsite(id) {
+    const d = await scrivi(() => F.getDoc(F.doc(db, 'onsite', id)));
+    if (!d.exists()) throw new Error('Deployment non trovato.');
+    return Object.assign({ id }, d.data());
+  }
+
+  async function modificaOnsite(id, campi, extra) {
+    const d = await leggiOnsite(id);
+    if (d.stato === 'annullata') throw new Error('Il deployment è annullato.');
+    const nuovi = DO.onsite.modifiche(d, campi || {});
+    const compenso = extra && extra.compenso !== undefined ? DO.onsite.compensoValido(extra.compenso) : undefined;
+    await scrivi(async () => {
+      const batch = F.writeBatch(db);
+      if (Object.keys(nuovi).length) batch.update(F.doc(db, 'onsite', id), nuovi);
+      if (compenso !== undefined) batch.set(F.doc(db, 'onsiteRiservato', id), { compenso });
+      await batch.commit();
+    });
+    const { senzaEmail, conEmail } = contattiEmail(extra);
+    return { senzaEmail, inviate: mandaRichiestaOnsite(Object.assign({}, d, nuovi), conEmail, extra && extra.urlSito) };
+  }
+
+  const togliOnsite = (id, idOperatore) => scrivi(() => F.updateDoc(F.doc(db, 'onsite', id), {
+    accettatiTL: F.arrayRemove(idOperatore), accettatiOP: F.arrayRemove(idOperatore), esclusi: F.arrayUnion(idOperatore),
+  }));
+
+  async function statoOnsite(id, stato) {
+    if (!['aperta', 'chiusa', 'annullata'].includes(stato)) throw new Error('Stato non valido.');
+    const d = await leggiOnsite(id);
+    if (d.stato === 'annullata' && stato !== 'annullata') throw new Error('Il deployment è annullato.');
+    await scrivi(() => F.updateDoc(F.doc(db, 'onsite', id), { stato }));
+  }
+
+  // Operatori: solo i deployment mandati a loro (le regole lo pretendono anche nella ricerca)
+  async function mieiOnsite() {
+    const op = operatoreCorrente || await caricaOperatore();
+    try {
+      const s = await F.getDocs(F.query(F.collection(db, 'onsite'), F.where('destinatari', 'array-contains', op.id)));
+      return s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+    } catch (e) {
+      // regole non ancora pubblicate: la pagina funziona senza on-site
+      if (e.code === 'permission-denied') return [];
+      throw traduci(e);
+    }
+  }
+
+  async function rispondiOnsite(id, accetto) {
+    const op = operatoreCorrente || await caricaOperatore();
+    const leggi = async () => {
+      const d = await F.getDoc(F.doc(db, 'onsite', id));
+      if (!d.exists() || !(d.data().destinatari || []).includes(op.id)) throw new Error('Richiesta non trovata.');
+      return Object.assign({ id }, d.data());
+    };
+    // prima si controlla come faranno le regole, così il messaggio è quello giusto
+    const controlla = (d, chi = op) => {
+      const stato = DO.onsite.statoPerOperatore(d, chi, DO.oggi());
+      if (accetto && !['da-rispondere', 'rifiutato'].includes(stato)) throw new Error(DO.onsite.MESSAGGI[stato]);
+      if (!accetto && ['accettato', 'annullato', 'escluso', 'scaduta'].includes(stato)) throw new Error(DO.onsite.MESSAGGI[stato]);
+      if (!accetto && (d.rifiuti || []).includes(op.id)) throw new Error('Hai già risposto.');
+    };
+    let d;
+    try { d = await leggi(); } catch (e) { if (e.code) throw traduci(e); throw e; }
+    controlla(d);
+    const adesso = new Date().toISOString();
+    try {
+      const batch = F.writeBatch(db);
+      batch.update(F.doc(db, 'onsite', id), accetto
+        ? { ['accettati' + op.onsite]: F.arrayUnion(op.id), rifiuti: F.arrayRemove(op.id) }
+        : { rifiuti: F.arrayUnion(op.id) });
+      batch.set(F.doc(F.collection(db, 'invii')), {
+        quando: adesso, operatoreId: op.id, nome: op.nome, modifiche: [], letto: false, tipo: 'onsite',
+        evento: { id, luogo: d.luogo, da: d.da, a: d.a, stato: accetto ? 'accettato' : 'rifiutato', ruolo: accetto ? op.onsite : '' },
+      });
+      await batch.commit();
+    } catch (e) {
+      // posto preso da un altro un attimo prima, abilitazione cambiata…: si spiega senza far uscire,
+      // a meno che l'accesso non sia davvero revocato
+      if (e && e.code === 'permission-denied') {
+        let valido = true;
+        try { await caricaOperatore(false); } catch (x) { valido = false; }
+        if (valido) {
+          controlla(await leggi(), operatoreCorrente || op);
+          throw new Error('Risposta non registrata: ricarica la pagina e riprova.');
+        }
+      }
+      return negato(e, 'Il tuo accesso non è più valido: contatta i supervisori.');
+    }
+    if (accetto) email('notificaOnsite', { id }).catch((e) => console.warn('Email ai supervisori non inviata:', e.message));
+  }
+
   const leggiImpostazioni = () => email('leggiImpostazioni');
   const salvaImpostazioni = (x) => email('salvaImpostazioni', x);
 
@@ -580,5 +714,6 @@
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
     creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa, leggiOperativo, salvaOperativo,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
+    creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
   };
 })(window.DO = window.DO || {});

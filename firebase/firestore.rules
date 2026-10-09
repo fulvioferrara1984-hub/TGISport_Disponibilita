@@ -43,6 +43,37 @@ service cloud.firestore {
       return exists(rif) ? get(rif).data.get('giorniBlocco', 3) : 3;
     }
 
+    // Deployment on-site: l'operatore vede solo quelli mandati a lui
+    // e può solo occupare un posto del suo ruolo o dire che non può.
+    function abilitazioneOnsite() {
+      return get(/databases/$(database)/documents/operatori/$(mioOperatore())).data.get('onsite', '');
+    }
+    function primoGiornoOnsite() {
+      let p = resource.data.da.split('-');
+      return timestamp.date(int(p[0]), int(p[1]), int(p[2]));
+    }
+    function puoRispondereOnsite() {
+      let io = mioOperatore();
+      return operatore() && resource.data.stato == 'aperta' && request.time < primoGiornoOnsite()
+        && io in resource.data.destinatari && !(io in resource.data.esclusi)
+        && !(io in resource.data.accettatiTL) && !(io in resource.data.accettatiOP);
+    }
+    function accettaOnsite() {
+      let io = mioOperatore();
+      let ruolo = abilitazioneOnsite();
+      return puoRispondereOnsite() && ruolo in ['TL', 'OP']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accettati' + ruolo, 'rifiuti'])
+        && request.resource.data['accettati' + ruolo] == resource.data['accettati' + ruolo].concat([io])
+        && request.resource.data['accettati' + ruolo].size() <= resource.data.posti[ruolo]
+        && request.resource.data.rifiuti == resource.data.rifiuti.removeAll([io]);
+    }
+    function nonPossoOnsite() {
+      let io = mioOperatore();
+      return puoRispondereOnsite() && !(io in resource.data.rifiuti)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rifiuti'])
+        && request.resource.data.rifiuti == resource.data.rifiuti.concat([io]);
+    }
+
     match /utenti/{uid} {
       allow read: if supervisore() || (request.auth != null && request.auth.uid == uid);
       allow write: if supervisore();
@@ -97,6 +128,17 @@ service cloud.firestore {
 
     // Tariffe, competizioni e regole: solo i supervisori (gli operatori non vedono i compensi).
     // "operativo" (telefono di reperibilità e giorni di blocco) lo leggono anche gli operatori attivi.
+    match /onsite/{id} {
+      allow read: if supervisore() || (operatore() && mioOperatore() in resource.data.destinatari);
+      allow create, delete: if supervisore();
+      allow update: if supervisore() || accettaOnsite() || nonPossoOnsite();
+    }
+
+    // compenso del deployment: solo i supervisori
+    match /onsiteRiservato/{id} {
+      allow read, write: if supervisore();
+    }
+
     match /impostazioni/{documento} {
       allow read: if supervisore() || (documento == 'operativo' && operatore());
       allow write: if supervisore();

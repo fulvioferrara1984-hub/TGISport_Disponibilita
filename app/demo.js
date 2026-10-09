@@ -15,7 +15,7 @@
     const operatori = nomi.map(([nome, mansione], i) => ({
       id: 'op-demo' + (i + 1), nome, mansione, email: nome.toLowerCase().replace(' ', '.') + '@esempio.it',
       telefono: '+39 333 000 00' + due(i + 1), attivo: true, codice: 'DEMO000' + (i + 1), ultimoInvio: '',
-      contratto: i % 4 === 3 ? 'Coop' : 'P.IVA', ruolo: i < 2 ? 'TL' : 'OP',
+      contratto: i % 4 === 3 ? 'Coop' : 'P.IVA', ruolo: i < 2 ? 'TL' : 'OP', onsite: ['TL', '', 'OP', '', 'OP'][i] || '',
     }));
     const disponibilita = {}, invii = [];
     const lun = DO.lunedi(DO.oggi());
@@ -43,14 +43,15 @@
       orario: '14:00', convocazione: '', convocazioneCalcolata: '10:00', operatoreId: 'op-demo1', stato: 'convocato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
     eventi.push({ id: 'evc1', tipo: 'partita', competizione: 'Champions League', round: 'League Phase', sport: 'Calcio', data: DO.aggiungi(lun, 2), titolo: 'Feyenoord-Como',
       orario: '18:45', convocazione: '', convocazioneCalcolata: '14:45', operatoreId: 'op-demo2', stato: 'confermato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
-    return { operatori, disponibilita, invii, richieste: [], eventi, regole: null, operativo: null, password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true } };
+    return { operatori, disponibilita, invii, richieste: [], eventi, regole: null, operativo: null, password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true },
+      onsite: [], onsiteRiservato: {} };
   }
 
   let dati = null, ruolo = '', alloScadere = null, utenteDemo = null;
   const ascoltatori = new Set();
 
   function carica() {
-    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.eventi) { dati = d; return; } } catch (e) { /* si riparte */ }
+    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.eventi) { dati = Object.assign({ onsite: [], onsiteRiservato: {} }, d); return; } } catch (e) { /* si riparte */ }
     dati = iniziali();
   }
   function salva() {
@@ -61,7 +62,7 @@
   window.addEventListener('storage', (e) => { if (e.key === CHIAVE) { carica(); ascoltatori.forEach((cb) => cb()); } });
 
   const pubblico = (o) => ({ id: o.id, nome: o.nome, mansione: o.mansione, email: o.email, telefono: o.telefono, attivo: o.attivo, ultimoInvio: o.ultimoInvio,
-    contratto: o.contratto || '', ruolo: o.ruolo || 'OP' });
+    contratto: o.contratto || '', ruolo: o.ruolo || 'OP', onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '' });
   const norm = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const nuovoCodiceDemo = () => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 8; i++) c += a[Math.floor(Math.random() * 32)]; return c; };
   const formato = (c) => c.slice(0, 4) + '-' + c.slice(4);
@@ -151,6 +152,8 @@
       eventi: JSON.parse(JSON.stringify(dati.eventi)),
       regole: DO.regole.complete(dati.regole),
       operativo: Object.assign({}, DO.OPERATIVO_PREDEFINITO, dati.operativo || {}),
+      onsite: JSON.parse(JSON.stringify(dati.onsite)),
+      compensiOnsite: Object.fromEntries(Object.entries(dati.onsiteRiservato).map(([id, r]) => [id, r.compenso])),
     });
     ascoltatori.add(invia);
     setTimeout(invia, 200);
@@ -165,7 +168,7 @@
   async function salvaOperatore(o) {
     await pausa(150);
     const campi = { nome: String(o.nome || '').trim(), mansione: (o.mansione || '').trim(), email: (o.email || '').trim(), telefono: (o.telefono || '').trim(), attivo: o.attivo !== false,
-      contratto: o.contratto || '', ruolo: o.ruolo === 'TL' ? 'TL' : 'OP' };
+      contratto: o.contratto || '', ruolo: o.ruolo === 'TL' ? 'TL' : 'OP', onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '' };
     if (!campi.nome) throw new Error('Il nome è obbligatorio.');
     if (o.id) {
       const op = dati.operatori.find((x) => x.id === o.id);
@@ -271,6 +274,89 @@
     salva();
     return Object.assign({}, dati.impostazioni);
   }
+  // ---------- deployment on-site (stesse condizioni delle regole di Firestore) ----------
+  const copia = (x) => JSON.parse(JSON.stringify(x));
+  function deployment(id) {
+    const d = dati.onsite.find((x) => x.id === id);
+    if (!d) throw new Error('Deployment non trovato.');
+    return d;
+  }
+  const contattiEmail = (extra) => {
+    const contatti = (extra && extra.email ? extra.contatti || [] : []);
+    return { senzaEmail: contatti.filter((c) => !c.email).map((c) => c.nome), conEmail: contatti.filter((c) => c.email) };
+  };
+
+  async function creaOnsite(d, extra) {
+    await pausa(150);
+    const scheda = DO.onsite.normalizza(d, DO.oggi());
+    const destinatari = Array.from(new Set(d.destinatari || []));
+    if (!destinatari.length) throw new Error('Scegli almeno un operatore.');
+    const compenso = DO.onsite.compensoValido(extra && extra.compenso);
+    const id = 'ons' + Date.now().toString(36) + Math.floor(Math.random() * 1e4);
+    dati.onsite.push(Object.assign({ id, creato: new Date().toISOString() }, scheda,
+      { destinatari, accettatiTL: [], accettatiOP: [], rifiuti: [], esclusi: [], stato: 'aperta' }));
+    dati.onsiteRiservato[id] = { compenso };
+    salva();
+    const { senzaEmail, conEmail } = contattiEmail(extra);
+    return { id, senzaEmail, inviate: pausa(800).then(() => ({ email: conEmail.length })) };
+  }
+
+  async function modificaOnsite(id, campi, extra) {
+    await pausa(150);
+    const d = deployment(id);
+    if (d.stato === 'annullata') throw new Error('Il deployment è annullato.');
+    const nuovi = DO.onsite.modifiche(d, campi || {});
+    const compenso = extra && extra.compenso !== undefined ? DO.onsite.compensoValido(extra.compenso) : undefined;
+    Object.assign(d, nuovi);
+    if (compenso !== undefined) dati.onsiteRiservato[id] = { compenso };
+    salva();
+    const { senzaEmail, conEmail } = contattiEmail(extra);
+    return { senzaEmail, inviate: pausa(800).then(() => ({ email: conEmail.length })) };
+  }
+
+  async function togliOnsite(id, idOperatore) {
+    const d = deployment(id);
+    d.accettatiTL = d.accettatiTL.filter((x) => x !== idOperatore);
+    d.accettatiOP = d.accettatiOP.filter((x) => x !== idOperatore);
+    if (!d.esclusi.includes(idOperatore)) d.esclusi.push(idOperatore);
+    salva();
+  }
+
+  async function statoOnsite(id, stato) {
+    const d = deployment(id);
+    if (!['aperta', 'chiusa', 'annullata'].includes(stato)) throw new Error('Stato non valido.');
+    if (d.stato === 'annullata' && stato !== 'annullata') throw new Error('Il deployment è annullato.');
+    d.stato = stato;
+    salva();
+  }
+
+  async function mieiOnsite() {
+    await pausa(100);
+    const op = operatoreValido();
+    return copia(dati.onsite.filter((d) => d.destinatari.includes(op.id)));
+  }
+
+  async function rispondiOnsite(id, accetto) {
+    await pausa(150);
+    const op = operatoreValido();
+    const d = dati.onsite.find((x) => x.id === id);
+    if (!d || !d.destinatari.includes(op.id)) throw new Error('Richiesta non trovata.');
+    const stato = DO.onsite.statoPerOperatore(d, op, DO.oggi());
+    if (accetto) {
+      if (!['da-rispondere', 'rifiutato'].includes(stato)) throw new Error(DO.onsite.MESSAGGI[stato]);
+      d['accettati' + op.onsite].push(op.id);
+      d.rifiuti = d.rifiuti.filter((x) => x !== op.id);
+    } else {
+      // come le regole: «non posso» solo con la richiesta aperta, prima del primo giorno, una volta sola
+      if (['accettato', 'annullato', 'escluso', 'scaduta'].includes(stato)) throw new Error(DO.onsite.MESSAGGI[stato]);
+      if (d.rifiuti.includes(op.id)) throw new Error('Hai già risposto.');
+      d.rifiuti.push(op.id);
+    }
+    dati.invii.push({ id: 'inv' + Date.now(), quando: new Date().toISOString(), operatoreId: op.id, nome: op.nome, modifiche: [], letto: false, tipo: 'onsite',
+      evento: { id: d.id, luogo: d.luogo, da: d.da, a: d.a, stato: accetto ? 'accettato' : 'rifiutato', ruolo: accetto ? op.onsite : '' } });
+    salva();
+  }
+
   async function cambiaPassword(attuale, nuova) {
     if (attuale !== dati.password) throw new Error('La password attuale non è corretta.');
     if (String(nuova).length < 8) throw new Error('La nuova password deve avere almeno 8 caratteri.');
@@ -284,6 +370,7 @@
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
     creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa, leggiOperativo, salvaOperativo,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
+    creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
     azzera: () => { try { localStorage.removeItem(CHIAVE); } catch (e) { /* niente */ } },
   };
 })(window.DO = window.DO || {});

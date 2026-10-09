@@ -128,8 +128,47 @@
     return x.num + ' ' + x.mese + ' – ' + y.num + ' ' + y.mese;
   }
 
+  // perché l'operatore non può accettare (dagli stati di statoPerOperatore)
+  const MESSAGGI = {
+    accettato: 'Hai già accettato.',
+    annullato: 'Il deployment è annullato.',
+    escluso: 'Il supervisore ti ha tolto da questo deployment.',
+    scaduta: 'La richiesta non accetta più risposte.',
+    'non-abilitato': 'Non sei abilitato per i posti di questa richiesta.',
+    esaurito: 'Posti esauriti',
+  };
+
+  function compensoValido(v) {
+    const n = v === '' || v == null ? NaN : Number(v);
+    if (!Number.isFinite(n) || n < 0) throw new Error('Compenso non valido.');
+    return centesimi(n);
+  }
+
+  // Campi che il supervisore può cambiare dopo l'invio (mai le date), già puliti e controllati
+  function modifiche(d, campi) {
+    const out = {};
+    const testo = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
+    if (campi.titolo !== undefined) out.titolo = testo(campi.titolo, 120);
+    if (campi.note !== undefined) out.note = testo(campi.note, 500);
+    if (campi.luogo !== undefined) { out.luogo = testo(campi.luogo, 80); if (!out.luogo) throw new Error('Scrivi il luogo.'); }
+    if (campi.sport !== undefined) { out.sport = testo(campi.sport, 40); if (!out.sport) throw new Error('Scrivi lo sport.'); }
+    if (campi.posti !== undefined) {
+      const posti = {};
+      RUOLI.forEach((r) => {
+        const n = Number(campi.posti[r] === '' || campi.posti[r] == null ? 0 : campi.posti[r]);
+        if (!Number.isInteger(n) || n < 0 || n > 20) throw new Error('I posti vanno da 0 a 20.');
+        posti[r] = n;
+      });
+      if (!posti.TL && !posti.OP) throw new Error('Indica almeno un posto.');
+      if (RUOLI.some((r) => posti[r] < accettati(d, r).length)) throw new Error('I posti non possono essere meno di chi ha già accettato.');
+      out.posti = posti;
+    }
+    if (campi.destinatariAggiunti !== undefined) out.destinatari = Array.from(new Set(lista(d.destinatari).concat(lista(campi.destinatariAggiunti))));
+    return out;
+  }
+
   DO.onsite = {
-    ATTIVITA, attivitaProposte, giorniDa, normalizza, compensoProposto, postiLiberi, etichettaPosti,
+    ATTIVITA, MESSAGGI, attivitaProposte, giorniDa, normalizza, compensoProposto, compensoValido, modifiche, postiLiberi, etichettaPosti,
     ruoloAccettato, giorniOnsite, conflittiRemoti, statoPerOperatore, quoteMese, periodoBreve,
   };
 })(window.DO = window.DO || {});

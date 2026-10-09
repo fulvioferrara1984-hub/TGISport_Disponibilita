@@ -123,3 +123,27 @@ test('periodo breve', () => {
   assert.equal(O.periodoBreve('2026-10-12', '2026-10-15'), '12–15 ottobre');
   assert.equal(O.periodoBreve('2026-10-30', '2026-11-02'), '30 ottobre – 2 novembre');
 });
+
+test('compenso valido', () => {
+  assert.equal(O.compensoValido('600'), 600);
+  assert.equal(O.compensoValido(12.5), 12.5);
+  assert.equal(O.compensoValido(0), 0);
+  ['', null, -1, 'abc'].forEach((v) => assert.throws(() => O.compensoValido(v), { message: 'Compenso non valido.' }, String(v)));
+});
+
+test('modifiche del supervisore', () => {
+  const d = dep({ accettatiOP: ['b', 'c'], destinatari: ['a', 'b', 'c'] });
+  assert.deepEqual(O.modifiche(d, { titolo: ' Finale ', note: 'n', destinatariAggiunti: ['c', 'e'] }), { titolo: 'Finale', note: 'n', destinatari: ['a', 'b', 'c', 'e'] });
+  assert.deepEqual(O.modifiche(d, { posti: { TL: 0, OP: '3' }, luogo: ' Milano ' }), { posti: { TL: 0, OP: 3 }, luogo: 'Milano' });
+  assert.throws(() => O.modifiche(d, { posti: { TL: 1, OP: 1 } }), { message: 'I posti non possono essere meno di chi ha già accettato.' });
+  assert.throws(() => O.modifiche(d, { posti: { TL: 0, OP: 0 } }), { message: 'Indica almeno un posto.' });
+  assert.throws(() => O.modifiche(d, { posti: { TL: -1, OP: 2 } }), { message: 'I posti vanno da 0 a 20.' });
+  assert.throws(() => O.modifiche(d, { luogo: '' }), { message: 'Scrivi il luogo.' });
+  assert.throws(() => O.modifiche(d, { sport: ' ' }), { message: 'Scrivi lo sport.' });
+});
+
+test('messaggi per chi non può accettare', () => {
+  assert.equal(O.MESSAGGI.esaurito, 'Posti esauriti');
+  assert.equal(O.MESSAGGI.escluso, 'Il supervisore ti ha tolto da questo deployment.');
+  ['accettato', 'annullato', 'scaduta', 'non-abilitato'].forEach((k) => assert.ok(O.MESSAGGI[k], k));
+});

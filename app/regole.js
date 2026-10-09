@@ -9,6 +9,7 @@
       'P.IVA': { diurno: 140, notturno: 210, maggiorato: 210 },
       Coop: { diurno: 175, notturno: 262.5, maggiorato: 262.5 },
     },
+    tariffaOnsite: 150,      // on-site: € al giorno per persona (4 giorni = 600 €)
     anticipoOre: 4,          // convocazione = orario dell'evento meno queste ore
     fineOre: 2,              // fine turno = orario dell'evento più queste ore
     durataSupervisioneOre: 6, // fine della supervisione = ritrovo più queste ore
@@ -43,6 +44,7 @@
       'P.IVA': Object.assign({}, PREDEFINITE.tariffe['P.IVA'], (r && r.tariffe && r.tariffe['P.IVA']) || {}),
       Coop: Object.assign({}, PREDEFINITE.tariffe.Coop, (r && r.tariffe && r.tariffe.Coop) || {}),
     };
+    if (!(Number.isFinite(x.tariffaOnsite) && x.tariffaOnsite >= 0)) x.tariffaOnsite = PREDEFINITE.tariffaOnsite;
     return x;
   }
 
