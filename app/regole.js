@@ -191,7 +191,7 @@
   }
 
   // riga di stato dei promemoria automatici, dalle impostazioni restituite dallo script delle email
-  function statoPromemoria(imp) {
+  function statoPromemoria(imp, oggi = DO.oggi()) {
     if (!imp || imp.promemoriaAttivi === undefined) return 'Script delle email da aggiornare: i promemoria non sono ancora disponibili.';
     if (!imp.promemoriaProgrammato) return 'Invio giornaliero non attivo: esegui attivaPromemoria nello script delle email.';
     const u = imp.ultimoPromemoria;
@@ -203,7 +203,10 @@
     const quanti = (n, uno, molti) => n + (n === 1 ? uno : molti);
     const partite = [u.riepilogo ? 'riepilogo ai supervisori' : '', u.operatori ? quanti(u.operatori, ' operatore', ' operatori') : ''].filter(Boolean).join(' + ');
     const cosa = partite || (u.inSospeso ? quanti(u.inSospeso, ' evento', ' eventi') + ' da sistemare, nessuna email partita' : 'niente in sospeso, nessuna email');
-    return 'Ultimo promemoria: ' + quando + ' · ' + cosa + (u.nonInviate ? ' · ' + quanti(u.nonInviate, ' email non partita', ' email non partite') : '');
+    // promemoria accesi ma nessun giro da più di un giorno: lo script non sta girando
+    const fermo = imp.promemoriaAttivi && u.giorno ? DO.giorniA(oggi, u.giorno) : 0;
+    return 'Ultimo promemoria: ' + quando + ' · ' + cosa + (u.nonInviate ? ' · ' + quanti(u.nonInviate, ' email non partita', ' email non partite') : '')
+      + (fermo >= 2 ? ' · ⚠ nessun giro da ' + fermo + ' giorni: controlla lo script delle email' : '');
   }
 
   DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria };

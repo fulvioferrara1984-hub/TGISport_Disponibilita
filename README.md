@@ -25,7 +25,7 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 | Supervisione | un turno per giorno, solo operatori con ruolo **TL**; le partite vanno a TL o OP |
 | Annullati | non contano mai nei riepiloghi |
 | On-site | richiesta con date, attività per giorno (Travel Day, MD-1, MD…), luogo, sport e posti TL/OP, solo agli operatori abilitati; chi accetta per primo occupa il posto, è on-site in quei giorni (non assegnabile al remoto) e non si ritira dal sito; compenso di trasferta = giorni × tariffa on-site (generale: 150 € al giorno), modificabile, visibile solo ai supervisori |
-| Promemoria | ogni mattina tra le 8 e le 9, per gli eventi remoti da oggi a X giorni dopo (generale: 3): agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto (da sostituire, senza operatore, da inviare, in attesa) |
+| Promemoria | ogni mattina tra le 8 e le 9 (nuovo tentativo alle 11 se il primo non riesce), per gli eventi remoti da oggi a X giorni dopo (generale: 3): agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto (da sostituire, senza operatore, da inviare, in attesa) |
 
 Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco), **Competizioni e sport** (ore prima/dopo per competizione, casella *UEFA ½*) , **Notifiche email** (promemoria automatici e giorni) e **Tariffe e regole → Tariffa on-site**; l'abilitazione on-site di ciascuno si imposta nella scheda dell'operatore.
 
@@ -106,7 +106,7 @@ Da fare una volta, nell'ordine:
 2. **Script**: incolla [`backend/Codice.gs`](backend/Codice.gs) e il manifest [`backend/appsscript.json`](backend/appsscript.json), salva, scegli **attivaPromemoria** nel menu delle funzioni accanto a *Debug* e premi **Esegui**; accetta le autorizzazioni nuove (dati di Firestore e attivatori). Nel registro devono comparire:
    - `Firebase: lettura riuscita.`
    - `Anteprima di oggi, nessuna email spedita: …` (chi riceverebbe un promemoria oggi)
-   - `Invio giornaliero attivo tra le 8 e le 9 · promemoria accesi, 3 giorni prima …`
+   - `Invio giornaliero attivo tra le 8 e le 9 (nuovo tentativo alle 11) · promemoria accesi, 3 giorni prima …`
 
    Se invece compare *aggiungilo come Editor del progetto*, il passo 1 non è ancora attivo: aspetta qualche minuto e riesegui. Poi **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione**.
 3. **Sito**: pubblicazione normale. Prima dell'aggiornamento dello script la dashboard scrive *Script delle email da aggiornare*.

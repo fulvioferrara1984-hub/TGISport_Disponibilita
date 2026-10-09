@@ -139,10 +139,10 @@ test('numeri dalle impostazioni: vuoto o fuori limite non valgono', () => {
 
 test('stato dei promemoria nelle impostazioni', () => {
   const base = { promemoriaAttivi: true, promemoriaGiorni: 3, promemoriaProgrammato: true, ultimoPromemoria: null };
-  assert.equal(R.statoPromemoria({ emailSupervisori: '', emailAttive: true }), 'Script delle email da aggiornare: i promemoria non sono ancora disponibili.');
+  assert.equal(R.statoPromemoria({ emailSupervisori: '', emailAttive: true }, '2026-10-10'), 'Script delle email da aggiornare: i promemoria non sono ancora disponibili.');
   assert.equal(R.statoPromemoria(Object.assign({}, base, { promemoriaProgrammato: false })), 'Invio giornaliero non attivo: esegui attivaPromemoria nello script delle email.');
   assert.equal(R.statoPromemoria(base), 'Nessun promemoria ancora inviato.');
-  const con = (u) => R.statoPromemoria(Object.assign({}, base, { ultimoPromemoria: Object.assign({ giorno: '2026-10-10', quando: '2026-10-10T06:14:00Z' }, u) }));
+  const con = (u) => R.statoPromemoria(Object.assign({}, base, { ultimoPromemoria: Object.assign({ giorno: '2026-10-10', quando: '2026-10-10T06:14:00Z' }, u) }), '2026-10-10');
   const inizio = 'Ultimo promemoria: sab 10 ottobre alle 8:14 · ';
   assert.equal(con({ riepilogo: true, operatori: 3 }), inizio + 'riepilogo ai supervisori + 3 operatori');
   assert.equal(con({ riepilogo: true, operatori: 1 }), inizio + 'riepilogo ai supervisori + 1 operatore');
@@ -154,10 +154,22 @@ test('stato dei promemoria nelle impostazioni', () => {
 test('stato dei promemoria: email non partite ed eventi senza destinatari', () => {
   const imp = (u) => ({ promemoriaAttivi: true, promemoriaGiorni: 3, promemoriaProgrammato: true, ultimoPromemoria: Object.assign({ giorno: '2026-10-10', quando: '2026-10-10T06:14:00Z' }, u) });
   const inizio = 'Ultimo promemoria: sab 10 ottobre alle 8:14 · ';
+  const stato = R.statoPromemoria;
+  R.statoPromemoria = (x) => stato(x, '2026-10-10');
   assert.equal(R.statoPromemoria(imp({ riepilogo: true, operatori: 2, nonInviate: 1, inSospeso: 4 })), inizio + 'riepilogo ai supervisori + 2 operatori · 1 email non partita');
   assert.equal(R.statoPromemoria(imp({ riepilogo: false, operatori: 0, nonInviate: 0, inSospeso: 3 })), inizio + '3 eventi da sistemare, nessuna email partita');
   assert.equal(R.statoPromemoria(imp({ riepilogo: false, operatori: 0, nonInviate: 2, inSospeso: 1, fallito: true })), inizio + '1 evento da sistemare, nessuna email partita · 2 email non partite');
   assert.equal(R.statoPromemoria(imp({ riepilogo: false, operatori: 0, nonInviate: 0, inSospeso: 0 })), inizio + 'niente in sospeso, nessuna email');
+  R.statoPromemoria = stato;
+});
+
+test('stato dei promemoria: avviso se l\'ultimo giro è vecchio', () => {
+  const imp = (campi) => Object.assign({ promemoriaAttivi: true, promemoriaGiorni: 3, promemoriaProgrammato: true,
+    ultimoPromemoria: { giorno: '2026-10-10', quando: '2026-10-10T06:14:00Z', riepilogo: false, operatori: 0, inSospeso: 0 } }, campi);
+  const inizio = 'Ultimo promemoria: sab 10 ottobre alle 8:14 · niente in sospeso, nessuna email';
+  assert.equal(R.statoPromemoria(imp(), '2026-10-11'), inizio);
+  assert.equal(R.statoPromemoria(imp(), '2026-10-13'), inizio + ' · ⚠ nessun giro da 3 giorni: controlla lo script delle email');
+  assert.equal(R.statoPromemoria(imp({ promemoriaAttivi: false }), '2026-10-13'), inizio);
 });
 
 test('esportazione mensile con on-site', () => {

@@ -466,7 +466,8 @@ function inviaPromemoria() {
 }
 
 // Da eseguire una volta dall'editor (e di nuovo se serve): chiede le autorizzazioni, controlla
-// di poter leggere Firebase, mostra cosa partirebbe oggi e attiva l'invio ogni mattina tra le 8 e le 9.
+// di poter leggere Firebase, mostra cosa partirebbe oggi e attiva l'invio ogni mattina tra le 8 e le 9,
+// con un nuovo tentativo tra le 11 e le 12 (se alle 8 è andato tutto bene non fa nulla).
 function attivaPromemoria() {
   const oggi = Utilities.formatDate(new Date(), 'Europe/Rome', 'yyyy-MM-dd');
   try {
@@ -484,9 +485,9 @@ function attivaPromemoria() {
     : prova.inSospeso ? prova.inSospeso + (prova.inSospeso === 1 ? ' evento' : ' eventi') + ' da sistemare ma nessun destinatario (controlla gli indirizzi dei supervisori).'
       : 'niente in sospeso.'));
   ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'inviaPromemoria').forEach((t) => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('inviaPromemoria').timeBased().everyDays(1).atHour(8).inTimezone('Europe/Rome').create();
+  [8, 11].forEach((ora) => ScriptApp.newTrigger('inviaPromemoria').timeBased().everyDays(1).atHour(ora).inTimezone('Europe/Rome').create());
   const imp = leggiImpostazioni();
-  console.log('Invio giornaliero attivo tra le 8 e le 9 · promemoria ' + (imp.promemoriaAttivi ? 'accesi' : 'spenti') + ', '
+  console.log('Invio giornaliero attivo tra le 8 e le 9 (nuovo tentativo alle 11) · promemoria ' + (imp.promemoriaAttivi ? 'accesi' : 'spenti') + ', '
     + imp.promemoriaGiorni + ' giorni prima · email ancora disponibili oggi: ' + MailApp.getRemainingDailyQuota());
 }
 
