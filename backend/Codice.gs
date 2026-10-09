@@ -281,3 +281,69 @@ function selezionaPromemoria(eventi, operatori, oggi, giorni) {
     });
   return { gruppi, operatori: Object.keys(avvisati).map((id) => avvisati[id]) };
 }
+
+// ---------------------------------------------------------------- promemoria automatici: testo delle email
+
+// Link delle email ricavati dall'indirizzo della dashboard salvato con le impostazioni
+function indirizzi(urlAdmin) {
+  const url = String(urlAdmin || '');
+  if (!/^https:\/\//.test(url)) return { convocazioni: '', sito: '' };
+  const base = url.replace(/#.*$/, '');
+  return { convocazioni: base + '#convocazioni', sito: /admin\.html/.test(base) ? base.replace(/admin\.html.*$/, '') : '' };
+}
+
+const relativo = (data, oggi) => (data === oggi ? ' (oggi)' : data === aggiungiGiorni(oggi, 1) ? ' (domani)' : '');
+
+// "evento 18:30 · ritrovo 14:30 – fine 20:30", per la supervisione "inizio turno 10:00 – fine 16:00"
+function orariTurno(e) {
+  const ritrovo = e.convocazione || e.convocazioneCalcolata || '';
+  const fine = e.fine || e.fineCalcolata || '';
+  const turno = [ritrovo ? (e.tipo === 'supervisione' ? 'inizio turno' : 'ritrovo') + ' <b>' + esc(ritrovo) + '</b>' : '', fine ? 'fine <b>' + esc(fine) + '</b>' : '']
+    .filter(Boolean).join(' – ');
+  return [e.tipo !== 'supervisione' && e.orario ? 'evento ' + esc(e.orario) : '', turno].filter(Boolean).join(' · ');
+}
+
+function rigaEvento(e, oggi, ultimaColonna) {
+  return '<tr><td style="padding:6px 14px 6px 0;white-space:nowrap;vertical-align:top"><b>' + esc(giornoLungo(String(e.data))) + '</b>' + relativo(e.data, oggi) + '</td>'
+    + '<td style="padding:6px 14px 6px 0">' + esc(e.titolo || '') + '<br><span style="color:#8b919c;font-size:12px">' + esc([e.competizione, e.round].filter(Boolean).join(' · ')) + '</span></td>'
+    + '<td style="padding:6px 0;white-space:nowrap">' + ultimaColonna + '</td></tr>';
+}
+
+const tasto = (href, testo) => '<p><a href="' + esc(href) + '" style="display:inline-block;padding:10px 18px;background:#1740f0;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">' + testo + '</a></p>';
+
+function emailOperatore(op, eventi, ctx) {
+  const uno = eventi.length === 1;
+  return {
+    to: op.email,
+    subject: uno ? 'Promemoria: conferma la convocazione di ' + giornoLungo(String(eventi[0].data)) : 'Promemoria: ' + eventi.length + ' convocazioni da confermare',
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p>Ciao ' + esc(String(op.nome || '').split(' ')[0]) + ',</p>'
+      + '<p>' + (uno ? 'questa convocazione aspetta ancora la tua conferma:' : 'queste convocazioni aspettano ancora la tua conferma:') + '</p>'
+      + '<table style="border-collapse:collapse">' + eventi.map((e) => rigaEvento(e, ctx.oggi, orariTurno(e))).join('') + '</table>'
+      + (ctx.sito ? tasto(ctx.sito, 'Conferma sulla piattaforma') : '')
+      + (ctx.telefono ? '<p>Se non puoi partecipare, chiama il supervisore al <b>' + esc(ctx.telefono) + '</b>.</p>' : '')
+      + '<p style="color:#8b919c;font-size:12px">Per entrare usa il tuo codice personale.</p></div>',
+  };
+}
+
+const GRUPPI_PROMEMORIA = [
+  ['sostituire', 'Rifiutate o da sostituire', 'da sostituire'],
+  ['senzaOperatore', 'Senza operatore', 'senza operatore'],
+  ['daInviare', 'Assegnate ma non inviate', 'da inviare'],
+  ['inAttesa', 'In attesa di risposta', 'in attesa'],
+];
+
+function emailSupervisori(gruppi, ctx) {
+  const pieni = GRUPPI_PROMEMORIA.filter(([chiave]) => gruppi[chiave].length);
+  const orario = (e) => (e.tipo === 'supervisione' ? 'dalle ' + esc(e.convocazione || e.convocazioneCalcolata || '') : 'ore ' + esc(e.orario || ''));
+  const chi = (r) => (r.operatore ? esc(r.operatore.nome) + (r.nota ? ' ' + r.nota : '') : '—');
+  const sezioni = pieni.map(([chiave, titolo]) => '<h3 style="font-size:15px;margin:18px 0 6px">' + titolo + ' (' + gruppi[chiave].length + ')</h3>'
+    + '<table style="border-collapse:collapse">' + gruppi[chiave].map((r) => rigaEvento(r.evento, ctx.oggi, orario(r.evento) + ' · ' + chi(r))).join('') + '</table>');
+  return {
+    to: ctx.a,
+    subject: 'Promemoria convocazioni · ' + (ctx.giorni === 1 ? 'oggi e domani' : 'prossimi ' + ctx.giorni + ' giorni') + ': '
+      + pieni.map(([chiave, , breve]) => gruppi[chiave].length + ' ' + breve).join(', '),
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5">'
+      + '<p>Eventi remoti ' + (ctx.giorni === 1 ? 'di oggi e domani' : 'dei prossimi ' + ctx.giorni + ' giorni') + ' ancora da sistemare:</p>'
+      + sezioni.join('') + (ctx.convocazioni ? tasto(ctx.convocazioni, 'Apri le convocazioni') : '') + '</div>',
+  };
+}

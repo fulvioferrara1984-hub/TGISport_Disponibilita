@@ -155,3 +155,84 @@ test('aggiungiGiorni attraversa mesi e cambio d\'ora', () => {
   assert.equal(gs.aggiungiGiorni('2026-10-30', 3), '2026-11-02');
   assert.equal(gs.aggiungiGiorni('2026-03-28', 2), '2026-03-30');
 });
+
+// ---------------------------------------------------------------- email
+
+const sassuolo = (campi) => ev(Object.assign({
+  titolo: 'Sassuolo-Lazio', round: '9', data: '2026-10-10', orario: '18:30', convocazioneCalcolata: '14:30', fineCalcolata: '20:30',
+}, campi));
+const marco = { id: 'm', nome: 'Marco Rossi', email: 'm@x.it' };
+const CTX_OP = { oggi: OGGI, telefono: '+39 333', sito: 'https://x.github.io/sito/' };
+
+test('oggetto operatore al singolare e al plurale', () => {
+  assert.equal(gs.emailOperatore(marco, [sassuolo({ data: '2026-10-11' })], CTX_OP).subject, 'Promemoria: conferma la convocazione di domenica 11 ottobre');
+  const due = gs.emailOperatore(marco, [sassuolo(), sassuolo({ data: '2026-10-11' })], CTX_OP);
+  assert.equal(due.subject, 'Promemoria: 2 convocazioni da confermare');
+  assert.ok(due.htmlBody.includes('queste convocazioni aspettano ancora la tua conferma'));
+});
+
+test('email operatore', () => {
+  const m = gs.emailOperatore(marco, [sassuolo()], CTX_OP);
+  assert.equal(m.to, 'm@x.it');
+  ['Ciao Marco', 'questa convocazione aspetta ancora la tua conferma', '(domani)', 'Sassuolo-Lazio', 'Serie A · 9', 'evento 18:30',
+    'ritrovo <b>14:30</b>', 'fine <b>20:30</b>', 'Conferma sulla piattaforma', 'href="https://x.github.io/sito/"',
+    'chiama il supervisore al <b>+39 333</b>', 'Per entrare usa il tuo codice personale.'].forEach((t) => assert.ok(m.htmlBody.includes(t), t));
+  assert.ok(!gs.emailOperatore(marco, [sassuolo()], Object.assign({}, CTX_OP, { telefono: '' })).htmlBody.includes('chiama'));
+  assert.ok(!gs.emailOperatore(marco, [sassuolo()], Object.assign({}, CTX_OP, { sito: '' })).htmlBody.includes('Conferma sulla piattaforma'));
+  assert.ok(gs.emailOperatore(marco, [sassuolo({ data: OGGI })], CTX_OP).htmlBody.includes('(oggi)'));
+});
+
+test('supervisione nell\'email operatore', () => {
+  const m = gs.emailOperatore(marco, [ev({ tipo: 'supervisione', titolo: 'Supervisione', orario: '', convocazione: '10:00' })], CTX_OP);
+  assert.ok(m.htmlBody.includes('inizio turno <b>10:00</b>'));
+  assert.ok(!m.htmlBody.includes('fine'));
+});
+
+test('caratteri HTML resi come testo', () => {
+  const e = sassuolo({ titolo: '<b>A&B</b>' });
+  assert.ok(gs.emailOperatore(marco, [e], CTX_OP).htmlBody.includes('&lt;b&gt;A&amp;B&lt;/b&gt;'));
+  const gruppi = { sostituire: [], senzaOperatore: [{ evento: e, operatore: null, nota: '' }], daInviare: [], inAttesa: [] };
+  const s = gs.emailSupervisori(gruppi, { oggi: OGGI, giorni: 3, a: 's@x.it', convocazioni: '' });
+  assert.ok(s.htmlBody.includes('&lt;b&gt;A&amp;B&lt;/b&gt;'));
+  assert.ok(!s.htmlBody.includes('<b>A&B</b>'));
+});
+
+const righe = (n, campi) => Array.from({ length: n }, () => ({ evento: sassuolo(campi), operatore: OPS[0], nota: '' }));
+const CTX_SUP = { oggi: OGGI, giorni: 3, a: 's1@x.it,s2@x.it', convocazioni: 'https://x.github.io/sito/admin.html#convocazioni' };
+
+test('oggetto supervisori', () => {
+  const vuoti = { sostituire: [], senzaOperatore: [], daInviare: [], inAttesa: [] };
+  const oggetto = (g, ctx = CTX_SUP) => gs.emailSupervisori(Object.assign({}, vuoti, g), ctx).subject;
+  assert.equal(oggetto({ senzaOperatore: righe(2), inAttesa: righe(3) }), 'Promemoria convocazioni · prossimi 3 giorni: 2 senza operatore, 3 in attesa');
+  assert.equal(oggetto({ sostituire: righe(1), senzaOperatore: righe(1), daInviare: righe(1), inAttesa: righe(1) }),
+    'Promemoria convocazioni · prossimi 3 giorni: 1 da sostituire, 1 senza operatore, 1 da inviare, 1 in attesa');
+  assert.equal(oggetto({ inAttesa: righe(1) }, Object.assign({}, CTX_SUP, { giorni: 1 })), 'Promemoria convocazioni · oggi e domani: 1 in attesa');
+});
+
+test('riepilogo supervisori', () => {
+  const gruppi = {
+    sostituire: righe(1, { titolo: 'Rinuncia' }),
+    senzaOperatore: [{ evento: sassuolo({ titolo: 'Libera', operatoreId: '' }), operatore: null, nota: '' }],
+    daInviare: [],
+    inAttesa: [{ evento: sassuolo({ titolo: 'Attesa' }), operatore: OPS[1], nota: '(senza email)' }],
+  };
+  const s = gs.emailSupervisori(gruppi, CTX_SUP);
+  assert.equal(s.to, 's1@x.it,s2@x.it');
+  const posizione = (t) => s.htmlBody.indexOf(t);
+  assert.ok(posizione('Rifiutate o da sostituire (1)') >= 0);
+  assert.ok(posizione('Senza operatore (1)') > posizione('Rifiutate o da sostituire (1)'));
+  assert.ok(posizione('In attesa di risposta (1)') > posizione('Senza operatore (1)'));
+  assert.equal(posizione('Assegnate ma non inviate'), -1);
+  assert.ok(s.htmlBody.includes('Bruno Blu (senza email)'));
+  assert.ok(s.htmlBody.includes('Anna Neri'));
+  assert.ok(s.htmlBody.includes('Apri le convocazioni'));
+  assert.ok(s.htmlBody.includes('href="https://x.github.io/sito/admin.html#convocazioni"'));
+});
+
+test('indirizzi dei link ricavati dalla dashboard', () => {
+  assert.deepEqual(j(gs.indirizzi('https://x.github.io/TGISport_Disponibilita/admin.html#aggiornamenti')), {
+    convocazioni: 'https://x.github.io/TGISport_Disponibilita/admin.html#convocazioni', sito: 'https://x.github.io/TGISport_Disponibilita/',
+  });
+  assert.deepEqual(j(gs.indirizzi('')), { convocazioni: '', sito: '' });
+  assert.deepEqual(j(gs.indirizzi('javascript:alert(1)')), { convocazioni: '', sito: '' });
+});
