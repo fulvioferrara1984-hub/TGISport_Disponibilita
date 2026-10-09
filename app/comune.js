@@ -29,6 +29,15 @@
   const bloccato = (data, oggiIso, giorniBlocco) => giorniA(data, oggiIso) <= giorniBlocco;
   const OPERATIVO_PREDEFINITO = Object.freeze({ telefono: '', giorniBlocco: 3 });
 
+  // Tasti di una convocazione per l'operatore, da sinistra a destra. Rinunciare si può solo a una
+  // convocazione in attesa e fuori dalla finestra di blocco; altrimenti si telefona al supervisore.
+  function azioniConvocazione(stato, nellaFinestra) {
+    if (stato === 'convocato') return nellaFinestra ? { azioni: ['telefona', 'conferma'], spiegazione: true } : { azioni: ['rifiuta', 'conferma'], spiegazione: false };
+    if (stato === 'confermato') return { azioni: ['telefona'], spiegazione: false };
+    if (stato === 'rifiutato' && !nellaFinestra) return { azioni: ['riconferma'], spiegazione: false };
+    return { azioni: [], spiegazione: false };
+  }
+
   function giorno(s) {
     const d = daIso(s);
     return { nome: GIORNI[indiceGiorno(s)], breve: GIORNI_BREVI[indiceGiorno(s)], num: d.getDate(), mese: MESI[d.getMonth()], meseBreve: MESI[d.getMonth()].slice(0, 3), anno: d.getFullYear() };
@@ -188,7 +197,7 @@
 
   Object.assign(DO, {
     $, esc, iniziali, iso, daIso, aggiungi, lunedi, settimana, oggi, limite, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
-    giorniA, bloccato, OPERATIVO_PREDEFINITO,
+    giorniA, bloccato, OPERATIVO_PREDEFINITO, azioniConvocazione,
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
   });

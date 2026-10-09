@@ -30,3 +30,14 @@ test('il cambio dell\'ora legale non sposta il conteggio', () => {
 test('regole operative predefinite', () => {
   assert.deepEqual(DO.OPERATIVO_PREDEFINITO, { telefono: '', giorniBlocco: 3 });
 });
+
+test('tasti della convocazione secondo stato e finestra di blocco (spec §2)', () => {
+  const az = (stato, bloccato) => DO.azioniConvocazione(stato, bloccato);
+  assert.deepEqual(az('convocato', false), { azioni: ['rifiuta', 'conferma'], spiegazione: false });
+  assert.deepEqual(az('convocato', true), { azioni: ['telefona', 'conferma'], spiegazione: true });
+  assert.deepEqual(az('confermato', false), { azioni: ['telefona'], spiegazione: false });
+  assert.deepEqual(az('confermato', true), { azioni: ['telefona'], spiegazione: false });
+  assert.deepEqual(az('rifiutato', false), { azioni: ['riconferma'], spiegazione: false });
+  assert.deepEqual(az('rifiutato', true), { azioni: [], spiegazione: false });
+  assert.deepEqual(az('annullato', false), { azioni: [], spiegazione: false });
+});

@@ -13,20 +13,24 @@
   let oggi = DO.iso(new Date()), limite = DO.aggiungi(oggi, 83);
   let lun = DO.lunedi(oggi);
   let invio = false;
+  let operativo = Object.assign({}, DO.OPERATIVO_PREDEFINITO);   // telefono di reperibilità e giorni di blocco
   const noteAperte = new Set();   // giorni in cui l'operatore ha chiesto di scrivere una nota
 
   const chiaveBozza = () => 'do-bozza-' + operatore.id;
   const vuoto = { s: '', n: '' };
   const valore = (d) => bozza[d] || salvati[d] || vuoto;
   const uguali = (a, b) => (a.s || '') === (b.s || '') && (a.n || '') === (b.n || '');
-  const modificabile = (d) => d >= oggi && d <= limite;
+  // negli ultimi giorni prima dell'evento non si cambia più nulla: si telefona al supervisore
+  const nellaFinestra = (d) => DO.bloccato(d, oggi, operativo.giorniBlocco);
+  const bloccatoOra = (d) => d >= oggi && d <= limite && nellaFinestra(d);
+  const modificabile = (d) => d >= oggi && d <= limite && !nellaFinestra(d);
   const nModifiche = () => Object.keys(bozza).length;
   const richiesto = (d) => modificabile(d) && richieste.some((x) => d >= x.da && d <= x.a);
 
   function giorniDi(x) {
     const out = [];
     for (let d = x.da > oggi ? x.da : oggi; d <= x.a && d <= limite; d = DO.aggiungi(d, 1)) out.push(d);
-    return out;
+    return out.filter(modificabile);
   }
 
   function salvaBozza() {
@@ -68,6 +72,7 @@
       return '<li class="giorno' + (bozza[d] ? ' modificato' : '') + (attivo ? '' : ' passato') + (richiesto(d) && !v.s ? ' da-fare' : '') + '" data-data="' + d + '">'
         + '<div class="giorno-data"><b>' + g.nome + '</b><small>' + g.num + ' ' + g.mese + '</small>'
         + (d === oggi ? '<span class="oggi">Oggi</span>' : '') + (richiesto(d) ? '<span class="richiesto">Richiesto</span>' : '')
+        + (bloccatoOra(d) ? '<span class="bloccato-tag">Bloccato: contatta il supervisore</span>' : '')
         + convocazioni.filter((c) => c.data === d && c.stato !== 'annullato' && c.stato !== 'rifiutato')
           .map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + (ritrovo(c) || '—') + '</span>').join('') + '</div>'
         + '<div class="giorno-scelte"><div class="stati" role="radiogroup" aria-label="Disponibilità di ' + g.nome + ' ' + g.num + '">' + stati + '</div>'
@@ -80,6 +85,17 @@
 
   // ---------- convocazioni ----------
   const ritrovo = (c) => c.convocazione || c.convocazioneCalcolata || '';
+  const fineTurno = (c) => c.fine || c.fineCalcolata || '';
+
+  function tasto(azione, c) {
+    if (azione === 'conferma') return '<button type="button" class="primario" data-rispondi="confermato" data-id="' + c.id + '">Confermo</button>';
+    if (azione === 'rifiuta') return '<button type="button" class="bottone" data-rispondi="rifiutato" data-id="' + c.id + '">Non posso</button>';
+    if (azione === 'riconferma') return '<button type="button" class="link" data-rispondi="confermato" data-id="' + c.id + '">Posso, confermo</button>';
+    // telefona: numero di reperibilità impostato dai supervisori
+    const numero = String(operativo.telefono || '').replace(/[^\d+]/g, '');
+    return numero ? '<a class="bottone telefona" href="tel:' + numero + '">📞 Contatta il supervisore</a>'
+      : '<span class="conv-senza-numero">Chiedi ai supervisori il numero di reperibilità</span>';
+  }
 
   function disegnaConvocazioni() {
     const box = $('mie-convocazioni');
@@ -95,17 +111,18 @@
       + (daRispondere ? '<span class="stato-chip st-blu">' + daRispondere + ' da confermare</span>' : '') + '</div>'
       + prossime.map((c) => {
         const g = DO.giorno(c.data), sup = c.tipo === 'supervisione';
-        const orari = sup ? 'Inizio turno <span class="ritrovo">' + (ritrovo(c) || '—') + '</span>'
-          : (c.orario ? 'Evento alle ' + c.orario + ' · ' : '') + '<span class="ritrovo">ritrovo ' + (ritrovo(c) || '—') + '</span>';
-        const azioni = c.stato === 'annullato' ? '<span class="stato-chip st-annullato">Annullata</span>'
-          : c.stato === 'confermato' ? '<span class="stato-chip st-D">Confermata</span><button type="button" class="link" data-rispondi="rifiutato" data-id="' + c.id + '">Non posso più</button>'
-          : c.stato === 'rifiutato' ? '<span class="stato-chip st-A">Non puoi</span><button type="button" class="link" data-rispondi="confermato" data-id="' + c.id + '">Posso, confermo</button>'
-          : '<button type="button" class="bottone" data-rispondi="rifiutato" data-id="' + c.id + '">Non posso</button><button type="button" class="primario" data-rispondi="confermato" data-id="' + c.id + '">Confermo</button>';
+        const fine = fineTurno(c);
+        const orari = sup ? (fine ? 'Turno <span class="ritrovo">' + (ritrovo(c) || '—') + ' – ' + fine + '</span>' : 'Inizio turno <span class="ritrovo">' + (ritrovo(c) || '—') + '</span>')
+          : (c.orario ? 'Evento alle ' + c.orario + ' · ' : '') + '<span class="ritrovo">Ritrovo ' + (ritrovo(c) || '—') + (fine ? ' – fine turno ' + fine : '') + '</span>';
+        const { azioni: elenco, spiegazione } = DO.azioniConvocazione(c.stato, nellaFinestra(c.data));
+        const etichetta = { annullato: '<span class="stato-chip st-annullato">Annullata</span>', confermato: '<span class="stato-chip st-D">Confermata</span>', rifiutato: '<span class="stato-chip st-A">Non puoi</span>' }[c.stato] || '';
+        const azioni = etichetta + elenco.map((a) => tasto(a, c)).join('');
         return '<div class="convocazione' + (c.stato === 'annullato' ? ' annullata' : '') + '">'
           + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
           + '<div class="conv-info"><b>' + DO.esc(sup ? 'Turno di supervisione' : c.titolo) + '</b>'
           + '<span>' + DO.esc([c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · ')) + '</span>'
-          + '<span>' + orari + '</span></div>'
+          + '<span>' + orari + '</span>'
+          + (spiegazione ? '<small class="conv-spiegazione">Mancano ' + operativo.giorniBlocco + ' giorni o meno: per rinunciare chiama il supervisore.</small>' : '') + '</div>'
           + '<div class="conv-azioni">' + azioni + '</div></div>';
       }).join('');
   }
@@ -256,7 +273,7 @@
 
   // ---------- avvio ----------
   function salvaCopia() {
-    DO.salvaCopia({ operatore, giorni: salvati, richieste, convocazioni, oggi, limite });
+    DO.salvaCopia({ operatore, giorni: salvati, richieste, convocazioni, operativo, oggi, limite });
   }
 
   function applica(r) {
@@ -266,10 +283,16 @@
     salvati = r.giorni || {};
     richieste = r.richieste || [];
     if (r.convocazioni) convocazioni = r.convocazioni;
-    // la bozza salvata sul dispositivo perde i giorni passati e quelli ormai uguali all'inviato
+    if (r.operativo) operativo = Object.assign({}, DO.OPERATIVO_PREDEFINITO, r.operativo);
+    // la bozza salvata sul dispositivo perde i giorni passati, quelli ormai bloccati e quelli uguali all'inviato
     bozza = DO.leggi(chiaveBozza()) || {};
-    Object.keys(bozza).forEach((d) => { if (!modificabile(d) || uguali(bozza[d], salvati[d] || vuoto)) delete bozza[d]; });
+    let scartati = 0;
+    Object.keys(bozza).forEach((d) => {
+      if (bloccatoOra(d) && !uguali(bozza[d], salvati[d] || vuoto)) scartati++;
+      if (!modificabile(d) || uguali(bozza[d], salvati[d] || vuoto)) delete bozza[d];
+    });
     salvaBozza();
+    if (scartati) DO.avviso('Alcune modifiche non inviate riguardavano giorni ormai bloccati e sono state scartate.', 'errore', 8000);
     $('saluto').textContent = 'Ciao ' + operatore.nome.split(' ')[0];
     $('utente').innerHTML = '<b>' + DO.esc(operatore.nome) + '</b>' + (operatore.mansione ? ' · ' + DO.esc(operatore.mansione) : '');
     $('utente').hidden = false;
@@ -300,8 +323,12 @@
       $('giorni').innerHTML = '<li class="caricamento"><span></span></li>';
     }
     try {
-      const [r, conv] = await Promise.all([DO.dati.mieDisponibilita(), DO.dati.mieConvocazioni().catch(() => null)]);
+      const [r, conv, op] = await Promise.all([
+        DO.dati.mieDisponibilita(), DO.dati.mieConvocazioni().catch(() => null),
+        DO.dati.leggiOperativo().catch(() => Object.assign({}, DO.OPERATIVO_PREDEFINITO)),
+      ]);
       if (conv) r.convocazioni = conv;
+      r.operativo = op;
       const settimana = lun;
       applica(r);
       lun = giaVisibile ? settimana : settimanaIniziale();
