@@ -170,7 +170,7 @@
   async function salvaOperatore(o) {
     await pausa(150);
     const campi = { nome: String(o.nome || '').trim(), mansione: (o.mansione || '').trim(), email: (o.email || '').trim(), telefono: (o.telefono || '').trim(), attivo: o.attivo !== false,
-      contratto: o.contratto || '', ruolo: o.ruolo === 'TL' ? 'TL' : 'OP', onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '' };
+      contratto: o.contratto || '', ruolo: ['TL', 'SUP'].includes(o.ruolo) ? o.ruolo : 'OP', onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '' };
     if (!campi.nome) throw new Error('Il nome è obbligatorio.');
     if (o.id) {
       const op = dati.operatori.find((x) => x.id === o.id);

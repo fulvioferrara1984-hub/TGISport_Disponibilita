@@ -427,6 +427,7 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 .tag-ridosso { background: #fff1d6; color: #8a4b00; }
 .etichetta.ruolo-TL { background: #efe9ff; color: #5b34c7; }
 .etichetta.ruolo-OP { background: var(--vuoto); color: var(--inchiostro-2); }
+.etichetta.ruolo-SUP { background: #e3f4f2; color: #0f766e; }
 .st-blu { --st: var(--accento); --st-tenue: var(--accento-tenue); }
 .st-vuoto { --st: var(--inchiostro-3); --st-tenue: var(--vuoto); }
 .st-annullato { --st: var(--inchiostro-3); --st-tenue: var(--vuoto); text-decoration: line-through; }

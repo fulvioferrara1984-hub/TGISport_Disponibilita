@@ -193,28 +193,37 @@
       if (!data || (!testo(r[0]) && !testo(r[4]))) return;
       let comp = testo(r[0]);
       const round = testo(r[1]), nota = testo(r[10]), nomeOp = testo(r[7]);
-      if (!comp && precedente && precedente.round === round) {
+      // turni remoti: «Supporto…» (file della stagione) e «Remote TL…» → Remote TL; «Remote Support…» → Remote Support
+      const titoloRiga = testo(r[4]);
+      const tipo = /^remote\s*support/i.test(titoloRiga) ? 'support' : /^(supporto|remote\s*tl)/i.test(titoloRiga) ? 'supervisione' : 'partita';
+      const sup = tipo !== 'partita';
+      // (ai turni la competizione non serve: conta la mansione)
+      if (!comp && !sup && precedente && precedente.round === round) {
         comp = precedente.competizione;
         avvisi.push('Riga ' + riga + ': competizione mancante, presa dalla riga sopra (' + comp + ').');
       }
       // Europa e Conference League erano registrate sotto "Champions League"
       if (comp === 'Champions League' && /europa/i.test(nota + ' ' + round)) comp = 'Europa League';
       if (comp === 'Champions League' && /conference/i.test(nota + ' ' + round)) comp = 'Conference League';
-      const titoloRiga = testo(r[4]), sup = /^supporto/i.test(titoloRiga);
       const annullato = /^deleted/i.test(nota);
       const storico = [{ quando: new Date().toISOString(), testo: 'Importato dal file Excel (riga ' + riga + ')' }];
       const rimosso = /^deleted\s*-\s*(.+)$/i.exec(nota);
       if (rimosso) storico.push({ quando: new Date().toISOString(), testo: 'Rimosso ' + rimosso[1].trim() });
       const operatoreId = annullato ? '' : assicura(nomeOp, '');
+      // il ruolo si alza soltanto (Remote OP → Remote Support → Remote TL): ogni ruolo comprende quelli sotto
       if (sup && operatoreId) {
+        const livello = { OP: 0, SUP: 1, TL: 2 }, nuovo = tipo === 'supervisione' ? 'TL' : 'SUP';
         const o = operatori.find((x) => x.id === operatoreId);
-        if (o) o.ruolo = 'TL';
-        else if ((A.operatori.find((x) => x.id === operatoreId) || {}).ruolo !== 'TL') esistenti[operatoreId] = Object.assign(esistenti[operatoreId] || {}, { ruolo: 'TL' });
+        const attuale = o ? o.ruolo : (esistenti[operatoreId] || {}).ruolo || (A.operatori.find((x) => x.id === operatoreId) || {}).ruolo || 'OP';
+        if (livello[nuovo] > (livello[attuale] || 0)) {
+          if (o) o.ruolo = nuovo;
+          else esistenti[operatoreId] = Object.assign(esistenti[operatoreId] || {}, { ruolo: nuovo });
+        }
       }
       const orario = oraExcel(r[5]);
       const e = {
-        tipo: sup ? 'supervisione' : 'partita', competizione: comp, round, sport: testo(r[2]), data, orario,
-        titolo: sup ? 'Supervisione' : titoloRiga, convocazione: '', note: nota,
+        tipo, competizione: sup ? DO.mansione(tipo) : comp, round: sup ? '' : round, sport: sup ? '' : testo(r[2]), data, orario,
+        titolo: sup ? DO.mansione(tipo) : titoloRiga, convocazione: '', note: nota,
         gettone: /maggiorat/i.test(nota) ? 'maggiorato' : '', daSostituire: /^cambiare/i.test(nota),
         operatoreId, stato: annullato ? 'annullato' : operatoreId ? (testo(r[9]).toUpperCase() === 'SI' ? 'confermato' : 'convocato') : 'da-assegnare',
         inviata: !annullato && !!operatoreId, storico,
@@ -223,7 +232,8 @@
       e.convocazioneCalcolata = R.convocazione(e, regole);
       e.fineCalcolata = R.fine(e, regole);
       // identificativo stabile: ripetere l'importazione aggiorna lo stesso evento anche se si aggiungono righe
-      const base = 'xls-' + data + '-' + (chiave(e.titolo) || 'evento') + '-' + orario.replace(':', '') + '-' + chiave(comp);
+      // (i turni Remote TL tengono la chiave di quando si chiamavano «Supervisione»: reimportando non si duplicano)
+      const base = 'xls-' + data + '-' + (tipo === 'supervisione' ? 'supervisione' : chiave(e.titolo) || 'evento') + '-' + orario.replace(':', '') + '-' + chiave(comp);
       visti[base] = (visti[base] || 0) + 1;
       e.id = base + (visti[base] > 1 ? '-' + visti[base] : '');
       eventi.push(e);
@@ -260,14 +270,14 @@
       const nuoviOp = pacchetto.operatori;
       const giaPresenti = ev.filter((x) => A.eventi.some((y) => y.id === x.id)).length;
       box.innerHTML = '<h3>' + DO.esc(file.name) + '</h3><ul class="elenco-semplice">'
-        + '<li><b>' + ev.length + '</b> eventi (' + conta((x) => x.tipo === 'supervisione') + ' turni di supervisione): '
+        + '<li><b>' + ev.length + '</b> eventi (' + conta((x) => x.tipo === 'supervisione') + ' turni Remote TL, ' + conta((x) => x.tipo === 'support') + ' turni Remote Support): '
           + conta((x) => x.stato === 'confermato') + ' confermati, ' + conta((x) => x.stato === 'convocato') + ' in attesa di conferma, '
           + conta((x) => x.stato === 'da-assegnare') + ' da assegnare, ' + conta((x) => x.stato === 'annullato') + ' annullati'
           + (giaPresenti ? ' · <b>' + giaPresenti + '</b> già importati verranno aggiornati' : '') + '</li>'
         + '<li><b>' + nuoviOp.length + '</b> operatori nuovi' + (nuoviOp.length ? ': ' + nuoviOp.map((o) => DO.esc(o.nome) + ' (' + R.nomeRuolo(o.ruolo) + ', ' + (o.contratto || 'contratto ?') + ')').join(', ') : '') + '</li>'
         + (Object.keys(pacchetto.esistenti).length ? '<li>Operatori già presenti aggiornati: ' + Object.keys(pacchetto.esistenti).map((id) => {
           const o = A.operatori.find((x) => x.id === id), m = pacchetto.esistenti[id];
-          return DO.esc(o.nome) + ' (' + [m.ruolo && 'ruolo Remote TL', m.contratto && 'contratto ' + m.contratto].filter(Boolean).join(', ') + ')';
+          return DO.esc(o.nome) + ' (' + [m.ruolo && 'ruolo ' + R.nomeRuolo(m.ruolo), m.contratto && 'contratto ' + m.contratto].filter(Boolean).join(', ') + ')';
         }).join(', ') + '</li>' : '')
         + '<li><b>' + pacchetto.assenze + '</b> giorni di assenza da segnare come "Non disponibile"</li>'
         + '<li>Tariffe, sport e competizioni (Europa League e Conference League con compenso dimezzato)</li></ul>'
@@ -286,7 +296,7 @@
     e.target.disabled = true;
     e.target.textContent = 'Importazione…';
     try {
-      // operatori già presenti: ruolo TL (dai turni di supervisione) e contratto se mancava
+      // operatori già presenti: ruolo (dai turni Remote TL / Remote Support) e contratto se mancava
       for (const id of Object.keys(pacchetto.esistenti)) {
         const o = A.operatori.find((x) => x.id === id);
         if (o) await DO.dati.salvaOperatore(Object.assign({}, o, pacchetto.esistenti[id]));

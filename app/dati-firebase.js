@@ -379,7 +379,7 @@
     const campi = {
       nome: String(o.nome || '').trim().slice(0, 80), mansione: String(o.mansione || '').trim().slice(0, 60),
       email: String(o.email || '').trim().slice(0, 120), telefono: String(o.telefono || '').trim().slice(0, 30), attivo: o.attivo !== false,
-      contratto: ['P.IVA', 'Coop'].includes(o.contratto) ? o.contratto : '', ruolo: o.ruolo === 'TL' ? 'TL' : 'OP',
+      contratto: ['P.IVA', 'Coop'].includes(o.contratto) ? o.contratto : '', ruolo: ['TL', 'SUP'].includes(o.ruolo) ? o.ruolo : 'OP',
       onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
     };
     if (!campi.nome) throw new Error('Il nome è obbligatorio.');

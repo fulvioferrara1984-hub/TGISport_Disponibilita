@@ -317,3 +317,12 @@ test('richiesta per evento: all\'operatore solo quelle da oggi in poi', async ()
   assert.ok(!(await D.mieRichiesteEvento()).some((r) => r.id === e.id));
 });
 
+
+test('ruolo Remote Support salvato', async () => {
+  comeSupervisore();
+  const o = (await statoDemo()).operatori.find((x) => x.id === 'op-demo4');
+  await D.salvaOperatore(Object.assign({}, o, { ruolo: 'SUP' }));
+  assert.equal((await statoDemo()).operatori.find((x) => x.id === 'op-demo4').ruolo, 'SUP');
+  await D.salvaOperatore(Object.assign({}, o, { ruolo: 'boh' }));
+  assert.equal((await statoDemo()).operatori.find((x) => x.id === 'op-demo4').ruolo, 'OP');
+});

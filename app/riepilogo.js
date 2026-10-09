@@ -19,6 +19,8 @@
     return out;
   }
   const periodo = () => periodi().find((p) => p.id === $('rie-periodo').value) || periodi()[0];
+  // gruppo dell'evento: la competizione, o la mansione per i turni Remote TL / Remote Support
+  const comp = (e) => R.competizioneDi(e) || '(senza competizione)';
 
   // Ogni evento che conta, con il suo gettone calcolato.
   function righe(p) {
@@ -48,13 +50,14 @@
   const quotaMese = (lista, mese) => lista.reduce((t, r) => t + (r.quote[mese] || 0), 0);
 
   function somma(lista) {
-    const t = { n: lista.length, euro: 0, sup: 0 };
+    const t = { n: lista.length, euro: 0, tl: 0, support: 0 };
     TIPI.forEach((k) => { t[k] = 0; t['e_' + k] = 0; });
     lista.forEach((r) => {
       t[r.g.tipo]++;
       t['e_' + r.g.tipo] += r.g.importo;
       t.euro += r.g.importo;
-      if (r.tipo === 'supervisione') t.sup++;
+      if (r.tipo === 'supervisione') t.tl++;
+      if (r.tipo === 'support') t.support++;
     });
     return t;
   }
@@ -80,28 +83,28 @@
     const ops = A.operatori.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'it'))
       .map((o) => ({ o, t: somma(lista.filter((r) => r.operatoreId === o.id)), on: sommaOnsite(ons.filter((r) => r.operatoreId === o.id)) }))
       .filter((x) => x.t.n || x.on.giorni || x.o.attivo);
-    const tabOp = '<table class="tabella numeri"><thead><tr><th>Operatore</th><th class="sx">Ruolo</th><th class="sx">Contratto</th><th>Diurni</th><th>Notturni</th><th>Maggiorati</th><th>Dimezzati</th><th>di cui supervisione</th><th>Totale eventi</th><th>Giorni on-site</th><th>€ on-site</th><th>Netto</th></tr></thead><tbody>'
+    const tabOp = '<table class="tabella numeri"><thead><tr><th>Operatore</th><th class="sx">Ruolo</th><th class="sx">Contratto</th><th>Diurni</th><th>Notturni</th><th>Maggiorati</th><th>Dimezzati</th><th>di cui Remote TL</th><th>di cui Remote Support</th><th>Totale eventi</th><th>Giorni on-site</th><th>€ on-site</th><th>Netto</th></tr></thead><tbody>'
       + ops.map(({ o, t, on }) => '<tr><td><b>' + DO.esc(o.nome) + '</b></td><td class="sx">' + R.nomeRuolo(o.ruolo) + '</td><td class="sx">' + (o.contratto || '<span class="testo-errore">da indicare</span>') + '</td>'
-        + TIPI.map((k) => '<td>' + num(t[k]) + '</td>').join('') + '<td>' + num(t.sup) + '</td><td><b>' + num(t.n) + '</b></td>'
+        + TIPI.map((k) => '<td>' + num(t[k]) + '</td>').join('') + '<td>' + num(t.tl) + '</td><td>' + num(t.support) + '</td><td><b>' + num(t.n) + '</b></td>'
         + '<td>' + num(on.giorni) + '</td><td>' + eur(on.euro) + '</td><td><b>' + eur(t.euro + on.euro) + '</b></td></tr>').join('')
-      + '</tbody><tfoot><tr><td>Totale</td><td></td><td></td>' + TIPI.map((k) => '<td>' + tot[k] + '</td>').join('') + '<td>' + tot.sup + '</td><td>' + tot.n + '</td>'
+      + '</tbody><tfoot><tr><td>Totale</td><td></td><td></td>' + TIPI.map((k) => '<td>' + tot[k] + '</td>').join('') + '<td>' + tot.tl + '</td><td>' + tot.support + '</td><td>' + tot.n + '</td>'
       + '<td>' + totOn.giorni + '</td><td>' + R.euro(totOn.euro) + '</td><td>' + R.euro(tot.euro + totOn.euro) + '</td></tr></tfoot></table>';
 
     // per competizione: eventi coperti, da assegnare e annullati a parte
     const nelPeriodo = A.eventi.filter((e) => e.data >= p.da && e.data <= p.a);
-    const comps = [...new Set(nelPeriodo.map((e) => e.competizione || '(senza competizione)'))].sort((a, b) => a.localeCompare(b, 'it'));
+    const comps = [...new Set(nelPeriodo.map(comp))].sort((a, b) => a.localeCompare(b, 'it'));
     const onPiva = ons.filter((r) => r.op.contratto === 'P.IVA').reduce((t, r) => t + r.euro, 0), onCoop = ons.filter((r) => r.op.contratto === 'Coop').reduce((t, r) => t + r.euro, 0);
-    const tabComp = '<table class="tabella numeri"><thead><tr><th>Competizione</th><th>Eventi coperti</th><th>di cui supervisione</th><th>Da assegnare</th><th>Annullati</th><th>Netto P.IVA</th><th>Netto Coop</th><th>Totale netto</th></tr></thead><tbody>'
+    const tabComp = '<table class="tabella numeri"><thead><tr><th>Competizione / mansione</th><th>Eventi coperti</th><th>Da assegnare</th><th>Annullati</th><th>Netto P.IVA</th><th>Netto Coop</th><th>Totale netto</th></tr></thead><tbody>'
       + comps.map((c) => {
-        const qui = lista.filter((r) => (r.competizione || '(senza competizione)') === c), tutti = nelPeriodo.filter((e) => (e.competizione || '(senza competizione)') === c);
+        const qui = lista.filter((r) => comp(r) === c), tutti = nelPeriodo.filter((e) => comp(e) === c);
         const piva = qui.filter((r) => r.op.contratto === 'P.IVA').reduce((s, r) => s + r.g.importo, 0), coop = qui.filter((r) => r.op.contratto === 'Coop').reduce((s, r) => s + r.g.importo, 0);
-        return '<tr><td><b>' + DO.esc(c) + '</b>' + (R.compensoCompetizione(c, A.regole) === 'dimezzato' ? ' <span class="tag">Dimezzato</span>' : '') + '</td><td><b>' + num(qui.length) + '</b></td><td>' + num(qui.filter((r) => r.tipo === 'supervisione').length) + '</td>'
+        return '<tr><td><b>' + DO.esc(c) + '</b>' + (R.compensoCompetizione(c, A.regole) === 'dimezzato' ? ' <span class="tag">Dimezzato</span>' : '') + '</td><td><b>' + num(qui.length) + '</b></td>'
           + '<td>' + num(tutti.filter((e) => e.stato === 'da-assegnare').length) + '</td><td>' + num(tutti.filter((e) => e.stato === 'annullato').length) + '</td>'
           + '<td>' + eur(piva) + '</td><td>' + eur(coop) + '</td><td><b>' + eur(piva + coop) + '</b></td></tr>';
       }).join('')
-      + (ons.length ? '<tr><td><b>On-site</b> <span class="tag">giorni-persona</span></td><td><b>' + num(totOn.giorni) + '</b></td><td></td><td></td><td></td>'
+      + (ons.length ? '<tr><td><b>On-site</b> <span class="tag">giorni-persona</span></td><td><b>' + num(totOn.giorni) + '</b></td><td></td><td></td>'
         + '<td>' + eur(onPiva) + '</td><td>' + eur(onCoop) + '</td><td><b>' + eur(totOn.euro) + '</b></td></tr>' : '')
-      + '</tbody><tfoot><tr><td>Totale</td><td>' + (tot.n + totOn.giorni) + '</td><td>' + tot.sup + '</td><td></td><td></td>'
+      + '</tbody><tfoot><tr><td>Totale</td><td>' + (tot.n + totOn.giorni) + '</td><td></td><td></td>'
       + '<td>' + R.euro(lista.filter((r) => r.op.contratto === 'P.IVA').reduce((s, r) => s + r.g.importo, 0) + onPiva) + '</td><td>' + R.euro(lista.filter((r) => r.op.contratto === 'Coop').reduce((s, r) => s + r.g.importo, 0) + onCoop) + '</td><td>' + R.euro(tot.euro + totOn.euro) + '</td></tr></tfoot></table>';
 
     // per mese (solo sulla stagione): netto di ogni operatore mese per mese
@@ -123,14 +126,14 @@
     const opsAttivi = ops.filter((x) => x.t.n);
     const tabIncrocio = opsAttivi.length ? '<section class="scheda"><div class="scheda-testa"><h2>Eventi per operatore e competizione</h2></div><div class="tabella-box"><table class="tabella numeri compatta ampia"><thead><tr><th>Competizione</th>'
       + opsAttivi.map(({ o }) => '<th>' + DO.esc(o.nome.split(' ')[0]) + ' ' + DO.esc((o.nome.split(' ')[1] || '').slice(0, 1)) + '.</th>').join('') + '<th>Totale</th></tr></thead><tbody>'
-      + comps.filter((c) => lista.some((r) => (r.competizione || '(senza competizione)') === c)).map((c) => '<tr><td><b>' + DO.esc(c) + '</b></td>' + opsAttivi.map(({ o }) =>
-        '<td>' + num(lista.filter((r) => r.operatoreId === o.id && (r.competizione || '(senza competizione)') === c).length) + '</td>').join('')
-        + '<td><b>' + lista.filter((r) => (r.competizione || '(senza competizione)') === c).length + '</b></td></tr>').join('')
+      + comps.filter((c) => lista.some((r) => comp(r) === c)).map((c) => '<tr><td><b>' + DO.esc(c) + '</b></td>' + opsAttivi.map(({ o }) =>
+        '<td>' + num(lista.filter((r) => r.operatoreId === o.id && comp(r) === c).length) + '</td>').join('')
+        + '<td><b>' + lista.filter((r) => comp(r) === c).length + '</b></td></tr>').join('')
       + '</tbody></table></div></section>' : '';
 
     $('rie-contenuto').innerHTML = '<div class="kpi">'
       + '<div><span>Eventi coperti</span><b>' + tot.n + '</b></div>'
-      + '<div><span>di cui supervisione</span><b>' + tot.sup + '</b></div>'
+      + '<div><span>di cui Remote TL / Remote Support</span><b>' + tot.tl + ' / ' + tot.support + '</b></div>'
       + '<div><span>Giorni on-site</span><b>' + totOn.giorni + '</b></div>'
       + '<div><span>Netto totale</span><b>' + R.euro(tot.euro + totOn.euro) + '</b></div>'
       + '<div><span>Ancora da assegnare</span><b>' + futuri + '</b></div></div>'
@@ -170,7 +173,8 @@
       .concat(A.eventi.filter((e) => e.data >= p.da && e.data <= p.a).sort((a, b) => a.data.localeCompare(b.data)).map((e) => {
         const o = A.operatori.find((x) => x.id === e.operatoreId);
         const g = R.conta(e) && o ? R.gettone(e, o, A.regole) : null;
-        return [e.data, e.tipo === 'supervisione' ? 'Supervisione' : 'Partita', e.competizione, e.round, e.sport, e.tipo === 'supervisione' ? 'Supervisione' : e.titolo,
+        const turno = DO.turnoRemoto(e.tipo);
+        return [e.data, R.nomeTipo(e.tipo), R.competizioneDi(e), turno ? '' : e.round, turno ? '' : e.sport, turno ? R.nomeTipo(e.tipo) : e.titolo,
           e.orario, R.convocazione(e, A.regole), o ? o.nome : '', o ? R.nomeRuolo(o.ruolo) : '', o ? o.contratto : '', e.stato, g ? g.etichetta : '', g ? g.importo : 0, e.note || ''];
       }));
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(conv), 'Convocazioni');
@@ -180,15 +184,15 @@
         .concat(ons.sort((a, b) => a.dep.da.localeCompare(b.dep.da)).map((r) => [r.dep.da, r.dep.a, r.dep.luogo, r.dep.sport, r.dep.titolo || '', r.op.nome, 'On-site ' + r.ruolo,
           r.op.contratto || '', r.giorni, Math.round(r.euro * 100) / 100]))), 'On-site');
     }
-    const perOp = [['Operatore', 'Ruolo', 'Contratto', 'Diurni', 'Notturni', 'Maggiorati', 'Dimezzati', 'di cui supervisione', 'Totale eventi', 'Giorni on-site', '€ on-site', 'Netto']];
+    const perOp = [['Operatore', 'Ruolo', 'Contratto', 'Diurni', 'Notturni', 'Maggiorati', 'Dimezzati', 'di cui Remote TL', 'di cui Remote Support', 'Totale eventi', 'Giorni on-site', '€ on-site', 'Netto']];
     A.operatori.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'it')).forEach((o) => {
       const t = somma(lista.filter((r) => r.operatoreId === o.id)), on = sommaOnsite(ons.filter((r) => r.operatoreId === o.id));
-      if (t.n || on.giorni) perOp.push([o.nome, R.nomeRuolo(o.ruolo), o.contratto, t.diurno, t.notturno, t.maggiorato, t.dimezzato, t.sup, t.n, on.giorni, Math.round(on.euro * 100) / 100, Math.round((t.euro + on.euro) * 100) / 100]);
+      if (t.n || on.giorni) perOp.push([o.nome, R.nomeRuolo(o.ruolo), o.contratto, t.diurno, t.notturno, t.maggiorato, t.dimezzato, t.tl, t.support, t.n, on.giorni, Math.round(on.euro * 100) / 100, Math.round((t.euro + on.euro) * 100) / 100]);
     });
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(perOp), 'Per operatore');
-    const perComp = [['Competizione', 'Eventi coperti', 'Netto P.IVA', 'Netto Coop', 'Totale netto']];
-    [...new Set(lista.map((r) => r.competizione || '(senza competizione)'))].sort().forEach((c) => {
-      const qui = lista.filter((r) => (r.competizione || '(senza competizione)') === c);
+    const perComp = [['Competizione / mansione', 'Eventi coperti', 'Netto P.IVA', 'Netto Coop', 'Totale netto']];
+    [...new Set(lista.map(comp))].sort().forEach((c) => {
+      const qui = lista.filter((r) => comp(r) === c);
       const piva = qui.filter((r) => r.op.contratto === 'P.IVA').reduce((s, r) => s + r.g.importo, 0), coop = qui.filter((r) => r.op.contratto === 'Coop').reduce((s, r) => s + r.g.importo, 0);
       perComp.push([c, qui.length, piva, coop, piva + coop]);
     });
