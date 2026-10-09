@@ -3,7 +3,8 @@
  * I dati stanno su Firebase; questo Google Apps Script serve solo a spedire le email, in sottofondo:
  *  - ai supervisori, quando un operatore invia le disponibilità;
  *  - agli operatori, quando i supervisori chiedono le disponibilità per un periodo;
- *  - ogni mattina, i promemoria delle convocazioni ancora da sistemare (attivaPromemoria).
+ *  - ogni mattina, i promemoria delle convocazioni ancora da sistemare (attivaPromemoria);
+ *  - agli operatori, le richieste di deployment on-site; ai supervisori, chi le accetta.
  * Chi chiama viene riconosciuto chiedendo a Firestore, con il suo gettone di accesso, di leggere
  * dati che le regole di sicurezza mostrano solo a lui: niente password o segreti qui dentro.
  * I promemoria girano senza nessuno collegato: leggono Firestore (solo lettura) con l'account Google
@@ -25,7 +26,7 @@ function doPost(e) {
   try {
     const r = JSON.parse(e.postData.contents);
     const azioni = {
-      notificaInvio, emailRichiesta, emailConvocazioni, notificaRisposta,
+      notificaInvio, emailRichiesta, emailConvocazioni, notificaRisposta, emailOnsite, notificaOnsite,
       leggiImpostazioni: soloSupervisori(impostazioniDashboard), salvaImpostazioni: soloSupervisori(salvaImpostazioni),
     };
     if (!azioni[r.azione]) throw new Error('Operazione non consentita.');
@@ -487,4 +488,88 @@ function attivaPromemoria() {
   const imp = leggiImpostazioni();
   console.log('Invio giornaliero attivo tra le 8 e le 9 · promemoria ' + (imp.promemoriaAttivi ? 'accesi' : 'spenti') + ', '
     + imp.promemoriaGiorni + ' giorni prima · email ancora disponibili oggi: ' + MailApp.getRemainingDailyQuota());
+}
+
+// ---------------------------------------------------------------- on-site: richiesta e accettazione
+// (periodoBreve ed etichettaPosti danno gli stessi risultati delle funzioni omonime di app/onsite.js)
+
+// "12 ottobre", "12–15 ottobre", "30 ottobre – 2 novembre"
+function periodoBreve(da, a) {
+  const mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+  const g = (iso) => ({ num: Number(iso.slice(8)), mese: mesi[Number(iso.slice(5, 7)) - 1], anno: iso.slice(0, 4) });
+  const x = g(String(da)), y = g(String(a));
+  if (da === a) return x.num + ' ' + x.mese;
+  if (x.mese === y.mese && x.anno === y.anno) return x.num + '–' + y.num + ' ' + y.mese;
+  return x.num + ' ' + x.mese + ' – ' + y.num + ' ' + y.mese;
+}
+
+// "TL 1/1 · OP 2/2 · completo"
+function etichettaPosti(d) {
+  const posti = d.posti || {};
+  const conPosti = ['TL', 'OP'].filter((r) => Number(posti[r] || 0) > 0);
+  const presi = (r) => (Array.isArray(d['accettati' + r]) ? d['accettati' + r] : []).length;
+  return conPosti.map((r) => r + ' ' + presi(r) + '/' + posti[r]).join(' · ')
+    + (conPosti.length && conPosti.every((r) => presi(r) >= Number(posti[r])) ? ' · completo' : '');
+}
+
+// Richiesta all'operatore: giorni, attività, luogo, sport e posto richiesto. Mai il compenso.
+function testoEmailOnsite(dest, d, sito) {
+  const giorni = (Array.isArray(d.giorni) ? d.giorni : []).slice(0, 31);
+  const righe = giorni.map((g) => '<tr><td style="padding:4px 14px 4px 0;white-space:nowrap"><b>' + esc(giornoLungo(String(g.data))) + '</b></td>'
+    + '<td style="padding:4px 0">' + esc(g.attivita || '') + (g.partita ? ' · ' + esc(g.partita) : '') + '</td></tr>').join('');
+  return {
+    to: dest.email,
+    subject: 'Richiesta on-site: ' + d.luogo + ' · ' + periodoBreve(d.da, d.a),
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p>Ciao ' + esc(String(dest.nome || '').split(' ')[0]) + ',</p>'
+      + '<p>i supervisori cercano operatori per un deployment on-site' + (d.titolo ? ': <b>' + esc(d.titolo) + '</b>' : '') + '.</p>'
+      + '<p><b>' + esc(d.luogo || '') + '</b> · ' + esc(d.sport || '') + (dest.ruolo ? '<br>Posto richiesto: <b>on-site ' + esc(dest.ruolo) + '</b>' : '') + '</p>'
+      + '<table style="border-collapse:collapse">' + righe + '</table>'
+      + (d.note ? '<p style="padding:10px 14px;background:#f3f4f6;border-radius:8px">' + esc(String(d.note).slice(0, 500)) + '</p>' : '')
+      + (sito ? tasto(sito, 'Rispondi sulla piattaforma') : '')
+      + '<p style="color:#8b919c;font-size:12px">I posti vanno a chi accetta per primo. Per entrare usa il tuo codice personale.</p></div>',
+  };
+}
+
+function emailOnsite(r) {
+  verificaSupervisore(r.idToken);
+  const sito = /^https:\/\//.test(String(r.urlSito || '')) ? String(r.urlSito) : '';
+  const d = r.deployment || {};
+  const esito = { email: 0, nonInviate: [] };
+  (Array.isArray(r.destinatari) ? r.destinatari : []).slice(0, 100).forEach((dest) => {
+    if (!EMAIL_VALIDA.test(String(dest.email || ''))) { esito.nonInviate.push(dest.nome); return; }
+    try {
+      MailApp.sendEmail(Object.assign({ name: CONFIG.MITTENTE }, testoEmailOnsite(dest, d, sito)));
+      esito.email++;
+    } catch (e) {
+      esito.nonInviate.push(dest.nome);
+    }
+  });
+  esito.quotaRestante = MailApp.getRemainingDailyQuota();
+  return esito;
+}
+
+// Ai supervisori: chi ha accettato, con che ruolo, e quanti posti restano
+function testoNotificaOnsite(nome, ruolo, d, convocazioni) {
+  return {
+    subject: 'On-site accettato: ' + nome + ' · ' + d.luogo + ' ' + periodoBreve(d.da, d.a),
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p><b>' + esc(nome) + '</b> ha accettato il deployment on-site a <b>'
+      + esc(d.luogo || '') + '</b>' + (d.titolo ? ' (' + esc(d.titolo) + ')' : '') + ', ' + esc(periodoBreve(d.da, d.a)) + ', come <b>on-site ' + esc(ruolo) + '</b>.</p>'
+      + '<p>Posti: <b>' + esc(etichettaPosti(d)) + '</b></p>'
+      + (convocazioni ? tasto(convocazioni, 'Apri le convocazioni') : '') + '</div>',
+  };
+}
+
+// L'operatore ha accettato: lo script rilegge il deployment con il suo gettone e controlla che sia fra gli accettati.
+function notificaOnsite(r) {
+  const op = verificaOperatore(r.idToken);
+  const letto = firestore('onsite/' + encodeURIComponent(String(r.id || '')), r.idToken);
+  if (letto.codice !== 200) throw new Error('Accesso non consentito.');
+  const d = daFirestore(letto.dati);
+  const ruolo = ['TL', 'OP'].find((x) => (Array.isArray(d['accettati' + x]) ? d['accettati' + x] : []).indexOf(op.id) >= 0);
+  if (!ruolo) throw new Error('Accesso non consentito.');
+  const imp = leggiImpostazioni();
+  if (!imp.emailAttive || !imp.emailSupervisori) return { inviata: false };
+  const testo = testoNotificaOnsite(op.nome, ruolo, d, indirizzi(imp.urlAdmin).convocazioni);
+  MailApp.sendEmail({ to: imp.emailSupervisori, name: CONFIG.MITTENTE, subject: testo.subject, htmlBody: testo.htmlBody });
+  return { inviata: true };
 }

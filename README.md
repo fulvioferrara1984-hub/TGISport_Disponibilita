@@ -24,9 +24,10 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 | UEFA | Champions, Europa e Conference League: metà del diurno |
 | Supervisione | un turno per giorno, solo operatori con ruolo **TL**; le partite vanno a TL o OP |
 | Annullati | non contano mai nei riepiloghi |
+| On-site | richiesta con date, attività per giorno (Travel Day, MD-1, MD…), luogo, sport e posti TL/OP, solo agli operatori abilitati; chi accetta per primo occupa il posto, è on-site in quei giorni (non assegnabile al remoto) e non si ritira dal sito; compenso di trasferta = giorni × tariffa on-site (generale: 150 € al giorno), modificabile, visibile solo ai supervisori |
 | Promemoria | ogni mattina tra le 8 e le 9, per gli eventi remoti da oggi a X giorni dopo (generale: 3): agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto (da sostituire, senza operatore, da inviare, in attesa) |
 
-Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco), **Competizioni e sport** (ore prima/dopo per competizione, casella *UEFA ½*) e **Notifiche email** (promemoria automatici e giorni).
+Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco), **Competizioni e sport** (ore prima/dopo per competizione, casella *UEFA ½*) , **Notifiche email** (promemoria automatici e giorni) e **Tariffe e regole → Tariffa on-site**; l'abilitazione on-site di ciascuno si imposta nella scheda dell'operatore.
 
 **Esporta mese** (scheda Convocazioni) scarica un Excel con le convocazioni del mese e le presenze per operatore, senza compensi.
 
@@ -113,6 +114,15 @@ Da fare una volta, nell'ordine:
 
 Per sospenderli basta togliere la casella; per fermare del tutto l'invio giornaliero: editor di Apps Script → ⏰ **Attivatori** → elimina *inviaPromemoria*. `attivaPromemoria` si può rieseguire quando si vuole: non crea doppioni.
 
+### Deployment on-site
+
+Ordine come per ogni aggiornamento, **sito → regole → script**:
+
+1. **Sito**: finché le regole nuove non sono pubblicate la pagina operatori non mostra le richieste on-site (senza errori) e la dashboard avvisa *On-site non disponibile: pubblica le nuove regole di Firestore*.
+2. **Regole**: incolla [`firebase/firestore.rules`](firebase/firestore.rules) in Firebase → Firestore Database → Regole → **Pubblica**. Le regole controllano posti, ruolo on-site, richiesta aperta e primo giorno: due operatori non possono prendere lo stesso ultimo posto.
+3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste on-site non partono e la dashboard lo segnala dopo l'invio.
+4. **Dashboard**: in **Operatori → Modifica** imposta *On-site: TL / OP* per chi può andare in trasferta, e controlla la **Tariffa on-site** in Impostazioni.
+
 ### 4. GitHub Pages
 
 Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(root)`.
@@ -142,6 +152,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 - **Supervisori**: la dashboard si aggiorna da sola appena un operatore invia (badge su *Aggiornamenti*, avviso a schermo e, se attivate, notifiche del computer). Clic sull'intestazione di un giorno → pannello **Convocazione**; *Scrivi email ai selezionati* apre il programma di posta con tutti in Ccn.
 - **Richiedi disponibilità**: periodo (scorciatoie per questa settimana, la prossima, le prossime 2 o 4), messaggio facoltativo e operatori (già selezionati quelli a cui mancano giorni). Ogni operatore vede la richiesta in cima alla sua pagina, con i giorni richiesti evidenziati, e riceve un'email con il link. In **Aggiornamenti** c'è l'avanzamento, *Sollecita chi manca*, il messaggio per WhatsApp e *Chiudi*.
 - **Esporta CSV** scarica la settimana in vista (si apre con Excel).
+- **On-site**: *Convocazioni → + On-site* → primo e ultimo giorno (si può togliere un giorno), attività di ogni giorno con la partita per gli MD, luogo, sport, posti TL/OP, compenso proposto e destinatari (gli abilitati, con l'avviso se hanno convocazioni remote in quei giorni). Gli operatori rispondono *Accetto* / *Non posso* dalla loro pagina; chi ha convocazioni remote inviate negli stessi giorni deve prima chiamare. I giorni del deployment compaiono nel calendario: clic sulla riga → scheda con risposte, *Togli*, *Modifica*, *Chiudi richiesta* e *Annulla deployment*. Le presenze e i compensi on-site entrano nel Riepilogo e in *Esporta mese*.
 - **Promemoria**: ogni mattina, se ci sono convocazioni da sistemare nei prossimi giorni, arrivano le email (agli operatori solo le loro convocazioni da confermare, con il numero di reperibilità). Un operatore senza email o disattivato compare nel riepilogo dei supervisori con la nota *(senza email)* o *(disattivato)*.
 - **Password dimenticata**: nella schermata di accesso, scrivere l'email e premere *Password dimenticata?*: arriva un'email per sceglierne una nuova.
 - **Aggiungere o togliere un supervisore**: modificare l'elenco delle email sia in [`firebase/firestore.rules`](firebase/firestore.rules) (poi ripubblicare le regole in console) sia in `SUPERVISORI` di `app/config.js`. Per togliere l'accesso basta toglierlo dalle regole; l'account si può eliminare da Authentication → Utenti.
@@ -153,6 +164,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 - Firebase blocca da solo i tentativi di accesso ripetuti.
 - Uscendo (*Esci*) si cancella anche la copia dei dati salvata sul dispositivo.
 - Le email partono dall'account Google che ha pubblicato lo script (limite di Google: 100 al giorno con Gmail, 1500 con Google Workspace); le notifiche ai supervisori sono al massimo una al minuto per operatore.
+- Il compenso on-site sta in un archivio che leggono solo i supervisori (`onsiteRiservato`): agli operatori non arriva mai, nemmeno nelle email.
 - Per i promemoria lo script legge Firestore con il proprio account, fuori dalle regole di sicurezza: lo fa solo nel giro del mattino e solo in lettura; le richieste che arrivano dalle pagine continuano a usare l'accesso di chi le manda.
 
 ## Prove in locale
@@ -169,6 +181,7 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/demo.js` | archivio di prova nel browser (senza Firebase) |
 | `app/comune.js` | date, avvisi, accesso, email |
 | `app/regole.js` | ritrovo, notturno, gettoni, stagione |
+| `app/onsite.js`, `app/onsite-admin.js` | deployment on-site: calcoli (giorni, posti, presenze, compensi) e richiesta/scheda nella dashboard |
 | `app/convocazioni.js`, `app/riepilogo.js`, `app/impostazioni.js` | schede Convocazioni, Riepilogo, regole e importazione |
 | `app/config.js` | collegamento a Firebase e allo script delle email |
 | `app/stile.css`, `Logo/`, favicon | identità TGI Sport (come Mockup Studio) |
