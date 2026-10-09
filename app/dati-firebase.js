@@ -150,9 +150,17 @@
     await avvia();
     const codice = normalizza(testo);
     if (codice.length !== 8) throw new Error('Il codice ha 8 caratteri, es. K7QM-4XPA.');
+    const email = await emailDaCodice(codice);
+    // link personale riaperto da chi è già dentro con lo stesso codice: l'accesso non si ripete
+    if (operatoreCorrente && auth.currentUser && auth.currentUser.email === email) {
+      DO.segna('codice del link già in uso: nessun nuovo accesso');
+      return operatoreCorrente;
+    }
     await F.setPersistence(auth, ricorda ? F.browserLocalPersistence : F.browserSessionPersistence);
     try {
-      await F.signInWithEmailAndPassword(auth, await emailDaCodice(codice), codice);
+      DO.segna('accesso con il codice…');
+      await F.signInWithEmailAndPassword(auth, email, codice);
+      DO.segna('accesso con il codice fatto');
     } catch (e) {
       throw traduci(e, 'Codice non valido.');
     }
