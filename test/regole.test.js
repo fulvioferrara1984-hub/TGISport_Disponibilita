@@ -3,6 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 global.window = {};
+require('../app/comune.js');
+require('../app/onsite.js');
 require('../app/regole.js');
 const R = window.DO.regole;
 
@@ -96,9 +98,9 @@ test('esportazione mensile: due fogli, solo presenze, annullati esclusi dalle pr
   assert.deepEqual(convocazioni[1], ['05/10/2026', 'Partita', 'Serie A', '', '', 'Inter-Monza', '18:00', '14:00', '20:00', 'Bruno Blu', 'OP', 'Annullato']);
   assert.deepEqual(convocazioni[2].slice(0, 2).concat(convocazioni[2].slice(7)), ['18/10/2026', 'Supervisione', '10:00', '16:00', 'Anna Neri', 'TL', 'Confermato']);
   assert.deepEqual(presenze, [
-    ['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa'],
-    ['Anna Neri', 0, 1, 0],
-    ['Bruno Blu', 1, 0, 1],
+    ['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa', 'Giorni on-site'],
+    ['Anna Neri', 0, 1, 0, 0],
+    ['Bruno Blu', 1, 0, 1, 0],
   ]);
   assert.equal(JSON.stringify({ convocazioni, presenze }).match(/€|[Gg]ettone|[Mm]aggiorat/), null);
 });
@@ -156,4 +158,24 @@ test('stato dei promemoria: email non partite ed eventi senza destinatari', () =
   assert.equal(R.statoPromemoria(imp({ riepilogo: false, operatori: 0, nonInviate: 0, inSospeso: 3 })), inizio + '3 eventi da sistemare, nessuna email partita');
   assert.equal(R.statoPromemoria(imp({ riepilogo: false, operatori: 0, nonInviate: 2, inSospeso: 1, fallito: true })), inizio + '1 evento da sistemare, nessuna email partita · 2 email non partite');
   assert.equal(R.statoPromemoria(imp({ riepilogo: false, operatori: 0, nonInviate: 0, inSospeso: 0 })), inizio + 'niente in sospeso, nessuna email');
+});
+
+test('esportazione mensile con on-site', () => {
+  const ops = [{ id: 'a', nome: 'Anna Neri', ruolo: 'OP' }, { id: 'b', nome: 'Bruno Blu', ruolo: 'OP' }];
+  const dep = {
+    id: 'd1', luogo: 'Roma', sport: 'Rugby', stato: 'aperta', da: '2026-10-30', a: '2026-11-02', posti: { TL: 1, OP: 1 },
+    giorni: [{ data: '2026-10-30', attivita: 'Travel Day', partita: '' }, { data: '2026-10-31', attivita: 'MD', partita: 'Italia-Galles' },
+      { data: '2026-11-01', attivita: 'MD+1', partita: '' }, { data: '2026-11-02', attivita: 'Travel Day', partita: '' }],
+    accettatiTL: ['a'], accettatiOP: [], rifiuti: ['b'], esclusi: [],
+  };
+  const ottobre = R.righeMese([], ops, regole, '2026-10', [dep]);
+  assert.deepEqual(ottobre.convocazioni.slice(1), [
+    ['30/10/2026', 'On-site', '', '', 'Rugby', 'Travel Day · Roma', '', '', '', 'Anna Neri', 'On-site TL', 'Confermato'],
+    ['31/10/2026', 'On-site', '', '', 'Rugby', 'MD · Italia-Galles · Roma', '', '', '', 'Anna Neri', 'On-site TL', 'Confermato'],
+  ]);
+  assert.deepEqual(ottobre.presenze, [['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa', 'Giorni on-site'], ['Anna Neri', 0, 0, 0, 2]]);
+  assert.equal(JSON.stringify(ottobre).match(/€|[Cc]ompens/), null);
+  const annullato = R.righeMese([], ops, regole, '2026-10', [Object.assign({}, dep, { stato: 'annullata' })]);
+  assert.equal(annullato.convocazioni.length, 1);
+  assert.equal(annullato.presenze.length, 1);
 });

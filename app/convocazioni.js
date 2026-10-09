@@ -429,7 +429,7 @@
   async function esportaMese(mese) {
     let X;
     try { X = await DO.caricaXlsx(); } catch (e) { DO.avviso(e.message, 'errore'); return; }
-    const { convocazioni, presenze } = R.righeMese(A.eventi, A.operatori, A.regole, mese);
+    const { convocazioni, presenze } = R.righeMese(A.eventi, A.operatori, A.regole, mese, A.onsite);
     if (convocazioni.length === 1) { DO.avviso('Nessun evento in questo mese.'); return; }
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(convocazioni), 'Convocazioni');

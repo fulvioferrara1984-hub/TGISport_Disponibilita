@@ -146,24 +146,36 @@
 
   // Esportazione mensile per l'operatività: solo presenze, nessun compenso.
   const NOMI_STATO = { 'da-assegnare': 'Da assegnare', assegnato: 'Da inviare', convocato: 'In attesa di risposta', confermato: 'Confermato', rifiutato: 'Rifiutato', annullato: 'Annullato' };
-  function righeMese(eventi, operatori, regole, mese) {
+  // Esportazione del mese, senza compensi: convocazioni (anche i giorni on-site, uno per persona) e presenze per operatore
+  function righeMese(eventi, operatori, regole, mese, onsite = []) {
     const op = (id) => operatori.find((o) => o.id === id) || null;
-    const delMese = eventi.filter((e) => e.data.slice(0, 7) === mese)
-      .sort((a, b) => (a.data + convocazione(a, regole)).localeCompare(b.data + convocazione(b, regole)));
-    const convocazioni = [['Data', 'Tipo', 'Competizione', 'Round', 'Sport', 'Evento', 'Orario', 'Ritrovo', 'Fine turno', 'Operatore', 'Ruolo', 'Stato']]
-      .concat(delMese.map((e) => {
-        const o = op(e.operatoreId), sup = e.tipo === 'supervisione';
-        return [e.data.slice(8) + '/' + e.data.slice(5, 7) + '/' + e.data.slice(0, 4), sup ? 'Supervisione' : 'Partita', e.competizione || '', e.round || '', e.sport || '',
-          sup ? 'Supervisione' : e.titolo || '', e.orario || '', convocazione(e, regole), fine(e, regole), o ? o.nome : '', o ? o.ruolo : '', NOMI_STATO[e.stato] || e.stato];
-      }));
+    const data = (iso) => iso.slice(8) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+    const delMese = eventi.filter((e) => e.data.slice(0, 7) === mese);
+    const righe = delMese.map((e) => {
+      const o = op(e.operatoreId), sup = e.tipo === 'supervisione';
+      return { chiave: e.data + convocazione(e, regole), riga: [data(e.data), sup ? 'Supervisione' : 'Partita', e.competizione || '', e.round || '', e.sport || '',
+        sup ? 'Supervisione' : e.titolo || '', e.orario || '', convocazione(e, regole), fine(e, regole), o ? o.nome : '', o ? o.ruolo : '', NOMI_STATO[e.stato] || e.stato] };
+    });
     const conta = {};
+    const contatore = (id) => (conta[id] = conta[id] || [0, 0, 0, 0]);
+    onsite.filter((d) => d.stato !== 'annullata').forEach((d) => {
+      ['TL', 'OP'].forEach((ruolo) => (d['accettati' + ruolo] || []).filter(op).forEach((id) => {
+        d.giorni.filter((g) => g.data.slice(0, 7) === mese).forEach((g) => {
+          righe.push({ chiave: g.data + '~', riga: [data(g.data), 'On-site', '', '', d.sport || '', [g.attivita, g.partita, d.luogo].filter(Boolean).join(' · '),
+            '', '', '', op(id).nome, 'On-site ' + ruolo, 'Confermato'] });
+          contatore(id)[3]++;
+        });
+      }));
+    });
+    const convocazioni = [['Data', 'Tipo', 'Competizione', 'Round', 'Sport', 'Evento', 'Orario', 'Ritrovo', 'Fine turno', 'Operatore', 'Ruolo', 'Stato']]
+      .concat(righe.sort((x, y) => x.chiave.localeCompare(y.chiave)).map((x) => x.riga));
     delMese.forEach((e) => {
       if (!e.operatoreId || !op(e.operatoreId)) return;
-      const c = conta[e.operatoreId] = conta[e.operatoreId] || [0, 0, 0];
+      const c = contatore(e.operatoreId);
       if (e.stato === 'confermato') c[e.tipo === 'supervisione' ? 1 : 0]++;
       else if (e.stato === 'convocato') c[2]++;
     });
-    const presenze = [['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa']]
+    const presenze = [['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa', 'Giorni on-site']]
       .concat(Object.keys(conta).filter((id) => conta[id].some(Boolean)).map((id) => [op(id).nome].concat(conta[id]))
         .sort((a, b) => a[0].localeCompare(b[0], 'it')));
     return { convocazioni, presenze };

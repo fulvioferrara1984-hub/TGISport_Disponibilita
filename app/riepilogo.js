@@ -28,6 +28,25 @@
     });
   }
 
+  // On-site: per ogni persona accettata in un deployment non annullato, giorni ed euro del periodo.
+  // Il compenso si divide in parti uguali sui giorni e quindi sui mesi (DO.onsite.quoteMese).
+  function righeOnsite(p) {
+    const out = [];
+    (A.onsite || []).filter((d) => d.stato !== 'annullata').forEach((d) => {
+      const quote = DO.onsite.quoteMese(d, Number(A.compensiOnsite[d.id]) || 0);
+      ['TL', 'OP'].forEach((ruolo) => (d['accettati' + ruolo] || []).forEach((id) => {
+        const giorni = (d.giorni || []).filter((g) => g.data >= p.da && g.data <= p.a).length;
+        if (!giorni) return;
+        const euro = Object.keys(quote).filter((m) => m >= p.da.slice(0, 7) && m <= p.a.slice(0, 7)).reduce((t, m) => t + quote[m], 0);
+        const op = A.operatori.find((x) => x.id === id) || { nome: '(operatore rimosso)', contratto: '' };
+        out.push({ dep: d, operatoreId: id, op, ruolo, giorni, euro, quote });
+      }));
+    });
+    return out;
+  }
+  const sommaOnsite = (lista) => ({ giorni: lista.reduce((t, r) => t + r.giorni, 0), euro: lista.reduce((t, r) => t + r.euro, 0) });
+  const quotaMese = (lista, mese) => lista.reduce((t, r) => t + (r.quote[mese] || 0), 0);
+
   function somma(lista) {
     const t = { n: lista.length, euro: 0, sup: 0 };
     TIPI.forEach((k) => { t[k] = 0; t['e_' + k] = 0; });
@@ -52,20 +71,25 @@
     sel.innerHTML = periodi().map((p) => '<option value="' + p.id + '">' + p.nome + '</option>').join('');
     sel.value = attuale || 'stagione';
     const p = periodo(), lista = righe(p), tot = somma(lista);
+    const ons = righeOnsite(p), totOn = sommaOnsite(ons);
     const futuri = A.eventi.filter((e) => e.data >= DO.oggi() && e.data <= p.a && e.stato === 'da-assegnare').length;
     const senzaContratto = [...new Set(lista.filter((r) => r.g.senzaContratto).map((r) => r.op.nome))];
 
     // per operatore
     const ops = A.operatori.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'it'))
-      .map((o) => ({ o, t: somma(lista.filter((r) => r.operatoreId === o.id)) })).filter((x) => x.t.n || x.o.attivo);
-    const tabOp = '<table class="tabella numeri"><thead><tr><th>Operatore</th><th class="sx">Ruolo</th><th class="sx">Contratto</th><th>Diurni</th><th>Notturni</th><th>Maggiorati</th><th>UEFA ½</th><th>di cui supervisione</th><th>Totale eventi</th><th>Netto</th></tr></thead><tbody>'
-      + ops.map(({ o, t }) => '<tr><td><b>' + DO.esc(o.nome) + '</b></td><td class="sx">' + o.ruolo + '</td><td class="sx">' + (o.contratto || '<span class="testo-errore">da indicare</span>') + '</td>'
-        + TIPI.map((k) => '<td>' + num(t[k]) + '</td>').join('') + '<td>' + num(t.sup) + '</td><td><b>' + num(t.n) + '</b></td><td><b>' + eur(t.euro) + '</b></td></tr>').join('')
-      + '</tbody><tfoot><tr><td>Totale</td><td></td><td></td>' + TIPI.map((k) => '<td>' + tot[k] + '</td>').join('') + '<td>' + tot.sup + '</td><td>' + tot.n + '</td><td>' + R.euro(tot.euro) + '</td></tr></tfoot></table>';
+      .map((o) => ({ o, t: somma(lista.filter((r) => r.operatoreId === o.id)), on: sommaOnsite(ons.filter((r) => r.operatoreId === o.id)) }))
+      .filter((x) => x.t.n || x.on.giorni || x.o.attivo);
+    const tabOp = '<table class="tabella numeri"><thead><tr><th>Operatore</th><th class="sx">Ruolo</th><th class="sx">Contratto</th><th>Diurni</th><th>Notturni</th><th>Maggiorati</th><th>UEFA ½</th><th>di cui supervisione</th><th>Totale eventi</th><th>Giorni on-site</th><th>€ on-site</th><th>Netto</th></tr></thead><tbody>'
+      + ops.map(({ o, t, on }) => '<tr><td><b>' + DO.esc(o.nome) + '</b></td><td class="sx">' + o.ruolo + '</td><td class="sx">' + (o.contratto || '<span class="testo-errore">da indicare</span>') + '</td>'
+        + TIPI.map((k) => '<td>' + num(t[k]) + '</td>').join('') + '<td>' + num(t.sup) + '</td><td><b>' + num(t.n) + '</b></td>'
+        + '<td>' + num(on.giorni) + '</td><td>' + eur(on.euro) + '</td><td><b>' + eur(t.euro + on.euro) + '</b></td></tr>').join('')
+      + '</tbody><tfoot><tr><td>Totale</td><td></td><td></td>' + TIPI.map((k) => '<td>' + tot[k] + '</td>').join('') + '<td>' + tot.sup + '</td><td>' + tot.n + '</td>'
+      + '<td>' + totOn.giorni + '</td><td>' + R.euro(totOn.euro) + '</td><td>' + R.euro(tot.euro + totOn.euro) + '</td></tr></tfoot></table>';
 
     // per competizione: eventi coperti, da assegnare e annullati a parte
     const nelPeriodo = A.eventi.filter((e) => e.data >= p.da && e.data <= p.a);
     const comps = [...new Set(nelPeriodo.map((e) => e.competizione || '(senza competizione)'))].sort((a, b) => a.localeCompare(b, 'it'));
+    const onPiva = ons.filter((r) => r.op.contratto === 'P.IVA').reduce((t, r) => t + r.euro, 0), onCoop = ons.filter((r) => r.op.contratto === 'Coop').reduce((t, r) => t + r.euro, 0);
     const tabComp = '<table class="tabella numeri"><thead><tr><th>Competizione</th><th>Eventi coperti</th><th>di cui supervisione</th><th>Da assegnare</th><th>Annullati</th><th>Netto P.IVA</th><th>Netto Coop</th><th>Totale netto</th></tr></thead><tbody>'
       + comps.map((c) => {
         const qui = lista.filter((r) => (r.competizione || '(senza competizione)') === c), tutti = nelPeriodo.filter((e) => (e.competizione || '(senza competizione)') === c);
@@ -73,8 +97,11 @@
         return '<tr><td><b>' + DO.esc(c) + '</b>' + (R.uefa(c, A.regole) ? ' <span class="tag">UEFA ½</span>' : '') + '</td><td><b>' + num(qui.length) + '</b></td><td>' + num(qui.filter((r) => r.tipo === 'supervisione').length) + '</td>'
           + '<td>' + num(tutti.filter((e) => e.stato === 'da-assegnare').length) + '</td><td>' + num(tutti.filter((e) => e.stato === 'annullato').length) + '</td>'
           + '<td>' + eur(piva) + '</td><td>' + eur(coop) + '</td><td><b>' + eur(piva + coop) + '</b></td></tr>';
-      }).join('') + '</tbody><tfoot><tr><td>Totale</td><td>' + tot.n + '</td><td>' + tot.sup + '</td><td></td><td></td>'
-      + '<td>' + R.euro(lista.filter((r) => r.op.contratto === 'P.IVA').reduce((s, r) => s + r.g.importo, 0)) + '</td><td>' + R.euro(lista.filter((r) => r.op.contratto === 'Coop').reduce((s, r) => s + r.g.importo, 0)) + '</td><td>' + R.euro(tot.euro) + '</td></tr></tfoot></table>';
+      }).join('')
+      + (ons.length ? '<tr><td><b>On-site</b> <span class="tag">giorni-persona</span></td><td><b>' + num(totOn.giorni) + '</b></td><td></td><td></td><td></td>'
+        + '<td>' + eur(onPiva) + '</td><td>' + eur(onCoop) + '</td><td><b>' + eur(onPiva + onCoop) + '</b></td></tr>' : '')
+      + '</tbody><tfoot><tr><td>Totale</td><td>' + (tot.n + totOn.giorni) + '</td><td>' + tot.sup + '</td><td></td><td></td>'
+      + '<td>' + R.euro(lista.filter((r) => r.op.contratto === 'P.IVA').reduce((s, r) => s + r.g.importo, 0) + onPiva) + '</td><td>' + R.euro(lista.filter((r) => r.op.contratto === 'Coop').reduce((s, r) => s + r.g.importo, 0) + onCoop) + '</td><td>' + R.euro(tot.euro + totOn.euro) + '</td></tr></tfoot></table>';
 
     // per mese (solo sulla stagione): netto di ogni operatore mese per mese
     let tabMese = '';
@@ -82,12 +109,13 @@
       const mesi = periodi().slice(1);
       tabMese = '<section class="scheda"><div class="scheda-testa"><h2>Netto per mese</h2></div><div class="tabella-box"><table class="tabella numeri compatta ampia"><thead><tr><th>Operatore</th>'
         + mesi.map((m) => '<th>' + m.nome.slice(0, 3) + ' ' + m.nome.slice(-2) + '</th>').join('') + '<th>Totale</th></tr></thead><tbody>'
-        + ops.filter((x) => x.t.n).map(({ o, t }) => '<tr><td><b>' + DO.esc(o.nome) + '</b></td>' + mesi.map((m) => {
+        + ops.filter((x) => x.t.n || x.on.giorni).map(({ o, t, on }) => '<tr><td><b>' + DO.esc(o.nome) + '</b></td>' + mesi.map((m) => {
           const qui = lista.filter((r) => r.operatoreId === o.id && r.data >= m.da && r.data <= m.a);
-          return '<td title="' + qui.length + ' eventi">' + eurBreve(qui.reduce((s, r) => s + r.g.importo, 0)) + '</td>';
-        }).join('') + '<td><b>' + eurBreve(t.euro) + '</b></td></tr>').join('')
-        + '</tbody><tfoot><tr><td>Totale</td>' + mesi.map((m) => '<td>' + eurBreve(lista.filter((r) => r.data >= m.da && r.data <= m.a).reduce((s, r) => s + r.g.importo, 0)) + '</td>').join('')
-        + '<td>' + eurBreve(tot.euro) + '</td></tr></tfoot></table></div></section>';
+          const suoi = ons.filter((r) => r.operatoreId === o.id);
+          return '<td title="' + qui.length + ' eventi">' + eurBreve(qui.reduce((s, r) => s + r.g.importo, 0) + quotaMese(suoi, m.id)) + '</td>';
+        }).join('') + '<td><b>' + eurBreve(t.euro + on.euro) + '</b></td></tr>').join('')
+        + '</tbody><tfoot><tr><td>Totale</td>' + mesi.map((m) => '<td>' + eurBreve(lista.filter((r) => r.data >= m.da && r.data <= m.a).reduce((s, r) => s + r.g.importo, 0) + quotaMese(ons, m.id)) + '</td>').join('')
+        + '<td>' + eurBreve(tot.euro + totOn.euro) + '</td></tr></tfoot></table></div></section>';
     }
 
     // operatori × competizioni
@@ -102,7 +130,8 @@
     $('rie-contenuto').innerHTML = '<div class="kpi">'
       + '<div><span>Eventi coperti</span><b>' + tot.n + '</b></div>'
       + '<div><span>di cui supervisione</span><b>' + tot.sup + '</b></div>'
-      + '<div><span>Netto totale</span><b>' + R.euro(tot.euro) + '</b></div>'
+      + '<div><span>Giorni on-site</span><b>' + totOn.giorni + '</b></div>'
+      + '<div><span>Netto totale</span><b>' + R.euro(tot.euro + totOn.euro) + '</b></div>'
       + '<div><span>Ancora da assegnare</span><b>' + futuri + '</b></div></div>'
       + (senzaContratto.length ? '<p class="errore">Contratto non indicato per ' + senzaContratto.map(DO.esc).join(', ') + ': i loro eventi non hanno compenso. Indicalo nella scheda Operatori.</p>' : '')
       + '<section class="scheda"><div class="scheda-testa"><h2>Per operatore</h2></div><div class="tabella-box">' + tabOp + '</div></section>'
@@ -142,10 +171,16 @@
           e.orario, R.convocazione(e, A.regole), o ? o.nome : '', o ? o.ruolo : '', o ? o.contratto : '', e.stato, g ? g.etichetta : '', g ? g.importo : 0, e.note || ''];
       }));
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(conv), 'Convocazioni');
-    const perOp = [['Operatore', 'Ruolo', 'Contratto', 'Diurni', 'Notturni', 'Maggiorati', 'UEFA ½', 'di cui supervisione', 'Totale eventi', 'Netto']];
+    const ons = righeOnsite(p);
+    if (ons.length) {
+      X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([['Dal', 'Al', 'Luogo', 'Sport', 'Titolo', 'Operatore', 'Ruolo', 'Contratto', 'Giorni nel periodo', 'Netto nel periodo']]
+        .concat(ons.sort((a, b) => a.dep.da.localeCompare(b.dep.da)).map((r) => [r.dep.da, r.dep.a, r.dep.luogo, r.dep.sport, r.dep.titolo || '', r.op.nome, 'On-site ' + r.ruolo,
+          r.op.contratto || '', r.giorni, Math.round(r.euro * 100) / 100]))), 'On-site');
+    }
+    const perOp = [['Operatore', 'Ruolo', 'Contratto', 'Diurni', 'Notturni', 'Maggiorati', 'UEFA ½', 'di cui supervisione', 'Totale eventi', 'Giorni on-site', '€ on-site', 'Netto']];
     A.operatori.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'it')).forEach((o) => {
-      const t = somma(lista.filter((r) => r.operatoreId === o.id));
-      if (t.n) perOp.push([o.nome, o.ruolo, o.contratto, t.diurno, t.notturno, t.maggiorato, t.uefa, t.sup, t.n, Math.round(t.euro * 100) / 100]);
+      const t = somma(lista.filter((r) => r.operatoreId === o.id)), on = sommaOnsite(ons.filter((r) => r.operatoreId === o.id));
+      if (t.n || on.giorni) perOp.push([o.nome, o.ruolo, o.contratto, t.diurno, t.notturno, t.maggiorato, t.uefa, t.sup, t.n, on.giorni, Math.round(on.euro * 100) / 100, Math.round((t.euro + on.euro) * 100) / 100]);
     });
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(perOp), 'Per operatore');
     const perComp = [['Competizione', 'Eventi coperti', 'Netto P.IVA', 'Netto Coop', 'Totale netto']];
@@ -154,13 +189,20 @@
       const piva = qui.filter((r) => r.op.contratto === 'P.IVA').reduce((s, r) => s + r.g.importo, 0), coop = qui.filter((r) => r.op.contratto === 'Coop').reduce((s, r) => s + r.g.importo, 0);
       perComp.push([c, qui.length, piva, coop, piva + coop]);
     });
+    if (ons.length) {
+      const piva = ons.filter((r) => r.op.contratto === 'P.IVA').reduce((t, r) => t + r.euro, 0), coop = ons.filter((r) => r.op.contratto === 'Coop').reduce((t, r) => t + r.euro, 0);
+      perComp.push(['On-site (giorni-persona)', sommaOnsite(ons).giorni, piva, coop, piva + coop]);
+    }
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(perComp), 'Per competizione');
     if (p.id === 'stagione') {
       const mesi = periodi().slice(1);
       const perMese = [['Operatore'].concat(mesi.map((m) => m.nome), ['Totale'])];
       A.operatori.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'it')).forEach((o) => {
-        const qui = lista.filter((r) => r.operatoreId === o.id);
-        if (qui.length) perMese.push([o.nome].concat(mesi.map((m) => qui.filter((r) => r.data >= m.da && r.data <= m.a).reduce((s, r) => s + r.g.importo, 0)), [qui.reduce((s, r) => s + r.g.importo, 0)]));
+        const qui = lista.filter((r) => r.operatoreId === o.id), suoi = ons.filter((r) => r.operatoreId === o.id);
+        if (qui.length || suoi.length) {
+          perMese.push([o.nome].concat(mesi.map((m) => qui.filter((r) => r.data >= m.da && r.data <= m.a).reduce((s, r) => s + r.g.importo, 0) + quotaMese(suoi, m.id)),
+            [qui.reduce((s, r) => s + r.g.importo, 0) + sommaOnsite(suoi).euro]));
+        }
       });
       X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(perMese), 'Netto per mese');
     }
