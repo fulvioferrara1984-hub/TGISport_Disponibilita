@@ -525,6 +525,8 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 .elenco-competizioni input[type="text"], .elenco-competizioni select { height: 32px; font-size: 13px; }
 .elenco-competizioni .spunta { margin: 0; font-size: 12px; white-space: nowrap; }
 .elenco-competizioni .icona { width: 30px; height: 30px; font-size: 12px; }
+.elenco-competizioni li.mansione input[readonly] { grid-column: span 2; background: var(--vuoto); font-weight: 600; }
+.elenco-competizioni li.mansione input:disabled { opacity: .55; }
 .importazione { margin-top: 14px; padding: 14px; border-radius: 10px; background: #fafbfc; border: 1px solid var(--linea); }
 .importazione h3 { margin: 0 0 8px; font-size: 13.5px; }
 .importazione .elenco-semplice { line-height: 1.55; margin-bottom: 8px; }
@@ -606,6 +608,7 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
   .kpi b { font-size: 18px; }
   .elenco-competizioni li { grid-template-columns: minmax(0, 1fr) 52px 52px 66px 30px; }
   .elenco-competizioni select[data-campo="sport"] { grid-column: 1; grid-row: 2; }
+  .elenco-competizioni li.mansione input[readonly] { grid-column: auto; }
   .elenco-competizioni select[data-campo="compenso"] { grid-column: 2 / span 3; grid-row: 2; }
   .intestazione-competizioni { grid-template-columns: minmax(0, 1fr) 52px 52px 66px 30px; }
   .intestazione-competizioni span:nth-child(2), .intestazione-competizioni span:nth-child(6) { display: none; }

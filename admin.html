@@ -230,12 +230,6 @@
                 </tbody>
               </table>
               <p class="nota" style="margin: 8px 0 14px;">Il tipo di compenso si sceglie per competizione (Competizioni e sport); il maggiorato anche sul singolo evento.</p>
-              <div class="tre-campi">
-                <label class="campo"><span>Ritrovo: ore prima</span><input type="number" id="reg-anticipo" min="0" max="12" step="0.25"></label>
-                <label class="campo"><span>Fine turno: ore dopo</span><input type="number" id="reg-fine" min="0" max="12" step="0.25"></label>
-                <label class="campo"><span>Durata supervisione: ore</span><input type="number" id="reg-durata-sup" min="1" max="16" step="0.5"></label>
-              </div>
-              <p class="nota" style="margin: -4px 0 12px;">Valori generali: ogni competizione può avere i suoi (scheda Competizioni e sport).</p>
               <div class="due-campi">
                 <label class="campo"><span>Notturno: ritrovo dalle</span><input type="time" id="reg-notte-da"></label>
                 <label class="campo"><span>alle</span><input type="time" id="reg-notte-a"></label>
@@ -275,8 +269,9 @@
           <section class="scheda">
             <div class="scheda-testa"><h2>Competizioni e sport</h2></div>
             <form class="scheda-corpo" id="form-competizioni">
-              <div class="intestazione-competizioni" aria-hidden="true"><span>Competizione</span><span>Sport</span><span title="Ritrovo: ore prima">−h</span><span title="Fine turno: ore dopo">+h</span><span>Colore</span><span>Compenso</span><span></span></div>
+              <div class="intestazione-competizioni" aria-hidden="true"><span>Competizione / mansione</span><span>Sport</span><span title="Ritrovo: ore prima dell'evento">−h</span><span title="Fine turno: ore dopo l'evento (per le mansioni: durata del turno dal ritrovo)">+h</span><span>Colore</span><span>Compenso</span><span></span></div>
               <ul class="elenco-competizioni" id="reg-competizioni"></ul>
+              <p class="nota" style="margin: 8px 0 0;">Remote TL e Remote Support sono le mansioni dei turni: si cambiano colore, compenso e durata del turno (ore dal ritrovo).</p>
               <button type="button" class="link" id="reg-aggiungi-comp" style="margin: 8px 0 14px;">+ Aggiungi competizione</button>
               <label class="campo"><span>Sport (separati da virgola)</span><textarea id="reg-sport" rows="3"></textarea></label>
               <button type="submit" class="primario">Salva competizioni</button>
