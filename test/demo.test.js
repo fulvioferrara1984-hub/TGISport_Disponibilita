@@ -32,3 +32,14 @@ test('rinunciare: solo convocazioni in attesa e fuori dalla finestra di blocco',
   await D.rispondiConvocazione(lontana, 'rifiutato', 'impegno');
   await D.rispondiConvocazione(vicina, 'confermato', '');
 });
+
+test('impostazioni dei promemoria nella demo', async () => {
+  const imp = await D.leggiImpostazioni();
+  assert.deepEqual([imp.promemoriaAttivi, imp.promemoriaGiorni, imp.promemoriaProgrammato, imp.ultimoPromemoria], [true, 3, true, null]);
+  await assert.rejects(D.salvaImpostazioni({ emailSupervisori: 's@x.it', emailAttive: true, promemoriaAttivi: true, promemoriaGiorni: 8 }), /I giorni del promemoria vanno da 1 a 7\./);
+  const vecchia = await D.salvaImpostazioni({ emailSupervisori: 's@x.it', emailAttive: true });
+  assert.deepEqual([vecchia.promemoriaAttivi, vecchia.promemoriaGiorni, vecchia.emailSupervisori], [true, 3, 's@x.it']);
+  const nuova = await D.salvaImpostazioni({ emailSupervisori: 's@x.it', emailAttive: true, promemoriaAttivi: false, promemoriaGiorni: 5 });
+  assert.deepEqual([nuova.promemoriaAttivi, nuova.promemoriaGiorni], [false, 5]);
+  assert.equal((await D.leggiImpostazioni()).promemoriaGiorni, 5);
+});

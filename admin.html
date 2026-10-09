@@ -7,7 +7,7 @@
   <title>Supervisori · Disponibilità TGI Sport</title>
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
-  <link rel="stylesheet" href="app/stile.css?v=16">
+  <link rel="stylesheet" href="app/stile.css?v=17">
 </head>
 <body>
   <header class="testata con-schede">
@@ -259,6 +259,10 @@
                 <textarea id="imp-email" rows="3" placeholder="nome.cognome@tgisport.it, …"></textarea></label>
               <label class="spunta" style="margin: 0 0 14px;"><input type="checkbox" id="imp-email-attive"><span>Invia un'email a ogni invio degli operatori</span></label>
               <p class="nota" style="margin: 0 0 12px;">Le notifiche compaiono comunque nella scheda <b>Aggiornamenti</b>.</p>
+              <label class="spunta" style="margin: 0 0 10px;"><input type="checkbox" id="imp-promemoria" disabled><span>Promemoria automatici ogni mattina</span></label>
+              <label class="campo"><span>Giorni prima dell'evento</span><input type="number" id="imp-promemoria-giorni" min="1" max="7" step="1" disabled></label>
+              <p class="nota" style="margin: 0 0 6px;">Tra le 8 e le 9, per gli eventi remoti da oggi a questi giorni dopo: agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto.</p>
+              <p class="nota" id="imp-promemoria-stato" style="margin: 0 0 12px;"></p>
               <button type="submit" class="primario">Salva</button>
             </form>
           </section>
@@ -467,14 +471,14 @@
     </form>
   </dialog>
 
-  <script src="app/config.js?v=16"></script>
-  <script src="app/comune.js?v=16"></script>
-  <script src="app/demo.js?v=16"></script>
-  <script src="app/dati-firebase.js?v=16"></script>
-  <script src="app/regole.js?v=16"></script>
-  <script src="app/admin.js?v=16"></script>
-  <script src="app/convocazioni.js?v=16"></script>
-  <script src="app/riepilogo.js?v=16"></script>
-  <script src="app/impostazioni.js?v=16"></script>
+  <script src="app/config.js?v=17"></script>
+  <script src="app/comune.js?v=17"></script>
+  <script src="app/demo.js?v=17"></script>
+  <script src="app/dati-firebase.js?v=17"></script>
+  <script src="app/regole.js?v=17"></script>
+  <script src="app/admin.js?v=17"></script>
+  <script src="app/convocazioni.js?v=17"></script>
+  <script src="app/riepilogo.js?v=17"></script>
+  <script src="app/impostazioni.js?v=17"></script>
 </body>
 </html>

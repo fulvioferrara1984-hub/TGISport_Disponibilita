@@ -134,3 +134,17 @@ test('numeri dalle impostazioni: vuoto o fuori limite non valgono', () => {
   assert.equal(R.numero('2.5', { min: 0, max: 12 }), 2.5);
   assert.equal(R.numero('-1', { min: 0, max: 12 }), null);
 });
+
+test('stato dei promemoria nelle impostazioni', () => {
+  const base = { promemoriaAttivi: true, promemoriaGiorni: 3, promemoriaProgrammato: true, ultimoPromemoria: null };
+  assert.equal(R.statoPromemoria({ emailSupervisori: '', emailAttive: true }), 'Script delle email da aggiornare: i promemoria non sono ancora disponibili.');
+  assert.equal(R.statoPromemoria(Object.assign({}, base, { promemoriaProgrammato: false })), 'Invio giornaliero non attivo: esegui attivaPromemoria nello script delle email.');
+  assert.equal(R.statoPromemoria(base), 'Nessun promemoria ancora inviato.');
+  const con = (u) => R.statoPromemoria(Object.assign({}, base, { ultimoPromemoria: Object.assign({ giorno: '2026-10-10', quando: '2026-10-10T06:14:00Z' }, u) }));
+  const inizio = 'Ultimo promemoria: sab 10 ottobre alle 8:14 · ';
+  assert.equal(con({ riepilogo: true, operatori: 3 }), inizio + 'riepilogo ai supervisori + 3 operatori');
+  assert.equal(con({ riepilogo: true, operatori: 1 }), inizio + 'riepilogo ai supervisori + 1 operatore');
+  assert.equal(con({ riepilogo: true, operatori: 0 }), inizio + 'riepilogo ai supervisori');
+  assert.equal(con({ riepilogo: false, operatori: 1 }), inizio + '1 operatore');
+  assert.equal(con({ riepilogo: false, operatori: 0 }), inizio + 'niente in sospeso, nessuna email');
+});

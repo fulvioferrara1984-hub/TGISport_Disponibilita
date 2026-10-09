@@ -655,12 +655,22 @@
   });
 
   // ---------- impostazioni ----------
+  // promemoria automatici: con uno script delle email non aggiornato la casella e i giorni restano spenti
+  function mostraPromemoria(r) {
+    const disponibili = r.promemoriaAttivi !== undefined;
+    $('imp-promemoria').checked = !!r.promemoriaAttivi;
+    $('imp-promemoria-giorni').value = disponibili ? r.promemoriaGiorni : '';
+    $('imp-promemoria').disabled = $('imp-promemoria-giorni').disabled = !disponibili;
+    $('imp-promemoria-stato').textContent = DO.regole.statoPromemoria(r);
+  }
+
   async function caricaImpostazioni() {
     $('imp-email').placeholder = 'Caricamento…';
     try {
       const r = await DO.dati.leggiImpostazioni();
       $('imp-email').value = r.emailSupervisori.split(',').filter(Boolean).join(', ');
       $('imp-email-attive').checked = r.emailAttive;
+      mostraPromemoria(r);
     } catch (e) {
       DO.avviso('Impostazioni email non disponibili: ' + e.message, 'errore');
     } finally {
@@ -670,14 +680,20 @@
 
   $('form-email').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const dati = {
+      emailSupervisori: $('imp-email').value, emailAttive: $('imp-email-attive').checked,
+      // il link nelle email porta a questa pagina, direttamente agli aggiornamenti
+      urlAdmin: location.href.split('#')[0] + '#aggiornamenti',
+    };
+    if (!$('imp-promemoria-giorni').disabled) {
+      const giorni = DO.regole.numero($('imp-promemoria-giorni').value, { min: 1, max: 7, intero: true });
+      if (giorni === null) { DO.avviso('I giorni del promemoria vanno da 1 a 7.', 'errore'); return; }
+      Object.assign(dati, { promemoriaAttivi: $('imp-promemoria').checked, promemoriaGiorni: giorni });
+    }
     const b = e.target.querySelector('button[type="submit"]');
     b.disabled = true;
     try {
-      await DO.dati.salvaImpostazioni({
-        emailSupervisori: $('imp-email').value, emailAttive: $('imp-email-attive').checked,
-        // il link nelle email porta a questa pagina, direttamente agli aggiornamenti
-        urlAdmin: location.href.split('#')[0] + '#aggiornamenti',
-      });
+      mostraPromemoria(await DO.dati.salvaImpostazioni(dati));
       DO.avviso('Impostazioni salvate.', 'ok');
     } catch (err) {
       DO.avviso(err.message, 'errore');

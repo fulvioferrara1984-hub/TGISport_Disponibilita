@@ -258,11 +258,18 @@
     salva();
   }
 
-  async function leggiImpostazioni() { await pausa(150); return dati.impostazioni; }
+  // come lo script delle email: i promemoria si salvano solo se arrivano, con giorni da 1 a 7
+  const PROMEMORIA_DEMO = { promemoriaAttivi: true, promemoriaGiorni: 3, ultimoPromemoria: null, promemoriaProgrammato: true };
+  async function leggiImpostazioni() { await pausa(150); return Object.assign({}, PROMEMORIA_DEMO, dati.impostazioni); }
   async function salvaImpostazioni(x) {
-    dati.impostazioni = { emailSupervisori: x.emailSupervisori || '', emailAttive: x.emailAttive !== false };
+    const giorni = x.promemoriaGiorni === undefined ? undefined : Number(x.promemoriaGiorni === '' || x.promemoriaGiorni === null ? NaN : x.promemoriaGiorni);
+    if (giorni !== undefined && !(Number.isInteger(giorni) && giorni >= 1 && giorni <= 7)) throw new Error('I giorni del promemoria vanno da 1 a 7.');
+    const prima = Object.assign({}, PROMEMORIA_DEMO, dati.impostazioni);
+    dati.impostazioni = Object.assign(prima, { emailSupervisori: x.emailSupervisori || '', emailAttive: x.emailAttive !== false },
+      x.promemoriaAttivi === undefined ? {} : { promemoriaAttivi: x.promemoriaAttivi === true },
+      giorni === undefined ? {} : { promemoriaGiorni: giorni });
     salva();
-    return dati.impostazioni;
+    return Object.assign({}, dati.impostazioni);
   }
   async function cambiaPassword(attuale, nuova) {
     if (attuale !== dati.password) throw new Error('La password attuale non è corretta.');

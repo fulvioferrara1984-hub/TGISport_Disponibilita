@@ -176,5 +176,20 @@
     return { da: inizio + '-08-01', a: (inizio + 1) + '-07-31', nome: inizio + '/' + String(inizio + 1).slice(2) };
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm };
+  // riga di stato dei promemoria automatici, dalle impostazioni restituite dallo script delle email
+  function statoPromemoria(imp) {
+    if (!imp || imp.promemoriaAttivi === undefined) return 'Script delle email da aggiornare: i promemoria non sono ancora disponibili.';
+    if (!imp.promemoriaProgrammato) return 'Invio giornaliero non attivo: esegui attivaPromemoria nello script delle email.';
+    const u = imp.ultimoPromemoria;
+    if (!u) return 'Nessun promemoria ancora inviato.';
+    const d = new Date(u.quando);
+    const fuso = { timeZone: 'Europe/Rome' };
+    const quando = d.toLocaleDateString('it-IT', Object.assign({ weekday: 'short', day: 'numeric', month: 'long' }, fuso))
+      + ' alle ' + d.toLocaleTimeString('it-IT', Object.assign({ hour: 'numeric', minute: '2-digit' }, fuso));
+    const operatori = u.operatori ? u.operatori + (u.operatori === 1 ? ' operatore' : ' operatori') : '';
+    const cosa = u.riepilogo ? 'riepilogo ai supervisori' + (operatori ? ' + ' + operatori : '') : operatori || 'niente in sospeso, nessuna email';
+    return 'Ultimo promemoria: ' + quando + ' · ' + cosa;
+  }
+
+  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, uefa, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria };
 })(window.DO = window.DO || {});
