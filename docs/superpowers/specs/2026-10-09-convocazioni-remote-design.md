@@ -27,9 +27,9 @@ Fa parte di tre blocchi concordati: **1. convocazioni remote** (questo documento
 - Valori generali usati quando la competizione non li ha: `anticipoOre` (esistente, 4) e il nuovo `fineOre` (default 2).
 - Precedenza del ritrovo: ritrovo scritto a mano sull'evento → `prima` della competizione → `anticipoOre`.
 - Fine turno: fine scritta a mano sull'evento (nuovo campo `fine`, "HH:MM") → orario evento + `dopo` della competizione → orario evento + `fineOre`.
-- **Supervisione**: inizio = ritrovo scritto dal supervisore (come oggi); fine = `fine` scritta a mano, facoltativa (nessun calcolo automatico).
+- **Supervisione** (turno di circa 6 ore, con ritrovo variabile e non legato all'orario di una partita): inizio = ritrovo scritto dal supervisore, **mai** calcolato dalle regole della competizione; fine = `fine` scritta a mano, altrimenti ritrovo + `durataSupervisioneOre` (nuovo valore generale, default 6). Le supervisioni importate dal file Excel che hanno solo l'orario di riferimento calcolano il ritrovo come nel file (orario − `anticipoOre`); le importazioni successive salvano direttamente il ritrovo.
 - Il **notturno** resta calcolato sul ritrovo (22:00–06:00, configurabile come oggi).
-- Interfaccia: nella scheda *Competizioni e sport* due campi numerici per riga ("ritrovo: ore prima", "fine: ore dopo", vuoti = valori generali); in *Tariffe e regole* si aggiunge "fine turno: ore dopo".
+- Interfaccia: nella scheda *Competizioni e sport* due campi numerici per riga ("ritrovo: ore prima", "fine: ore dopo", vuoti = valori generali); in *Tariffe e regole* si aggiungono "fine turno: ore dopo" e "durata supervisione: ore".
 
 ### Regole per gli operatori (`impostazioni/operativo`, nuovo documento)
 
@@ -60,7 +60,7 @@ Fa parte di tre blocchi concordati: **1. convocazioni remote** (questo documento
 ## 3. Lato supervisore (`admin.html`, `app/convocazioni.js`, `app/riepilogo.js` per l'export)
 
 - **Righe del calendario**: ritrovo e fine turno ("ritrovo 16:45 · fine 22:45").
-- **Sovrapposizione**: due turni dello stesso operatore nello stesso giorno si sovrappongono se `inizioA < fineB` e `inizioB < fineA`, dove inizio = ritrovo e fine = fine turno; se manca la fine di un turno (supervisione senza fine), si considera la fine di giornata (23:59). Fine turno oltre la mezzanotte: conta come 23:59 dello stesso giorno ai fini del confronto.
+- **Sovrapposizione**: due turni dello stesso operatore nello stesso giorno si sovrappongono se `inizioA < fineB` e `inizioB < fineA`, dove inizio = ritrovo e fine = fine turno (per la supervisione, ritrovo + durata). Se un turno non ha un orario di fine ricavabile, si considera la fine di giornata (23:59). Fine turno oltre la mezzanotte: conta come 23:59 dello stesso giorno ai fini del confronto.
   - Menu operatori: "⛔ sovrapposto" al posto di "⚠ già impegnato" quando c'è sovrapposizione.
   - Avviso sulla riga: giallo "⚠ Doppio turno: anche …" oppure rosso "⛔ Turni sovrapposti con …".
   - All'assegnazione: conferma con testo diverso per i due casi; l'assegnazione resta possibile.

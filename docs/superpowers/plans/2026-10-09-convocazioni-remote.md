@@ -13,7 +13,7 @@
 ## Vincoli globali
 
 - Vale solo per gli eventi remoti (`eventi` con `tipo` `partita` o `supervisione`); niente on-site in questo blocco.
-- Default: `giorniBlocco` = 3, `fineOre` = 2, `anticipoOre` resta 4; notturno resta sul ritrovo (22:00–06:00).
+- Default: `giorniBlocco` = 3, `fineOre` = 2, `durataSupervisioneOre` = 6, `anticipoOre` resta 4; notturno resta sul ritrovo (22:00–06:00).
 - Giorno bloccato ⇔ `giorni(dataEvento − oggi) ≤ giorniBlocco` (giorni di calendario, ora locale). Esempio: N = 3, evento lunedì → bloccato da venerdì.
 - Agli operatori non arrivano mai tariffe, gettoni o note interne: `impostazioni/regole` resta solo supervisori; il nuovo `impostazioni/operativo` contiene solo `telefono` e `giorniBlocco`.
 - Testi in italiano, nello stile delle pagine esistenti. Etichette fissate dalla spec: "📞 Contatta il supervisore", "Bloccato: contatta il supervisore", "⚠ Doppio turno: anche …", "⛔ Turni sovrapposti con …", "⛔ sovrapposto", "⏰ a ridosso", "Esporta mese".
@@ -38,9 +38,9 @@
 
 **Interfacce:**
 - Produce:
-  - `PREDEFINITE.fineOre = 2`; competizioni `{ nome, sport, uefa, prima: number|null, dopo: number|null }` (le esistenti senza `prima`/`dopo` valgono `null`).
-  - `convocazione(e, regole) → 'HH:MM'|''`: ritrovo a mano (`e.convocazione`) → `e.orario − (competizione.prima ?? anticipoOre)` → `''`.
-  - `fine(e, regole) → 'HH:MM'|''`: `e.fine` se valido → per `tipo === 'supervisione'` `''` → `e.orario + (competizione.dopo ?? fineOre)` → `''`.
+  - `PREDEFINITE.fineOre = 2`, `PREDEFINITE.durataSupervisioneOre = 6`; competizioni `{ nome, sport, uefa, prima: number|null, dopo: number|null }` (le esistenti senza `prima`/`dopo` valgono `null`).
+  - `convocazione(e, regole) → 'HH:MM'|''`: ritrovo a mano (`e.convocazione`) → per `tipo === 'supervisione'` `e.orario − anticipoOre` (mai la competizione) → `e.orario − (competizione.prima ?? anticipoOre)` → `''`.
+  - `fine(e, regole) → 'HH:MM'|''`: `e.fine` se valido → per `tipo === 'supervisione'` ritrovo + `durataSupervisioneOre` → `e.orario + (competizione.dopo ?? fineOre)` → `''`.
   - `intervallo(e, regole) → { inizio: number, fine: number }` in minuti dalla mezzanotte; `fine` = 1439 se manca o se è ≤ `inizio`.
   - `sovrapposti(a, b, regole) → boolean`: stessa `data` e `a.inizio < b.fine && b.inizio < a.fine`.
 
@@ -49,7 +49,8 @@
   - `un solo campo compilato`: Ligue 1 20:45 → ritrovo `'19:45'`, fine `'22:45'` (fineOre 2).
   - `competizione sconosciuta usa i valori generali`: `{ competizione: 'X', orario: '15:00' }` → `'11:00'` e `'17:00'`.
   - `valori a mano vincono`: `{ competizione: 'Serie A', orario: '20:45', convocazione: '18:00', fine: '23:30' }` → `'18:00'` e `'23:30'`.
-  - `supervisione senza fine`: `{ tipo: 'supervisione', convocazione: '10:00' }` → `fine` `''`, `intervallo` `{ inizio: 600, fine: 1439 }`.
+  - `supervisione: durata predefinita`: `{ tipo: 'supervisione', competizione: 'Champions League', convocazione: '10:00' }` → `fine` `'16:00'`, `intervallo` `{ inizio: 600, fine: 960 }`; con `fine: '13:00'` → `'13:00'`.
+  - `supervisione importata`: `{ tipo: 'supervisione', competizione: 'Champions League', orario: '18:00' }` → ritrovo `'14:00'` (anticipoOre, non `prima` = 1), fine `'20:00'`.
   - `fine oltre mezzanotte`: Serie A 22:45 → `fine` `'00:45'`, `intervallo.fine` 1439.
   - `sovrapposti`: stessa data, Serie A 15:00 (11:00–17:00) e Serie A 20:45 (16:45–22:45) → `true`; Serie A 12:30 (08:30–14:30) e Serie A 20:45 → `false`; date diverse → `false`.
   - `notturno resta sul ritrovo`: Serie A 02:00 (ritrovo 22:00) → `notturno` `true`.
@@ -80,8 +81,8 @@
 ### Task 3: Impostazioni e dati (regole, operativo, eventi)
 
 **File:**
-- Modifica: `admin.html` (Tariffe e regole: campo `#reg-fine` "Fine turno: ore dopo"; nuovo riquadro "Regole per gli operatori" con `#form-operativo`, `#op-telefono-rep` tipo `tel`, `#op-giorni-blocco` numero 0–14; dialogo evento: campo `#evd-fine` "Fine turno" tipo `time` accanto al ritrovo)
-- Modifica: `app/impostazioni.js` (righe competizione con due campi numerici `data-campo="prima"` e `data-campo="dopo"`, vuoto = `null`; salvataggio di `fineOre`; lettura/salvataggio del riquadro operativo)
+- Modifica: `admin.html` (Tariffe e regole: campi `#reg-fine` "Fine turno: ore dopo" e `#reg-durata-sup` "Durata supervisione: ore"; nuovo riquadro "Regole per gli operatori" con `#form-operativo`, `#op-telefono-rep` tipo `tel`, `#op-giorni-blocco` numero 0–14; dialogo evento: campo `#evd-fine` "Fine turno" tipo `time` accanto al ritrovo)
+- Modifica: `app/impostazioni.js` (righe competizione con due campi numerici `data-campo="prima"` e `data-campo="dopo"`, vuoto = `null`; salvataggio di `fineOre` e `durataSupervisioneOre`; lettura/salvataggio del riquadro operativo; l'importazione salva per le supervisioni `convocazione` = ritrovo e `orario` vuoto)
 - Modifica: `app/dati-firebase.js`, `app/demo.js` (stessa interfaccia)
 - Modifica: `app/admin.js` (getter `DO.admin.operativo`)
 - Modifica: `app/stile.css` (righe competizione con due colonne in più; riga compatta su telefono)
@@ -132,7 +133,7 @@
 - Consuma: `R.fine`, `R.intervallo`, `R.sovrapposti` (Task 1), `DO.bloccato` (Task 2), `DO.admin.operativo` (Task 3).
 
 - [ ] **Passo 1: implementare** come spec §3: riga "ritrovo HH:MM · fine HH:MM"; nel menu "⛔ sovrapposto" se `sovrapposti`, altrimenti "⚠ già impegnato"; avviso sulla riga giallo o rosso con i titoli e gli orari degli altri turni; conferma all'assegnazione con testo "TURNI SOVRAPPOSTI: …" oppure "DOPPIO TURNO: …"; etichetta "⏰ a ridosso" se `DO.bloccato(e.data, oggi, N)` e stato `da-assegnare` o `convocato`.
-- [ ] **Passo 2: verifica nel browser** (demo): Luca Bianchi supervisione 10:00 senza fine + partita Serie A 20:45 → rosso (la supervisione senza fine arriva a fine giornata, come da spec); impostare la fine della supervisione a 16:00 → diventa giallo; due partite Serie A 15:00 e 20:45 → rosso; 12:30 e 20:45 → giallo; evento da assegnare fra 2 giorni → "⏰ a ridosso".
+- [ ] **Passo 2: verifica nel browser** (demo): Luca Bianchi supervisione 10:00 (fine 16:00 per durata) + partita Serie A 20:45 (ritrovo 16:45) → giallo; supervisione 14:00 (fine 20:00) + stessa partita → rosso; due partite Serie A 15:00 e 20:45 → rosso; 12:30 e 20:45 → giallo; evento da assegnare fra 2 giorni → "⏰ a ridosso".
 - [ ] **Passo 3: commit** `"Convocazioni: fine turno, turni sovrapposti, eventi a ridosso"`.
 
 ### Task 6: Esportazione mensile senza compensi
