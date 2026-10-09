@@ -23,6 +23,11 @@
   const GIORNI_BREVI = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   const indiceGiorno = (s) => (daIso(s).getDay() + 6) % 7;
+  // giorni di calendario fra oggi e la data (negativo se passata); arrotondato per il cambio dell'ora
+  const giorniA = (data, oggiIso) => Math.round((daIso(data) - daIso(oggiIso)) / 864e5);
+  // Finestra di blocco: mancano N giorni o meno (N = 3: evento lunedì → bloccato da venerdì)
+  const bloccato = (data, oggiIso, giorniBlocco) => giorniA(data, oggiIso) <= giorniBlocco;
+  const OPERATIVO_PREDEFINITO = Object.freeze({ telefono: '', giorniBlocco: 3 });
 
   function giorno(s) {
     const d = daIso(s);
@@ -183,6 +188,7 @@
 
   Object.assign(DO, {
     $, esc, iniziali, iso, daIso, aggiungi, lunedi, settimana, oggi, limite, giorno, periodo, etichettaSettimana, quando, indiceGiorno,
+    giorniA, bloccato, OPERATIVO_PREDEFINITO,
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
   });
