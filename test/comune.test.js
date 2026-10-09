@@ -93,3 +93,10 @@ test('foto di Firestore con soli metadati cambiati', () => {
   assert.equal(DO.soloMetadati(foto(0, true), true), false);    // rete persa: di nuovo la copia sul computer
 });
 
+test('nomi dei turni remoti', () => {
+  assert.deepEqual(['supervisione', 'support', 'partita', undefined].map(DO.mansione), ['Remote TL', 'Remote Support', '', '']);
+  assert.deepEqual(['supervisione', 'support', 'partita'].map(DO.turnoRemoto), [true, true, false]);
+  assert.deepEqual(['supervisione', 'support', 'partita'].map(DO.nomeTurno), ['Turno Remote TL', 'Turno Remote Support', '']);
+  assert.deepEqual(DO.RUOLI, { OP: 'Remote OP', SUP: 'Remote Support', TL: 'Remote TL' });
+});
+

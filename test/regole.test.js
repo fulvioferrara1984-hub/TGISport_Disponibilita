@@ -16,6 +16,8 @@ const regole = R.complete({
   ],
 });
 const turno = (e) => [R.convocazione(e, regole), R.fine(e, regole)];
+// competizioni vere, senza le righe fisse delle mansioni (Remote TL, Remote Support) che stanno in cima
+const normali = (r) => r.competizioni.filter((c) => !c.mansione);
 
 test('ritrovo e fine per competizione', () => {
   assert.deepEqual(turno({ competizione: 'Serie A', orario: '20:45' }), ['16:45', '22:45']);
@@ -62,12 +64,11 @@ test('il notturno resta calcolato sul ritrovo', () => {
   assert.equal(R.notturno({ competizione: 'Serie A', orario: '02:00' }, regole), true);
 });
 
-test('competizioni salvate senza orari restano valide', () => {
+test('competizioni salvate senza orari: si completano con i valori usati finora', () => {
   const r = R.complete({ competizioni: [{ nome: 'Serie A', sport: 'Calcio', uefa: false }] });
-  assert.equal(r.competizioni[0].prima, null);
-  assert.equal(r.competizioni[0].dopo, null);
-  assert.equal(r.fineOre, 2);
-  assert.equal(r.durataSupervisioneOre, 6);
+  assert.equal(normali(r)[0].prima, 4);
+  assert.equal(normali(r)[0].dopo, 2);
+  assert.deepEqual(turno({ competizione: 'Serie A', orario: '20:45' }), ['16:45', '22:45']);
 });
 
 test('conflitto: doppio turno o turni sovrapposti nello stesso giorno', () => {
@@ -96,11 +97,11 @@ test('esportazione mensile: due fogli, solo presenze, annullati esclusi dalle pr
   assert.deepEqual(convocazioni[0], ['Data', 'Tipo', 'Competizione', 'Round', 'Sport', 'Evento', 'Orario', 'Ritrovo', 'Fine turno', 'Operatore', 'Ruolo', 'Stato']);
   assert.equal(convocazioni.length, 5);   // intestazione + 4 eventi di ottobre, annullato compreso
   assert.deepEqual(convocazioni[1], ['05/10/2026', 'Partita', 'Serie A', '', '', 'Inter-Monza', '18:00', '14:00', '20:00', 'Bruno Blu', 'Remote OP', 'Annullato']);
-  assert.deepEqual(convocazioni[2].slice(0, 2).concat(convocazioni[2].slice(7)), ['18/10/2026', 'Supervisione', '10:00', '16:00', 'Anna Neri', 'Remote TL', 'Confermato']);
+  assert.deepEqual(convocazioni[2], ['18/10/2026', 'Remote TL', 'Remote TL', '', '', 'Remote TL', '', '10:00', '16:00', 'Anna Neri', 'Remote TL', 'Confermato']);
   assert.deepEqual(presenze, [
-    ['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa', 'Giorni on-site'],
-    ['Anna Neri', 0, 1, 0, 0],
-    ['Bruno Blu', 1, 0, 1, 0],
+    ['Operatore', 'Partite confermate', 'Remote TL confermati', 'Remote Support confermati', 'In attesa', 'Giorni on-site'],
+    ['Anna Neri', 0, 1, 0, 0, 0],
+    ['Bruno Blu', 1, 0, 0, 1, 0],
   ]);
   assert.equal(JSON.stringify({ convocazioni, presenze }).match(/€|[Gg]ettone|[Mm]aggiorat/), null);
 });
@@ -185,7 +186,7 @@ test('esportazione mensile con on-site', () => {
     ['30/10/2026', 'On-site', '', '', 'Rugby', 'Travel Day · Roma', '', '', '', 'Anna Neri', 'On-site TL', 'Confermato'],
     ['31/10/2026', 'On-site', '', '', 'Rugby', 'MD · Italia-Galles · Roma', '', '', '', 'Anna Neri', 'On-site TL', 'Confermato'],
   ]);
-  assert.deepEqual(ottobre.presenze, [['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa', 'Giorni on-site'], ['Anna Neri', 0, 0, 0, 2]]);
+  assert.deepEqual(ottobre.presenze, [['Operatore', 'Partite confermate', 'Remote TL confermati', 'Remote Support confermati', 'In attesa', 'Giorni on-site'], ['Anna Neri', 0, 0, 0, 0, 2]]);
   assert.equal(JSON.stringify(ottobre).match(/€|[Cc]ompens/), null);
   const annullato = R.righeMese([], ops, regole, '2026-10', [Object.assign({}, dep, { stato: 'annullata' })]);
   assert.equal(annullato.convocazioni.length, 1);
@@ -194,9 +195,9 @@ test('esportazione mensile con on-site', () => {
 
 test('colore delle competizioni', () => {
   const r = R.complete({ competizioni: [{ nome: 'Serie A', colore: '#FF0000' }, { nome: 'Ligue 1', colore: 'rosso' }, { nome: 'Liga' }] });
-  assert.equal(r.competizioni[0].colore, '#ff0000');
-  assert.equal(r.competizioni[1].colore, '');
-  assert.equal(r.competizioni[2].colore, '');
+  assert.equal(normali(r)[0].colore, '#ff0000');
+  assert.equal(normali(r)[1].colore, '');
+  assert.equal(normali(r)[2].colore, '');
   assert.equal(R.coloreCompetizione('Serie A', r), '#ff0000');
   const auto = R.coloreCompetizione('Ligue 1', r);
   assert.ok(R.PALETTE.includes(auto));
@@ -247,7 +248,7 @@ test('compenso per tipo di competizione', () => {
 
 test('migrazione da UEFA ½ al tipo di compenso', () => {
   const r = R.complete({ competizioni: [{ nome: 'A', uefa: true }, { nome: 'B' }, { nome: 'C', uefa: true, compenso: 'diurno' }, { nome: 'D', compenso: 'boh' }] });
-  assert.deepEqual(r.competizioni.map((c) => c.compenso), ['dimezzato', 'diurno', 'diurno', 'diurno']);
+  assert.deepEqual(normali(r).map((c) => c.compenso), ['dimezzato', 'diurno', 'diurno', 'diurno']);
   assert.equal(R.TIPI.dimezzato, 'Dimezzato (½ diurno)');
   assert.equal(R.TIPI.uefa, undefined);
   assert.equal(R.uefa, undefined);
@@ -258,12 +259,65 @@ test('nome dei ruoli remoti', () => {
   assert.equal(R.nomeRuolo('TL'), 'Remote TL');
   assert.equal(R.nomeRuolo('OP'), 'Remote OP');
   assert.equal(R.nomeRuolo(''), 'Remote OP');
+  assert.equal(R.nomeRuolo('SUP'), 'Remote Support');
+  assert.equal(R.nomeRuolo('boh'), 'Remote OP');
+});
+
+test('ruoli: chi può fare cosa', () => {
+  const tabella = ['OP', 'SUP', 'TL'].map((ruolo) => ['partita', 'support', 'supervisione'].map((tipo) => R.puoFare(ruolo, tipo)));
+  assert.deepEqual(tabella, [[true, false, false], [true, true, false], [true, true, true]]);
+  assert.equal(R.sceltaOperatore('supervisione'), '— Scegli un Remote TL —');
+  assert.equal(R.sceltaOperatore('support'), '— Scegli un Remote Support o Remote TL —');
+  assert.equal(R.sceltaOperatore('partita'), '— Scegli operatore —');
+});
+
+test('mansione dell\'evento: colore, compenso e ore dalla riga Remote TL / Remote Support', () => {
+  const piva = { contratto: 'P.IVA' };
+  const vecchio = { tipo: 'supervisione', competizione: 'Champions League', convocazione: '10:00' };
+  assert.equal(R.competizioneDi(vecchio), 'Remote TL');
+  assert.deepEqual([R.gettone(vecchio, piva, regole).tipo, R.gettone(vecchio, piva, regole).importo], ['diurno', 140]);
+  assert.equal(R.fine(vecchio, regole), '16:00');
+  assert.equal(R.coloreCompetizione(R.competizioneDi(vecchio), regole), R.coloreCompetizione('Remote TL', regole));
+  const support = { tipo: 'support', competizione: 'Remote Support', convocazione: '12:00' };
+  assert.equal(R.competizioneDi(support), 'Remote Support');
+  assert.deepEqual(turno(support), ['12:00', '18:00']);
+  assert.equal(R.competizioneDi({ tipo: 'partita', competizione: 'Serie A' }), 'Serie A');
+  assert.deepEqual(['partita', 'supervisione', 'support'].map(R.nomeTipo), ['Partita', 'Remote TL', 'Remote Support']);
+  // compenso e durata si cambiano dalla riga della mansione
+  const r = R.complete({ competizioni: [{ nome: 'Remote Support', mansione: true, compenso: 'maggiorato', dopo: 4 }] });
+  assert.equal(R.gettone(support, piva, r).tipo, 'maggiorato');
+  assert.equal(R.fine(support, r), '16:00');
+});
+
+test('righe mansione nelle regole', () => {
+  const r = R.complete({ competizioni: [{ nome: 'Serie A' }] });
+  assert.deepEqual(r.competizioni.slice(0, 2).map((c) => [c.nome, c.mansione, c.prima, c.dopo, c.compenso, c.sport]),
+    [['Remote TL', true, 0, 6, 'diurno', ''], ['Remote Support', true, 0, 6, 'diurno', '']]);
+  assert.deepEqual([r.competizioni[2].nome, r.competizioni[2].prima, r.competizioni[2].dopo], ['Serie A', 4, 2]);
+  const lunghi = R.complete({ durataSupervisioneOre: 8 });
+  assert.deepEqual(lunghi.competizioni.slice(0, 2).map((c) => c.dopo), [8, 6]);
+  const salvata = R.complete({ competizioni: [{ nome: 'Remote TL', mansione: true, prima: 3, dopo: 0, compenso: 'notturno', colore: '#123456', sport: 'Calcio' }] });
+  const tl = salvata.competizioni.filter((c) => c.nome === 'Remote TL');
+  assert.equal(tl.length, 1);
+  assert.deepEqual([tl[0].prima, tl[0].dopo, tl[0].compenso, tl[0].colore, tl[0].sport], [0, 6, 'notturno', '#123456', '']);
+  assert.equal(R.complete({ competizioni: [{ nome: 'Remote TL', mansione: true, dopo: 7.5 }] }).competizioni[0].dopo, 7.5);
+  assert.equal(R.complete(R.complete(null)).competizioni.filter((c) => c.mansione).length, 2);
+});
+
+test('operatori assegnabili a un evento', () => {
+  const ops = [{ id: 'a', ruolo: 'TL', attivo: true }, { id: 'b', ruolo: 'SUP', attivo: true }, { id: 'c', ruolo: 'OP', attivo: true }, { id: 'd', ruolo: 'OP', attivo: false }];
+  const ids = (e) => R.assegnabili(ops, e).map((o) => o.id);
+  assert.deepEqual(ids({ tipo: 'supervisione' }), ['a']);
+  assert.deepEqual(ids({ tipo: 'supervisione', operatoreId: 'c' }), ['a', 'c']);   // assegnato prima del cambio di ruolo
+  assert.deepEqual(ids({ tipo: 'support' }), ['a', 'b']);
+  assert.deepEqual(ids({ tipo: 'partita' }), ['a', 'b', 'c']);
+  assert.deepEqual(ids({ tipo: 'partita', operatoreId: 'd' }), ['a', 'b', 'c', 'd']);
 });
 
 test('compatibilità con le dashboard della versione precedente: Dimezzato scritto anche come uefa', () => {
   const r = R.complete({ competizioni: [{ nome: 'Champions League', compenso: 'dimezzato' }, { nome: 'Serie A', compenso: 'notturno' }] });
-  assert.deepEqual(r.competizioni.map((c) => c.uefa), [true, false]);
+  assert.deepEqual(normali(r).map((c) => c.uefa), [true, false]);
   // una dashboard vecchia che risalva { uefa } senza compenso non perde il Dimezzato
-  const risalvato = R.complete({ competizioni: r.competizioni.map((c) => ({ nome: c.nome, uefa: c.uefa })) });
-  assert.equal(risalvato.competizioni[0].compenso, 'dimezzato');
+  const risalvato = R.complete({ competizioni: normali(r).map((c) => ({ nome: c.nome, uefa: c.uefa })) });
+  assert.equal(normali(risalvato)[0].compenso, 'dimezzato');
 });

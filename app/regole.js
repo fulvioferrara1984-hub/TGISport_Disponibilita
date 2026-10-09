@@ -34,6 +34,10 @@
   };
 
   const ore = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+  // Remote TL e Remote Support: righe fisse in cima a «Competizioni e sport», da cui i turni prendono colore,
+  // compenso e durata (ore dopo il ritrovo); «ore prima» per loro vale sempre 0
+  const RIGHE_MANSIONE = ['Remote TL', 'Remote Support'];
+  const durataValida = (v) => (typeof v === 'number' && isFinite(v) && v >= 0.5 && v <= 16 ? v : null);
 
   // le regole salvate possono mancare di qualche voce (es. dopo un aggiornamento): si completano
   function complete(r) {
@@ -42,10 +46,21 @@
     // competizioni salvate prima del tipo di compenso: la vecchia casella «UEFA ½» diventa «dimezzato».
     // «uefa» si continua a scrivere uguale a «dimezzato» perché le dashboard ancora aperte sulla versione
     // precedente calcolino giusto e, se risalvano, non perdano il Dimezzato.
-    x.competizioni = x.competizioni.map(({ uefa, ...c }) => {
-      const compenso = TIPI[c.compenso] ? c.compenso : uefa && c.compenso === undefined ? 'dimezzato' : 'diurno';
-      return Object.assign({}, c, { prima: ore(c.prima), dopo: ore(c.dopo), colore: coloreValido(c.colore), compenso, uefa: compenso === 'dimezzato' });
+    // competizioni senza ore (salvate quando c'erano i valori generali): si completano con quelli usati finora
+    const anticipo = ore(x.anticipoOre) === null ? PREDEFINITE.anticipoOre : x.anticipoOre;
+    const dopoGenerale = ore(x.fineOre) === null ? PREDEFINITE.fineOre : x.fineOre;
+    const salvate = Array.isArray(x.competizioni) ? x.competizioni : [];
+    const mansioni = RIGHE_MANSIONE.map((nome) => {
+      const s = salvate.find((c) => c.nome === nome) || {};
+      const predefinita = nome === 'Remote TL' ? durataValida(x.durataSupervisioneOre) || 6 : 6;
+      const compenso = TIPI[s.compenso] ? s.compenso : 'diurno';
+      return { nome, mansione: true, sport: '', prima: 0, dopo: durataValida(s.dopo) || predefinita, compenso, colore: coloreValido(s.colore), uefa: compenso === 'dimezzato' };
     });
+    x.competizioni = mansioni.concat(salvate.filter((c) => !RIGHE_MANSIONE.includes(c.nome)).map(({ uefa, mansione, ...c }) => {
+      const compenso = TIPI[c.compenso] ? c.compenso : uefa && c.compenso === undefined ? 'dimezzato' : 'diurno';
+      const prima = ore(c.prima), dopo = ore(c.dopo);
+      return Object.assign({}, c, { prima: prima === null ? anticipo : prima, dopo: dopo === null ? dopoGenerale : dopo, colore: coloreValido(c.colore), compenso, uefa: compenso === 'dimezzato' });
+    }));
     x.tariffe = {
       'P.IVA': Object.assign({}, PREDEFINITE.tariffe['P.IVA'], (r && r.tariffe && r.tariffe['P.IVA']) || {}),
       Coop: Object.assign({}, PREDEFINITE.tariffe.Coop, (r && r.tariffe && r.tariffe.Coop) || {}),
@@ -58,22 +73,23 @@
   const hhmm = (min) => { const m = ((min % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
 
   // Ritrovo: scritto a mano; altrimenti orario dell'evento meno le ore della competizione (o generali).
-  // La supervisione non segue mai la competizione: le importate hanno solo l'orario di riferimento.
+  // I turni remoti hanno sempre il ritrovo scritto; quelli importati dal file della stagione hanno solo
+  // l'orario di riferimento e partono, come sempre, dall'anticipo generale.
   function convocazione(e, regole) {
     if (minuti(e.convocazione) !== null) return e.convocazione;
     const r = complete(regole), m = minuti(e.orario);
     if (m === null) return '';
-    const comp = e.tipo === 'supervisione' ? null : competizione(e.competizione, r);
+    const comp = DO.turnoRemoto(e.tipo) ? null : competizione(e.competizione, r);
     return hhmm(m - (comp && comp.prima !== null ? comp.prima : r.anticipoOre) * 60);
   }
 
-  // Fine turno: scritta a mano; supervisione = ritrovo + durata; partita = orario + ore della competizione (o generali).
+  // Fine turno: scritta a mano; turno remoto = ritrovo + durata della sua mansione; partita = orario + ore della competizione.
   function fine(e, regole) {
     if (minuti(e.fine) !== null) return e.fine;
     const r = complete(regole);
-    if (e.tipo === 'supervisione') {
+    if (DO.turnoRemoto(e.tipo)) {
       const inizio = minuti(convocazione(e, r));
-      return inizio === null ? '' : hhmm(inizio + r.durataSupervisioneOre * 60);
+      return inizio === null ? '' : hhmm(inizio + competizione(DO.mansione(e.tipo), r).dopo * 60);
     }
     const m = minuti(e.orario);
     if (m === null) return '';
@@ -110,8 +126,20 @@
   }
 
   const competizione = (nome, regole) => complete(regole).competizioni.find((c) => c.nome === nome) || null;
-  // ruoli remoti come si mostrano (i dati restano 'TL' / 'OP')
-  const nomeRuolo = (ruolo) => (ruolo === 'TL' ? 'Remote TL' : 'Remote OP');
+  // ruoli remoti come si mostrano (nei dati 'OP' / 'SUP' / 'TL'; un valore sconosciuto vale Remote OP)
+  const nomeRuolo = (ruolo) => DO.RUOLI[ruolo === 'TL' || ruolo === 'SUP' ? ruolo : 'OP'];
+  // ogni ruolo comprende quelli sotto: Remote OP < Remote Support < Remote TL
+  function puoFare(ruolo, tipo) {
+    if (tipo === 'supervisione') return ruolo === 'TL';
+    if (tipo === 'support') return ruolo === 'SUP' || ruolo === 'TL';
+    return true;
+  }
+  const sceltaOperatore = (tipo) => (tipo === 'supervisione' ? '— Scegli un Remote TL —' : tipo === 'support' ? '— Scegli un Remote Support o Remote TL —' : '— Scegli operatore —');
+  // operatori attivi che possono fare l'evento, più quello già assegnato (anche se nel frattempo ha cambiato ruolo)
+  const assegnabili = (operatori, e) => operatori.filter((o) => (!!e.operatoreId && o.id === e.operatoreId) || (o.attivo && puoFare(o.ruolo, e.tipo)));
+  // per un turno remoto conta la mansione, qualunque competizione abbia (i vecchi turni di supervisione ne avevano una)
+  const competizioneDi = (e) => DO.mansione(e.tipo) || e.competizione || '';
+  const nomeTipo = (tipo) => DO.mansione(tipo) || 'Partita';
   const compensoCompetizione = (nome, regole) => (competizione(nome, regole) || {}).compenso || 'diurno';
 
   // Colori delle competizioni: quello scelto nelle impostazioni, altrimenti uno della tavolozza ricavato dal nome
@@ -144,7 +172,7 @@
     const r = complete(regole);
     const t = r.tariffe[operatore && operatore.contratto] || null;
     // ordine: maggiorato sull'evento, poi il tipo della competizione; «diurno» diventa notturno se il ritrovo è di notte
-    const comp = compensoCompetizione(e.competizione, r);
+    const comp = compensoCompetizione(competizioneDi(e), r);
     let tipo = 'diurno';
     if (e.gettone === 'maggiorato' || comp === 'maggiorato') tipo = 'maggiorato';
     else if (comp === 'dimezzato') tipo = 'dimezzato';
@@ -163,7 +191,7 @@
     if (!e.inviata) return { cambiato: false, calcolati };
     const cambiato = dopo.data !== e.data
       || calcolati.convocazioneCalcolata !== convocazione(e, regole) || calcolati.fineCalcolata !== fine(e, regole)
-      || (e.tipo !== 'supervisione' && (dopo.orario || '') !== (e.orario || ''));
+      || (!DO.turnoRemoto(e.tipo) && (dopo.orario || '') !== (e.orario || ''));
     return { cambiato, calcolati: cambiato ? calcolati : null };
   }
 
@@ -183,18 +211,19 @@
     const data = (iso) => iso.slice(8) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
     const delMese = eventi.filter((e) => e.data.slice(0, 7) === mese);
     const righe = delMese.map((e) => {
-      const o = op(e.operatoreId), sup = e.tipo === 'supervisione';
-      return { chiave: e.data + convocazione(e, regole), riga: [data(e.data), sup ? 'Supervisione' : 'Partita', e.competizione || '', e.round || '', e.sport || '',
-        sup ? 'Supervisione' : e.titolo || '', e.orario || '', convocazione(e, regole), fine(e, regole), o ? o.nome : '', o ? nomeRuolo(o.ruolo) : '', NOMI_STATO[e.stato] || e.stato] };
+      const o = op(e.operatoreId), turno = DO.turnoRemoto(e.tipo);
+      return { chiave: e.data + convocazione(e, regole), riga: [data(e.data), nomeTipo(e.tipo), competizioneDi(e), turno ? '' : e.round || '', turno ? '' : e.sport || '',
+        turno ? nomeTipo(e.tipo) : e.titolo || '', e.orario || '', convocazione(e, regole), fine(e, regole), o ? o.nome : '', o ? nomeRuolo(o.ruolo) : '', NOMI_STATO[e.stato] || e.stato] };
     });
     const conta = {};
-    const contatore = (id) => (conta[id] = conta[id] || [0, 0, 0, 0]);
+    // partite, Remote TL, Remote Support confermati; in attesa; giorni on-site
+    const contatore = (id) => (conta[id] = conta[id] || [0, 0, 0, 0, 0]);
     onsite.filter((d) => d.stato !== 'annullata').forEach((d) => {
       ['TL', 'OP'].forEach((ruolo) => (d['accettati' + ruolo] || []).filter(op).forEach((id) => {
         d.giorni.filter((g) => g.data.slice(0, 7) === mese).forEach((g) => {
           righe.push({ chiave: g.data + '~', riga: [data(g.data), 'On-site', '', '', d.sport || '', [g.attivita, g.partita, d.luogo].filter(Boolean).join(' · '),
             '', '', '', op(id).nome, 'On-site ' + ruolo, 'Confermato'] });
-          contatore(id)[3]++;
+          contatore(id)[4]++;
         });
       }));
     });
@@ -203,10 +232,10 @@
     delMese.forEach((e) => {
       if (!e.operatoreId || !op(e.operatoreId)) return;
       const c = contatore(e.operatoreId);
-      if (e.stato === 'confermato') c[e.tipo === 'supervisione' ? 1 : 0]++;
-      else if (e.stato === 'convocato') c[2]++;
+      if (e.stato === 'confermato') c[e.tipo === 'supervisione' ? 1 : e.tipo === 'support' ? 2 : 0]++;
+      else if (e.stato === 'convocato') c[3]++;
     });
-    const presenze = [['Operatore', 'Partite confermate', 'Supervisioni confermate', 'In attesa', 'Giorni on-site']]
+    const presenze = [['Operatore', 'Partite confermate', 'Remote TL confermati', 'Remote Support confermati', 'In attesa', 'Giorni on-site']]
       .concat(Object.keys(conta).filter((id) => conta[id].some(Boolean)).map((id) => [op(id).nome].concat(conta[id]))
         .sort((a, b) => a[0].localeCompare(b[0], 'it')));
     return { convocazioni, presenze };
@@ -240,6 +269,6 @@
       + (fermo >= 2 ? ' · ⚠ nessun giro da ' + fermo + ' giorni: controlla lo script delle email' : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, nomeRuolo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria,
+  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});

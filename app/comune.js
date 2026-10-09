@@ -10,6 +10,14 @@
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const iniziali = (nome) => String(nome || '?').trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
 
+  // ---------- ruoli e turni remoti ----------
+  // Nei dati il turno Remote TL si chiama ancora 'supervisione': i turni già creati non cambiano.
+  const RUOLI = { OP: 'Remote OP', SUP: 'Remote Support', TL: 'Remote TL' };
+  const MANSIONI = Object.assign(Object.create(null), { supervisione: 'Remote TL', support: 'Remote Support' });
+  const mansione = (tipo) => MANSIONI[tipo] || '';
+  const turnoRemoto = (tipo) => !!MANSIONI[tipo];
+  const nomeTurno = (tipo) => (MANSIONI[tipo] ? 'Turno ' + MANSIONI[tipo] : '');
+
   // ---------- date (sempre stringhe yyyy-mm-dd, settimane da lunedì) ----------
   const due = (n) => String(n).padStart(2, '0');
   const iso = (d) => d.getFullYear() + '-' + due(d.getMonth() + 1) + '-' + due(d.getDate());
@@ -250,6 +258,6 @@
     giorniA, bloccato, OPERATIVO_PREDEFINITO, NON_PIU_RINUNCIABILE, azioniConvocazione,
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
-    versioneDa, nuovaVersione, soloMetadati,
+    versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno,
   });
 })(window.DO = window.DO || {});
