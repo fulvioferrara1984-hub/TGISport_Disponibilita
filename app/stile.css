@@ -113,6 +113,16 @@ select {
 }
 select::-ms-expand { display: none; }
 input:disabled { background: var(--vuoto); color: var(--inchiostro-3); }
+/* campi spenti tutti uguali, menu compresi (iPhone non li grigia e schiarisce il testo per conto suo) */
+select:disabled, textarea:disabled { background-color: var(--vuoto); color: var(--inchiostro-3); }
+input:disabled, select:disabled, textarea:disabled { -webkit-text-fill-color: var(--inchiostro-3); opacity: 1; }
+/* data e ora su iPhone: niente larghezza minima di sistema, testo a sinistra come negli altri campi */
+.due-campi > *, .tre-campi > * { min-width: 0; }
+input[type="date"], input[type="time"] { min-width: 0; display: block; }
+@supports (-webkit-touch-callout: none) {
+  input[type="date"], input[type="time"] { -webkit-appearance: none; appearance: none; text-align: left; line-height: 34px; }
+  input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; }
+}
 
 .spunta { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; margin: 6px 0 0; }
 .spunta input { width: 16px; height: 16px; accent-color: var(--accento); margin: 0; flex: none; }
@@ -568,6 +578,16 @@ body.sola-lettura .solo-modifica { display: none !important; }
 }
 @media (max-width: 760px) {
   .solo-desktop { display: none !important; }
+  /* Operatori: una scheda per operatore con tutte le voci */
+  .tabella-operatori thead { display: none; }
+  .tabella-operatori, .tabella-operatori tbody, .tabella-operatori tr { display: block; }
+  .tabella-operatori tr { padding: 10px 14px; border-bottom: 1px solid var(--linea); }
+  .tabella-operatori td { display: flex; gap: 12px; align-items: baseline; padding: 2px 0; border: 0; }
+  .tabella-operatori td .valore { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .tabella-operatori td[data-voce]::before { content: attr(data-voce); flex: 0 0 92px; font-size: 12px; color: var(--inchiostro-3); }
+  .tabella-operatori td.op-nome { display: block; padding-bottom: 6px; }
+  .tabella-operatori td.azioni { justify-content: flex-start; flex-wrap: wrap; gap: 6px; padding-top: 8px; white-space: normal; }
+  table.tabella-operatori td.azioni .bottone { flex: 1 1 auto; width: auto; margin: 0; }
   .testata { gap: 12px; padding: 0 16px; }
   .titolo-pagina > .primario { width: 100%; }
   .titolo-pagina h1 { font-size: 20px; }

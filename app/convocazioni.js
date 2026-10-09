@@ -271,8 +271,9 @@
     $('evd-partita').value = e.titolo || '';
     $('evd-data').value = e.data;
     $('evd-orario').value = e.orario || '';
-    $('evd-convocazione').value = sup ? R.convocazione(e, A.regole) : e.convocazione || '';
-    $('evd-fine').value = e.fine || '';
+    // in sola visualizzazione si leggono gli orari veri, non il campo vuoto con «(automatico …)»
+    $('evd-convocazione').value = sup || A.solaLettura ? R.convocazione(e, A.regole) : e.convocazione || '';
+    $('evd-fine').value = A.solaLettura ? R.fine(e, A.regole) : e.fine || '';
     $('evd-sport').value = e.sport || '';
     $('evd-note').value = e.note || '';
     $('evd-maggiorato').checked = e.gettone === 'maggiorato';
@@ -378,9 +379,9 @@
     const sup = turno(inModifica);
     const bozza = { tipo: inModifica.tipo, competizione: sup ? DO.mansione(inModifica.tipo) : $('evd-competizione').value, orario: sup ? '' : $('evd-orario').value, convocazione: sup ? $('evd-convocazione').value : '' };
     const auto = R.convocazione(bozza, A.regole), fineAuto = R.fine(bozza, A.regole);
-    $('evd-ritrovo-auto').textContent = sup ? '' : auto ? '(automatico ' + auto + ')' : '';
+    $('evd-ritrovo-auto').textContent = sup || A.solaLettura ? '' : auto ? '(automatico ' + auto + ')' : '';
     $('evd-convocazione').placeholder = auto;
-    $('evd-fine-auto').textContent = fineAuto ? '(automatica ' + fineAuto + ')' : '';
+    $('evd-fine-auto').textContent = fineAuto && !A.solaLettura ? '(automatica ' + fineAuto + ')' : '';
     $('evd-fine').placeholder = fineAuto;
   }
   $('evd-orario').addEventListener('input', ritrovoAuto);

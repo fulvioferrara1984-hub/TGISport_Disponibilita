@@ -636,16 +636,18 @@
       $('tabella-operatori').innerHTML = '<div class="griglia-vuota">Nessun operatore. Crea il primo con <b>+ Nuovo operatore</b>.</div>';
       return;
     }
-    $('tabella-operatori').innerHTML = '<table class="tabella"><thead><tr><th>Operatore</th><th>Ruolo</th><th class="solo-desktop">Contratto</th><th class="solo-desktop">Contatti</th><th>Stato</th><th class="solo-desktop">Ultimo invio</th><th class="solo-modifica"></th></tr></thead><tbody>'
+    // sul telefono ogni riga diventa una scheda con tutte le voci (data-voce fa da etichetta)
+    const voce = (nome, html) => '<td data-voce="' + nome + '"><span class="valore">' + html + '</span></td>';
+    $('tabella-operatori').innerHTML = '<table class="tabella tabella-operatori"><thead><tr><th>Operatore</th><th>Ruolo</th><th>Contratto</th><th>Contatti</th><th>Stato</th><th>Ultimo invio</th><th class="solo-modifica"></th></tr></thead><tbody>'
       + elenco.map((o) => '<tr class="' + (o.attivo ? '' : 'disattivo') + '">'
-        + '<td><b>' + DO.esc(o.nome) + '</b><br><small class="tenue">' + DO.esc(o.mansione || '—') + '</small></td>'
-        + '<td><span class="etichetta ruolo-' + o.ruolo + '">' + DO.regole.nomeRuolo(o.ruolo) + '</span>'
-        + (o.onsite ? ' <span class="etichetta etichetta-onsite">on-site ' + o.onsite + '</span>' : '') + '</td>'
-        + '<td class="solo-desktop">' + (o.contratto ? DO.esc(o.contratto) : '<span class="testo-errore">da indicare</span>') + '</td>'
-        + '<td class="solo-desktop">' + DO.esc(o.email || '—') + '<br><small class="tenue">' + DO.esc(o.telefono || '') + '</small></td>'
-        + '<td><span class="etichetta' + (o.attivo ? '' : ' spenta') + '">' + (o.attivo ? 'Attivo' : 'Disattivato') + '</span>'
-        + (o.uid === '' ? '<br><small class="testo-errore">senza codice</small>' : '') + '</td>'
-        + '<td class="solo-desktop">' + (o.ultimoInvio ? DO.quando(o.ultimoInvio) : '<span class="tenue">mai</span>') + '</td>'
+        + '<td class="op-nome"><b>' + DO.esc(o.nome) + '</b><br><small class="tenue">' + DO.esc(o.mansione || '—') + '</small></td>'
+        + voce('Ruolo', '<span class="etichetta ruolo-' + o.ruolo + '">' + DO.regole.nomeRuolo(o.ruolo) + '</span>'
+          + (o.onsite ? ' <span class="etichetta etichetta-onsite">on-site ' + o.onsite + '</span>' : ''))
+        + voce('Contratto', o.contratto ? DO.esc(o.contratto) : '<span class="testo-errore">da indicare</span>')
+        + voce('Contatti', DO.esc(o.email || '—') + '<br><small class="tenue">' + DO.esc(o.telefono || '') + '</small>')
+        + voce('Stato', '<span class="etichetta' + (o.attivo ? '' : ' spenta') + '">' + (o.attivo ? 'Attivo' : 'Disattivato') + '</span>'
+          + (o.uid === '' ? '<br><small class="testo-errore">senza codice</small>' : ''))
+        + voce('Ultimo invio', o.ultimoInvio ? DO.quando(o.ultimoInvio) : '<span class="tenue">mai</span>')
         + '<td class="azioni solo-modifica"><button type="button" class="bottone" data-modifica="' + o.id + '">Modifica</button> '
         + '<button type="button" class="bottone" data-codice="' + o.id + '">' + (o.uid === '' ? 'Crea codice' : 'Nuovo codice') + '</button> '
         + '<button type="button" class="bottone pericolo" data-elimina="' + o.id + '">Elimina</button></td></tr>').join('')
