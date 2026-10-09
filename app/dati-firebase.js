@@ -282,8 +282,10 @@
   // ---------- supervisori ----------
   // Ascolto in tempo reale: alla prima lettura arrivano tutti i dati, poi solo ciò che cambia.
   function ascolta(cb) {
-    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null, operativo: null, onsite: null, compensiOnsite: null };
-    const pronto = () => { if (Object.values(stato).every((v) => v !== null)) cb(Object.assign({}, stato)); };
+    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null, operativo: null, onsite: null, compensiOnsite: null, richiesteEvento: null };
+    // eventi e richieste per evento arrivati dal server (non solo dalla copia sul computer): solo allora la dashboard le allinea
+    const dalServer = { eventi: false, richiesteEvento: false };
+    const pronto = () => { if (Object.values(stato).every((v) => v !== null)) cb(Object.assign({ sincronizzato: dalServer.eventi && dalServer.richiesteEvento }, stato)); };
     let fermo = false;
     const errore = (e) => {
       if (fermo) return;
@@ -321,8 +323,9 @@
         pronto();
       }, errore),
       // eventi e turni della stagione in corso (da agosto): calendario e riepilogo senza altre letture
-      F.onSnapshot(F.query(F.collection(db, 'eventi'), F.where('data', '>=', DO.regole.stagione(DO.oggi()).da)), (s) => {
+      F.onSnapshot(F.query(F.collection(db, 'eventi'), F.where('data', '>=', DO.regole.stagione(DO.oggi()).da)), { includeMetadataChanges: true }, (s) => {
         stato.eventi = s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+        dalServer.eventi = !s.metadata.fromCache;
         pronto();
       }, erroreNuovo('eventi', [])),
       F.onSnapshot(F.doc(db, 'impostazioni', 'regole'), (d) => {
@@ -343,6 +346,11 @@
         stato.compensiOnsite = m;
         pronto();
       }, erroreNuovo('compensiOnsite', {}, SENZA_ONSITE)),
+      F.onSnapshot(F.query(F.collection(db, 'richiesteEvento'), F.where('evento.data', '>=', DO.regole.stagione(DO.oggi()).da)), { includeMetadataChanges: true }, (s) => {
+        stato.richiesteEvento = s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+        dalServer.richiesteEvento = !s.metadata.fromCache;
+        pronto();
+      }, erroreNuovo('richiesteEvento', [], 'Richieste per evento non disponibili: pubblica le nuove regole di Firestore (vedi README).')),
     ];
     return () => { fermo = true; ferma.forEach((f) => f()); };
   }
@@ -691,6 +699,94 @@
     if (accetto) email('notificaOnsite', { id }).catch((e) => console.warn('Email ai supervisori non inviata:', e.message));
   }
 
+  // ---------- richieste di disponibilità per un evento ----------
+  const SENZA_REGOLE_EVENTO = 'Pubblica le nuove regole di Firestore (vedi README).';
+
+  async function chiediPerEvento(evento, copia, destinatari, extra) {
+    const dest = Array.from(new Set(destinatari || []));
+    if (!dest.length) throw new Error('Scegli almeno un operatore.');
+    const motivo = DO.richiesteEvento.chiedibile(evento, DO.oggi());
+    if (motivo) throw new Error(motivo);
+    const messaggio = String((extra && extra.messaggio) || '').trim().slice(0, 300);
+    const rif = F.doc(db, 'richiesteEvento', evento.id);
+    try {
+      const d = await F.getDoc(rif);
+      if (!d.exists()) {
+        await F.setDoc(rif, { destinatari: dest, messaggio, evento: copia, aggiornata: F.serverTimestamp(), risposte: {}, aperta: true, assegnato: '', creata: new Date().toISOString() });
+      } else {
+        const cambiata = JSON.stringify(d.data().evento || {}) !== JSON.stringify(copia);
+        await F.updateDoc(rif, Object.assign({ destinatari: F.arrayUnion(...dest), evento: copia, aperta: true, assegnato: '' },
+          messaggio ? { messaggio } : {}, cambiata ? { aggiornata: F.serverTimestamp() } : {}));
+      }
+    } catch (e) {
+      // regole non ancora pubblicate (le impostazioni si leggono ancora) oppure sessione davvero scaduta
+      if (e && e.code === 'permission-denied' && await F.getDoc(F.doc(db, 'impostazioni', 'regole')).then(() => true, () => false)) throw new Error(SENZA_REGOLE_EVENTO);
+      return negato(e, 'Sessione scaduta: accedi di nuovo.');
+    }
+    const { senzaEmail, conEmail } = contattiEmail(extra);
+    const inviate = conEmail.length
+      ? email('emailRichiestaEvento', { destinatari: conEmail.map((c) => ({ nome: c.nome, email: c.email })), evento: copia, messaggio, urlSito: extra.urlSito })
+      : Promise.resolve({ email: 0 });
+    return { senzaEmail, inviate };
+  }
+
+  // Correzione calcolata da DO.richiesteEvento.allineamento; chi chiama mostra gli errori solo in console
+  function allineaRichiestaEvento(id, campi) {
+    return F.updateDoc(F.doc(db, 'richiesteEvento', id), Object.assign({}, campi, campi.aggiornata ? { aggiornata: F.serverTimestamp() } : {}));
+  }
+
+  // Operatori: solo le richieste mandate a loro (le regole lo pretendono anche nella ricerca)
+  async function mieRichiesteEvento() {
+    const op = operatoreCorrente || await caricaOperatore();
+    try {
+      const s = await F.getDocs(F.query(F.collection(db, 'richiesteEvento'), F.where('destinatari', 'array-contains', op.id)));
+      return s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+    } catch (e) {
+      // regole non ancora pubblicate: la pagina funziona senza richieste per evento
+      if (e.code === 'permission-denied') return [];
+      throw traduci(e);
+    }
+  }
+
+  async function rispondiRichiestaEvento(id, risposta) {
+    if (!['si', 'no'].includes(risposta)) throw new Error('Risposta non valida.');
+    const op = operatoreCorrente || await caricaOperatore();
+    const leggi = async () => {
+      let d;
+      try { d = await F.getDoc(F.doc(db, 'richiesteEvento', id)); } catch (e) { if (e.code === 'permission-denied') throw new Error('Richiesta non trovata.'); throw traduci(e); }
+      if (!d.exists() || !(d.data().destinatari || []).includes(op.id)) throw new Error('Richiesta non trovata.');
+      return d.data();
+    };
+    // prima si controlla come faranno le regole, così il messaggio è quello giusto
+    const controlla = (r) => {
+      if (((r.evento || {}).data || '') < DO.oggi()) throw new Error('La partita è già passata.');
+      if (!r.aperta) throw new Error('La richiesta è chiusa: il posto è già stato coperto.');
+    };
+    const r = await leggi();
+    controlla(r);
+    try {
+      const batch = F.writeBatch(db);
+      batch.update(F.doc(db, 'richiesteEvento', id), new F.FieldPath('risposte', op.id), { r: risposta, il: F.serverTimestamp() });
+      batch.set(F.doc(F.collection(db, 'invii')), {
+        quando: new Date().toISOString(), operatoreId: op.id, nome: op.nome, modifiche: [], letto: false, tipo: 'risposta-evento',
+        evento: { id, titolo: r.evento.titolo || '', data: r.evento.data, risposta },
+      });
+      await batch.commit();
+    } catch (e) {
+      // richiesta chiusa un attimo prima: si spiega senza far uscire, a meno che l'accesso non sia davvero revocato
+      if (e && e.code === 'permission-denied') {
+        let valido = true;
+        try { await caricaOperatore(false); } catch (x) { valido = false; }
+        if (valido) {
+          controlla(await leggi());
+          throw new Error('Risposta non registrata: ricarica la pagina e riprova.');
+        }
+      }
+      return negato(e, 'Il tuo accesso non è più valido: contatta i supervisori.');
+    }
+    if (risposta === 'si') email('notificaRispostaEvento', { id }).catch((e) => console.warn('Email ai supervisori non inviata:', e.message));
+  }
+
   const leggiImpostazioni = () => email('leggiImpostazioni');
   const salvaImpostazioni = (x) => email('salvaImpostazioni', x);
 
@@ -715,5 +811,6 @@
     creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa, leggiOperativo, salvaOperativo,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
+    chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
   };
 })(window.DO = window.DO || {});

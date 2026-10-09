@@ -98,3 +98,14 @@ test('preselezione dei destinatari', () => {
   assert.equal(p({ onsite: true }), false);
   assert.equal(p({ giaChiesto: true }), false);
 });
+
+test('eventi per cui si può chiedere', () => {
+  const c = (campi) => Q.chiedibile(partita(campi), OGGI);
+  assert.equal(c({}), '');
+  assert.equal(c({ data: OGGI }), '');
+  assert.equal(c({ operatoreId: 'a', stato: 'rifiutato' }), '');
+  assert.equal(c({ operatoreId: 'a', stato: 'confermato', daSostituire: true }), '');
+  assert.equal(c({ operatoreId: 'a', stato: 'assegnato' }), 'L\'evento ha già un operatore: segnalo «da sostituire» per chiedere ad altri.');
+  assert.equal(c({ stato: 'annullato' }), 'L\'evento è annullato.');
+  assert.equal(c({ data: '2026-10-08' }), 'La partita è già passata.');
+});

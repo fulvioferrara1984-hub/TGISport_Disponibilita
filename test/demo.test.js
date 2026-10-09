@@ -10,6 +10,7 @@ global.sessionStorage = memoria();
 require('../app/comune.js');
 require('../app/onsite.js');
 require('../app/regole.js');
+require('../app/richieste-evento.js');
 require('../app/demo.js');
 const DO = window.DO, D = DO.demo;
 
@@ -180,4 +181,105 @@ test('on-site: voce in Aggiornamenti', async () => {
   comeSupervisore();
   const v = (await statoDemo()).invii.find((x) => x.tipo === 'onsite' && x.evento.id === id);
   assert.deepEqual([v.operatoreId, v.evento.stato, v.evento.ruolo, v.evento.luogo, v.evento.da], ['op-demo3', 'accettato', 'OP', 'Roma', tra(10)]);
+});
+
+// ---------------------------------------------------------------- richieste di disponibilità per un evento (stesse condizioni delle regole)
+
+const nuovoEvento = async (titolo, campi) => {
+  comeSupervisore();
+  await D.creaEventi([Object.assign({ tipo: 'partita', competizione: 'Serie A', round: '9', data: tra(9), titolo, orario: '20:45' }, campi)]);
+  return (await statoDemo()).eventi.find((e) => e.titolo === titolo);
+};
+const chiedi = (e, destinatari, extra) => {
+  comeSupervisore();
+  return D.chiediPerEvento(e, DO.richiesteEvento.copiaEvento(e, DO.regole.complete(null)), destinatari, Object.assign({ messaggio: '', email: false, contatti: [] }, extra));
+};
+const richiestaDi = async (id) => { comeSupervisore(); return (await statoDemo()).richiesteEvento.find((r) => r.id === id); };
+
+test('richiesta per evento: creazione e nuovi destinatari', async () => {
+  const e = await nuovoEvento('Richiesta-Creazione');
+  await assert.rejects(chiedi(e, []), /Scegli almeno un operatore\./);
+  const r = await chiedi(e, ['op-demo1', 'op-demo3'], { messaggio: ' Serve una mano ', email: true,
+    contatti: [{ id: 'op-demo1', nome: 'Luca Bianchi', email: 'l@x.it' }, { id: 'op-demo3', nome: 'Marco Esposito', email: '' }] });
+  assert.deepEqual(r.senzaEmail, ['Marco Esposito']);
+  assert.deepEqual(await r.inviate, { email: 1 });
+  let q = await richiestaDi(e.id);
+  assert.deepEqual([q.destinatari, q.messaggio, q.aperta, q.assegnato, q.risposte, q.evento.titolo, q.evento.ritrovo],
+    [['op-demo1', 'op-demo3'], 'Serve una mano', true, '', {}, 'Richiesta-Creazione', '16:45']);
+  await D.allineaRichiestaEvento(e.id, { aperta: false, assegnato: 'op-demo5' });
+  await chiedi(e, ['op-demo3', 'op-demo4']);
+  q = await richiestaDi(e.id);
+  assert.deepEqual([q.destinatari, q.messaggio, q.aperta, q.assegnato], [['op-demo1', 'op-demo3', 'op-demo4'], 'Serve una mano', true, '']);
+});
+
+test('richiesta per evento: solo per eventi scoperti, non annullati e non passati', async () => {
+  const assegnato = await nuovoEvento('Richiesta-Assegnata', { operatoreId: 'op-demo2' });
+  await assert.rejects(chiedi(assegnato, ['op-demo1']), /ha già un operatore/);
+  await chiedi(Object.assign({}, assegnato, { stato: 'rifiutato' }), ['op-demo1']);
+  assert.equal((await richiestaDi(assegnato.id)).aperta, true);
+  await assert.rejects(chiedi(Object.assign({}, assegnato, { operatoreId: '', stato: 'annullato' }), ['op-demo1']), /L'evento è annullato\./);
+});
+
+test('richiesta per evento: risposte', async () => {
+  const e = await nuovoEvento('Richiesta-Risposte');
+  await chiedi(e, ['op-demo1', 'op-demo3']);
+  await comeOperatore('DEMO-0003');
+  await assert.rejects(D.rispondiRichiestaEvento(e.id, 'forse'), /Risposta non valida\./);
+  await D.rispondiRichiestaEvento(e.id, 'si');
+  await D.rispondiRichiestaEvento(e.id, 'no');
+  await D.rispondiRichiestaEvento(e.id, 'si');
+  const q = await richiestaDi(e.id);
+  assert.deepEqual(Object.keys(q.risposte), ['op-demo3']);
+  assert.equal(q.risposte['op-demo3'].r, 'si');
+  assert.ok(DO.richiesteEvento.ms(q.risposte['op-demo3'].il) > 0);
+  const voci = (await statoDemo()).invii.filter((x) => x.tipo === 'risposta-evento' && x.evento.id === e.id);
+  assert.deepEqual(voci.map((v) => v.evento.risposta), ['si', 'no', 'si']);
+  assert.deepEqual([voci[0].operatoreId, voci[0].evento.titolo, voci[0].evento.data, voci[0].modifiche], ['op-demo3', 'Richiesta-Risposte', tra(9), []]);
+});
+
+test('richiesta per evento: condizioni per rispondere', async () => {
+  const e = await nuovoEvento('Richiesta-Condizioni');
+  await chiedi(e, ['op-demo1']);
+  await comeOperatore('DEMO-0003');
+  await assert.rejects(D.rispondiRichiestaEvento(e.id, 'si'), /Richiesta non trovata\./);
+  await assert.rejects(D.rispondiRichiestaEvento('non-esiste', 'si'), /Richiesta non trovata\./);
+  comeSupervisore();
+  await D.allineaRichiestaEvento(e.id, { aperta: false, assegnato: 'op-demo5' });
+  await comeOperatore('DEMO-0001');
+  await assert.rejects(D.rispondiRichiestaEvento(e.id, 'si'), /La richiesta è chiusa: il posto è già stato coperto\./);
+  // giorno della partita passato
+  const passata = await nuovoEvento('Richiesta-Passata');
+  await chiedi(passata, ['op-demo1']);
+  const salvati = JSON.parse(localStorage.getItem('do-demo-dati'));
+  salvati.richiesteEvento.find((x) => x.id === passata.id).evento.data = tra(-1);
+  localStorage.setItem('do-demo-dati', JSON.stringify(salvati));
+  await comeOperatore('DEMO-0001');
+  await assert.rejects(D.rispondiRichiestaEvento(passata.id, 'si'), /La partita è già passata\./);
+  // il giorno stesso si risponde ancora (anche dentro la finestra di blocco)
+  const oggi = await nuovoEvento('Richiesta-Oggi', { data: DO.oggi() });
+  await chiedi(oggi, ['op-demo1']);
+  await comeOperatore('DEMO-0001');
+  await D.rispondiRichiestaEvento(oggi.id, 'si');
+});
+
+test('richiesta per evento: allineamento con l\'istante della modifica', async () => {
+  const e = await nuovoEvento('Richiesta-Allinea');
+  await chiedi(e, ['op-demo1']);
+  const prima = (await richiestaDi(e.id)).aggiornata;
+  await new Promise((r) => setTimeout(r, 5));
+  const spostato = Object.assign({}, e, { orario: '18:00' });
+  await D.allineaRichiestaEvento(e.id, { aperta: true, assegnato: '', evento: DO.richiesteEvento.copiaEvento(spostato, DO.regole.complete(null)), aggiornata: true });
+  const q = await richiestaDi(e.id);
+  assert.equal(q.evento.orario, '18:00');
+  assert.ok(DO.richiesteEvento.ms(q.aggiornata) > DO.richiesteEvento.ms(prima));
+  await D.allineaRichiestaEvento('non-esiste', { aperta: false, assegnato: '' });
+});
+
+test('richiesta per evento: l\'operatore vede solo le sue', async () => {
+  const e = await nuovoEvento('Richiesta-Mie');
+  await chiedi(e, ['op-demo1']);
+  await comeOperatore('DEMO-0001');
+  assert.ok((await D.mieRichiesteEvento()).some((r) => r.id === e.id));
+  await comeOperatore('DEMO-0003');
+  assert.ok(!(await D.mieRichiesteEvento()).some((r) => r.id === e.id));
 });

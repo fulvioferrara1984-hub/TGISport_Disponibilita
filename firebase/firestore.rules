@@ -73,6 +73,19 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rifiuti'])
         && request.resource.data.rifiuti == resource.data.rifiuti.concat([io]);
     }
+    // Richieste di disponibilità per un evento: l'operatore risponde Sì/No solo per sé,
+    // con la richiesta aperta e fino alla fine del giorno della partita (anche dentro la finestra di blocco).
+    function rispostaEvento() {
+      let io = mioOperatore();
+      let p = resource.data.evento.data.split('-');
+      return operatore() && resource.data.aperta == true && io in resource.data.destinatari
+        && request.time < timestamp.date(int(p[0]), int(p[1]), int(p[2])) + duration.value(1, 'd')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['risposte'])
+        && request.resource.data.risposte.diff(resource.data.risposte).affectedKeys().hasOnly([io])
+        && request.resource.data.risposte[io].keys().hasOnly(['r', 'il'])
+        && request.resource.data.risposte[io].r in ['si', 'no']
+        && request.resource.data.risposte[io].il == request.time;
+    }
 
     match /utenti/{uid} {
       allow read: if supervisore() || (request.auth != null && request.auth.uid == uid);
@@ -137,6 +150,13 @@ service cloud.firestore {
     // compenso del deployment: solo i supervisori
     match /onsiteRiservato/{id} {
       allow read, write: if supervisore();
+    }
+
+    // l'operatore vede solo le richieste mandate a lui (le letture filtrano per destinatari)
+    match /richiesteEvento/{id} {
+      allow read: if supervisore() || (operatore() && mioOperatore() in resource.data.destinatari);
+      allow create, delete: if supervisore();
+      allow update: if supervisore() || rispostaEvento();
     }
 
     match /impostazioni/{documento} {

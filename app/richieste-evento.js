@@ -27,6 +27,14 @@
 
   const scoperto = (e) => !e.operatoreId || e.stato === 'rifiutato' || !!e.daSostituire;
 
+  // '' se per l'evento si può chiedere disponibilità, altrimenti il motivo (la richiesta si aprirebbe e si chiuderebbe subito)
+  function chiedibile(e, oggi) {
+    if (e.stato === 'annullato') return 'L\'evento è annullato.';
+    if ((e.data || '') < oggi) return 'La partita è già passata.';
+    if (!scoperto(e)) return 'L\'evento ha già un operatore: segnalo «da sostituire» per chiedere ad altri.';
+    return '';
+  }
+
   // Campi da scrivere perché la richiesta torni con l'evento, oppure null se è già allineata
   function allineamento(richiesta, evento, copia, oggi) {
     const aperta = !!evento && evento.stato !== 'annullato' && evento.data >= oggi && scoperto(evento);
@@ -63,5 +71,5 @@
   const preselezione = ({ disponibilita, impegnato, onsite, giaChiesto }) =>
     (disponibilita === 'D' || disponibilita === 'P') && !impegnato && !onsite && !giaChiesto;
 
-  DO.richiesteEvento = { ms, copiaEvento, allineamento, statoPerOperatore, primaDellaModifica, riassunto, preselezione };
+  DO.richiesteEvento = { ms, copiaEvento, chiedibile, allineamento, statoPerOperatore, primaDellaModifica, riassunto, preselezione };
 })(window.DO = window.DO || {});

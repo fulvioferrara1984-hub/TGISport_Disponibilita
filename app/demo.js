@@ -44,14 +44,14 @@
     eventi.push({ id: 'evc1', tipo: 'partita', competizione: 'Champions League', round: 'League Phase', sport: 'Calcio', data: DO.aggiungi(lun, 2), titolo: 'Feyenoord-Como',
       orario: '18:45', convocazione: '', convocazioneCalcolata: '14:45', operatoreId: 'op-demo2', stato: 'confermato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
     return { operatori, disponibilita, invii, richieste: [], eventi, regole: null, operativo: null, password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true },
-      onsite: [], onsiteRiservato: {} };
+      onsite: [], onsiteRiservato: {}, richiesteEvento: [] };
   }
 
   let dati = null, ruolo = '', alloScadere = null, utenteDemo = null;
   const ascoltatori = new Set();
 
   function carica() {
-    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.eventi) { dati = Object.assign({ onsite: [], onsiteRiservato: {} }, d); return; } } catch (e) { /* si riparte */ }
+    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.eventi) { dati = Object.assign({ onsite: [], onsiteRiservato: {}, richiesteEvento: [] }, d); return; } } catch (e) { /* si riparte */ }
     dati = iniziali();
   }
   function salva() {
@@ -145,6 +145,7 @@
 
   function ascolta(cb) {
     const invia = () => cb({
+      sincronizzato: true,
       operatori: dati.operatori.map(pubblico),
       disponibilita: JSON.parse(JSON.stringify(dati.disponibilita)),
       invii: dati.invii.slice(-60).reverse(),
@@ -154,6 +155,7 @@
       operativo: Object.assign({}, DO.OPERATIVO_PREDEFINITO, dati.operativo || {}),
       onsite: JSON.parse(JSON.stringify(dati.onsite)),
       compensiOnsite: Object.fromEntries(Object.entries(dati.onsiteRiservato).map(([id, r]) => [id, r.compenso])),
+      richiesteEvento: JSON.parse(JSON.stringify(dati.richiesteEvento)),
     });
     ascoltatori.add(invia);
     setTimeout(invia, 200);
@@ -357,6 +359,56 @@
     salva();
   }
 
+  // ---------- richieste di disponibilità per un evento (stesse condizioni delle regole di Firestore) ----------
+  async function chiediPerEvento(evento, copiaEv, destinatari, extra) {
+    await pausa(150);
+    const dest = Array.from(new Set(destinatari || []));
+    if (!dest.length) throw new Error('Scegli almeno un operatore.');
+    const motivo = DO.richiesteEvento.chiedibile(evento, DO.oggi());
+    if (motivo) throw new Error(motivo);
+    const messaggio = String((extra && extra.messaggio) || '').trim().slice(0, 300);
+    const adesso = new Date().toISOString();
+    const r = dati.richiesteEvento.find((x) => x.id === evento.id);
+    if (r) {
+      const cambiata = JSON.stringify(r.evento) !== JSON.stringify(copiaEv);
+      Object.assign(r, { destinatari: Array.from(new Set(r.destinatari.concat(dest))), evento: copiaEv, aperta: true, assegnato: '' },
+        messaggio ? { messaggio } : {}, cambiata ? { aggiornata: adesso } : {});
+    } else {
+      dati.richiesteEvento.push({ id: evento.id, destinatari: dest, messaggio, evento: copiaEv, aggiornata: adesso, risposte: {}, aperta: true, assegnato: '', creata: adesso });
+    }
+    salva();
+    const { senzaEmail, conEmail } = contattiEmail(extra);
+    return { senzaEmail, inviate: pausa(800).then(() => ({ email: conEmail.length })) };
+  }
+
+  async function allineaRichiestaEvento(id, campi) {
+    const r = dati.richiesteEvento.find((x) => x.id === id);
+    if (!r) return;
+    Object.assign(r, campi, campi.aggiornata ? { aggiornata: new Date().toISOString() } : {});
+    salva();
+  }
+
+  async function mieRichiesteEvento() {
+    await pausa(100);
+    const op = operatoreValido();
+    return copia(dati.richiesteEvento.filter((r) => r.destinatari.includes(op.id)));
+  }
+
+  async function rispondiRichiestaEvento(id, risposta) {
+    await pausa(150);
+    if (!['si', 'no'].includes(risposta)) throw new Error('Risposta non valida.');
+    const op = operatoreValido();
+    const r = dati.richiesteEvento.find((x) => x.id === id);
+    if (!r || !r.destinatari.includes(op.id)) throw new Error('Richiesta non trovata.');
+    if (r.evento.data < DO.oggi()) throw new Error('La partita è già passata.');
+    if (!r.aperta) throw new Error('La richiesta è chiusa: il posto è già stato coperto.');
+    const adesso = new Date().toISOString();
+    r.risposte[op.id] = { r: risposta, il: adesso };
+    dati.invii.push({ id: 'inv' + Date.now() + Math.floor(Math.random() * 1e4), quando: adesso, operatoreId: op.id, nome: op.nome, modifiche: [], letto: false, tipo: 'risposta-evento',
+      evento: { id, titolo: r.evento.titolo, data: r.evento.data, risposta } });
+    salva();
+  }
+
   async function cambiaPassword(attuale, nuova) {
     if (attuale !== dati.password) throw new Error('La password attuale non è corretta.');
     if (String(nuova).length < 8) throw new Error('La nuova password deve avere almeno 8 caratteri.');
@@ -371,6 +423,7 @@
     creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa, leggiOperativo, salvaOperativo,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
+    chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     azzera: () => { try { localStorage.removeItem(CHIAVE); } catch (e) { /* niente */ } },
   };
 })(window.DO = window.DO || {});
