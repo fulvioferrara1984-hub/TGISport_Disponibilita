@@ -14,6 +14,8 @@
   let lun = DO.lunedi(oggi);
   let invio = false;
   let operativo = Object.assign({}, DO.OPERATIVO_PREDEFINITO);   // telefono di reperibilità e giorni di blocco
+  let onsite = [];                // deployment on-site mandati all'operatore
+  let giorniOn = {};              // giorni in cui è on-site: data → { luogo, … }
   const noteAperte = new Set();   // giorni in cui l'operatore ha chiesto di scrivere una nota
 
   const chiaveBozza = () => 'do-bozza-' + operatore.id;
@@ -23,7 +25,8 @@
   // negli ultimi giorni prima dell'evento non si cambia più nulla: si telefona al supervisore
   const nellaFinestra = (d) => DO.bloccato(d, oggi, operativo.giorniBlocco);
   const bloccatoOra = (d) => d >= oggi && d <= limite && nellaFinestra(d);
-  const modificabile = (d) => d >= oggi && d <= limite && !nellaFinestra(d);
+  const modificabile = (d) => d >= oggi && d <= limite && !nellaFinestra(d) && !giorniOn[d];
+  const aggiornaOnsite = () => { giorniOn = operatore ? DO.onsite.giorniOnsite(onsite, operatore.id) : {}; };
   const nModifiche = () => Object.keys(bozza).length;
   // pagina rimasta aperta da ieri: prima di agire si riallinea la data di oggi (e quindi la finestra di blocco)
   function riallineaOggi() {
@@ -81,13 +84,15 @@
       return '<li class="giorno' + (bozza[d] ? ' modificato' : '') + (attivo ? '' : ' passato') + (richiesto(d) && !v.s ? ' da-fare' : '') + '" data-data="' + d + '">'
         + '<div class="giorno-data"><b>' + g.nome + '</b><small>' + g.num + ' ' + g.mese + '</small>'
         + (d === oggi ? '<span class="oggi">Oggi</span>' : '') + (richiesto(d) ? '<span class="richiesto">Richiesto</span>' : '')
-        + (bloccatoOra(d) ? '<span class="bloccato-tag">Bloccato: contatta il supervisore</span>' : '')
+        + (giorniOn[d] ? '<span class="onsite-tag">On-site · ' + DO.esc(giorniOn[d].luogo) + '</span>'
+          : bloccatoOra(d) ? '<span class="bloccato-tag">Bloccato: contatta il supervisore</span>' : '')
         + convocazioni.filter((c) => c.data === d && c.stato !== 'annullato' && c.stato !== 'rifiutato')
           .map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + (ritrovo(c) || '—') + '</span>').join('') + '</div>'
         + '<div class="giorno-scelte"><div class="stati" role="radiogroup" aria-label="Disponibilità di ' + g.nome + ' ' + g.num + '">' + stati + '</div>'
         + nota + '</div></li>';
     }).join('');
     disegnaRichieste();
+    disegnaOnsite();
     disegnaConvocazioni();
     disegnaBarra();
   }
@@ -106,34 +111,57 @@
       : '<span class="conv-senza-numero">Chiedi ai supervisori il numero di reperibilità</span>';
   }
 
+  // deployment accettati (o annullati dopo l'accettazione) ancora in corso o futuri
+  const onsiteMiei = () => onsite.filter((d) => d.a >= oggi && ['accettato', 'annullato'].includes(DO.onsite.statoPerOperatore(d, operatore, oggi)));
+  const giorniElenco = (d) => '<ul class="onsite-giorni">' + d.giorni.map((x) => {
+    const g = DO.giorno(x.data);
+    return '<li><b>' + g.breve + ' ' + g.num + ' ' + g.mese + '</b> · ' + DO.esc(x.attivita) + (x.partita ? ' · ' + DO.esc(x.partita) : '') + '</li>';
+  }).join('') + '</ul>';
+
+  function schedaOnsite(d) {
+    const g = DO.giorno(d.da), annullato = d.stato === 'annullata';
+    return '<div class="convocazione onsite' + (annullato ? ' annullata' : '') + '">'
+      + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
+      + '<div class="conv-info"><b>On-site · ' + DO.esc(d.luogo) + (d.titolo ? ' · ' + DO.esc(d.titolo) : '') + '</b>'
+      + '<span>' + DO.esc(d.sport) + ' · ' + DO.onsite.periodoBreve(d.da, d.a) + ' · posto on-site ' + DO.onsite.ruoloAccettato(d, operatore.id) + '</span>'
+      + giorniElenco(d) + (d.note ? '<span class="onsite-nota">' + DO.esc(d.note) + '</span>' : '') + '</div>'
+      + '<div class="conv-azioni">' + (annullato ? '<span class="stato-chip st-annullato">Annullato dal supervisore</span>'
+        : '<span class="stato-chip st-D">Confermato</span>' + tasto('telefona')) + '</div></div>';
+  }
+
   function disegnaConvocazioni() {
     const box = $('mie-convocazioni');
     const prossime = convocazioni.filter((c) => c.data >= oggi).sort((a, b) => (a.data + ritrovo(a)).localeCompare(b.data + ritrovo(b)));
+    const deployment = onsiteMiei();
     box.hidden = false;
-    if (!prossime.length) {
+    if (!prossime.length && !deployment.length) {
       box.innerHTML = '<div class="scheda-testa"><h2>Le tue convocazioni</h2></div>'
         + '<p class="conv-vuoto">Nessuna convocazione in programma. Quando i supervisori ti convocano la trovi qui, da confermare.</p>';
       return;
     }
     const daRispondere = prossime.filter((c) => c.stato === 'convocato').length;
+    const voci = deployment.map((d) => ({ chiave: d.da, html: schedaOnsite(d) }));
     box.innerHTML = '<div class="scheda-testa"><h2>Le tue convocazioni</h2><span class="spazio"></span>'
       + (daRispondere ? '<span class="stato-chip st-blu">' + daRispondere + ' da confermare</span>' : '') + '</div>'
-      + prossime.map((c) => {
-        const g = DO.giorno(c.data), sup = c.tipo === 'supervisione';
-        const fine = fineTurno(c);
-        const orari = sup ? (fine ? 'Turno <span class="ritrovo">' + (ritrovo(c) || '—') + ' – ' + fine + '</span>' : 'Inizio turno <span class="ritrovo">' + (ritrovo(c) || '—') + '</span>')
-          : (c.orario ? 'Evento alle ' + c.orario + ' · ' : '') + '<span class="ritrovo">Ritrovo ' + (ritrovo(c) || '—') + (fine ? ' – fine turno ' + fine : '') + '</span>';
-        const { azioni: elenco, spiegazione } = DO.azioniConvocazione(c.stato, nellaFinestra(c.data));
-        const etichetta = { annullato: '<span class="stato-chip st-annullato">Annullata</span>', confermato: '<span class="stato-chip st-D">Confermata</span>', rifiutato: '<span class="stato-chip st-A">Non puoi</span>' }[c.stato] || '';
-        const azioni = etichetta + elenco.map((a) => tasto(a, c)).join('');
-        return '<div class="convocazione' + (c.stato === 'annullato' ? ' annullata' : '') + '">'
-          + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
-          + '<div class="conv-info"><b>' + DO.esc(sup ? 'Turno di supervisione' : c.titolo) + '</b>'
-          + '<span>' + DO.esc([c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · ')) + '</span>'
-          + '<span>' + orari + '</span>'
-          + (spiegazione ? '<small class="conv-spiegazione">Mancano ' + operativo.giorniBlocco + ' giorni o meno: per rinunciare chiama il supervisore.</small>' : '') + '</div>'
-          + '<div class="conv-azioni">' + azioni + '</div></div>';
-      }).join('');
+      + prossime.map((c) => ({ chiave: c.data + ritrovo(c), html: rigaConvocazione(c) })).concat(voci)
+        .sort((a, b) => a.chiave.localeCompare(b.chiave)).map((v) => v.html).join('');
+  }
+
+  function rigaConvocazione(c) {
+    const g = DO.giorno(c.data), sup = c.tipo === 'supervisione';
+    const fine = fineTurno(c);
+    const orari = sup ? (fine ? 'Turno <span class="ritrovo">' + (ritrovo(c) || '—') + ' – ' + fine + '</span>' : 'Inizio turno <span class="ritrovo">' + (ritrovo(c) || '—') + '</span>')
+      : (c.orario ? 'Evento alle ' + c.orario + ' · ' : '') + '<span class="ritrovo">Ritrovo ' + (ritrovo(c) || '—') + (fine ? ' – fine turno ' + fine : '') + '</span>';
+    const { azioni: elenco, spiegazione } = DO.azioniConvocazione(c.stato, nellaFinestra(c.data));
+    const etichetta = { annullato: '<span class="stato-chip st-annullato">Annullata</span>', confermato: '<span class="stato-chip st-D">Confermata</span>', rifiutato: '<span class="stato-chip st-A">Non puoi</span>' }[c.stato] || '';
+    const azioni = etichetta + elenco.map((a) => tasto(a, c)).join('');
+    return '<div class="convocazione' + (c.stato === 'annullato' ? ' annullata' : '') + '">'
+      + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
+      + '<div class="conv-info"><b>' + DO.esc(sup ? 'Turno di supervisione' : c.titolo) + '</b>'
+      + '<span>' + DO.esc([c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · ')) + '</span>'
+      + '<span>' + orari + '</span>'
+      + (spiegazione ? '<small class="conv-spiegazione">Mancano ' + operativo.giorniBlocco + ' giorni o meno: per rinunciare chiama il supervisore.</small>' : '') + '</div>'
+      + '<div class="conv-azioni">' + azioni + '</div></div>';
   }
 
   $('mie-convocazioni').addEventListener('click', async (e) => {
@@ -162,6 +190,66 @@
       DO.avviso(err.message, 'errore', 8000);
       disegna();
     }
+  });
+
+  // ---------- richieste on-site ----------
+  // "il 12 e il 13 ottobre", "il 31 ottobre e l'1 novembre"
+  function elencoDate(date) {
+    const parti = date.map((d, i) => {
+      const g = DO.giorno(d), dopo = date[i + 1] && DO.giorno(date[i + 1]);
+      return ([1, 8, 11].includes(g.num) ? 'l\'' : 'il ') + g.num + (dopo && dopo.mese === g.mese ? '' : ' ' + g.mese);
+    });
+    return parti.length > 1 ? parti.slice(0, -1).join(', ') + ' e ' + parti[parti.length - 1] : parti[0] || '';
+  }
+
+  function disegnaOnsite() {
+    const box = $('richieste-onsite');
+    const visibili = operatore ? onsite.filter((d) => d.a >= oggi
+      && ['da-rispondere', 'rifiutato', 'esaurito', 'escluso'].includes(DO.onsite.statoPerOperatore(d, operatore, oggi))) : [];
+    box.hidden = !visibili.length;
+    if (!visibili.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="scheda-testa"><h2>Richieste on-site</h2></div>' + visibili.sort((a, b) => a.da.localeCompare(b.da)).map((d) => {
+      const stato = DO.onsite.statoPerOperatore(d, operatore, oggi), ruolo = operatore.onsite, g = DO.giorno(d.da);
+      const liberi = DO.onsite.postiLiberi(d)[ruolo] || 0;
+      const conflitti = DO.onsite.conflittiRemoti(d, convocazioni);
+      const accetta = (testo, cls) => '<button type="button" class="' + cls + '" data-onsite="accetta" data-id="' + d.id + '">' + testo + '</button>';
+      const nonPosso = '<button type="button" class="bottone" data-onsite="rifiuta" data-id="' + d.id + '">Non posso</button>';
+      let azioni;
+      if (stato === 'escluso') azioni = '<small class="conv-spiegazione">' + DO.onsite.MESSAGGI.escluso + '</small>';
+      else if (stato === 'esaurito') azioni = '<span class="stato-chip">Posti esauriti</span>';
+      else if (conflitti.length) {
+        azioni = '<small class="conv-spiegazione">Hai già convocazioni ' + elencoDate(conflitti) + ': chiama il supervisore</small>'
+          + tasto('telefona') + (stato === 'da-rispondere' ? nonPosso : '');
+      } else if (stato === 'rifiutato') azioni = '<span class="stato-chip st-A">Hai risposto: non posso</span>' + accetta('Ho cambiato idea, accetto', 'link');
+      else azioni = nonPosso + accetta('Accetto', 'primario');
+      return '<div class="convocazione onsite">'
+        + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
+        + '<div class="conv-info"><b>On-site · ' + DO.esc(d.luogo) + (d.titolo ? ' · ' + DO.esc(d.titolo) : '') + '</b>'
+        + '<span>' + DO.esc(d.sport) + ' · ' + DO.onsite.periodoBreve(d.da, d.a) + ' · posto on-site ' + ruolo
+        + (stato === 'esaurito' || stato === 'escluso' ? '' : ' · ' + (liberi === 1 ? '1 posto libero' : liberi + ' posti liberi')) + '</span>'
+        + giorniElenco(d) + (d.note ? '<span class="onsite-nota">' + DO.esc(d.note) + '</span>' : '') + '</div>'
+        + '<div class="conv-azioni">' + azioni + '</div></div>';
+    }).join('');
+  }
+
+  $('richieste-onsite').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-onsite]');
+    if (!b) return;
+    const d = onsite.find((x) => x.id === b.dataset.id), accetto = b.dataset.onsite === 'accetta';
+    if (riallineaOggi()) disegna();
+    if (accetto && !confirm('Accetti il deployment on-site a ' + d.luogo + ' (' + DO.onsite.periodoBreve(d.da, d.a) + ')?\n'
+      + 'Dopo non potrai ritirarti dal sito: per qualunque cambio dovrai chiamare il supervisore.')) return;
+    b.disabled = true;
+    try {
+      await DO.dati.rispondiOnsite(d.id, accetto);
+      DO.avviso(accetto ? 'Posto confermato: trovi il deployment nelle tue convocazioni.' : 'Risposta inviata ai supervisori.', 'ok');
+    } catch (err) {
+      DO.avviso(err.message, 'errore', 8000);
+    }
+    try { onsite = await DO.dati.mieiOnsite(); } catch (err) { /* resta la lista di prima */ }
+    aggiornaOnsite();
+    salvaCopia();
+    disegna();
   });
 
   function disegnaRichieste() {
@@ -289,7 +377,7 @@
 
   // ---------- avvio ----------
   function salvaCopia() {
-    DO.salvaCopia({ operatore, giorni: salvati, richieste, convocazioni, operativo, oggi, limite });
+    DO.salvaCopia({ operatore, giorni: salvati, richieste, convocazioni, operativo, onsite, oggi, limite });
   }
 
   function applica(r) {
@@ -300,11 +388,13 @@
     richieste = r.richieste || [];
     if (r.convocazioni) convocazioni = r.convocazioni;
     if (r.operativo) operativo = Object.assign({}, DO.OPERATIVO_PREDEFINITO, r.operativo);
+    if (r.onsite) onsite = r.onsite;
+    aggiornaOnsite();
     // la bozza salvata sul dispositivo perde i giorni passati, quelli ormai bloccati e quelli uguali all'inviato
     bozza = DO.leggi(chiaveBozza()) || {};
     let scartati = 0;
     Object.keys(bozza).forEach((d) => {
-      if (bloccatoOra(d) && !uguali(bozza[d], salvati[d] || vuoto)) scartati++;
+      if ((bloccatoOra(d) || giorniOn[d]) && !uguali(bozza[d], salvati[d] || vuoto)) scartati++;
       if (!modificabile(d) || uguali(bozza[d], salvati[d] || vuoto)) delete bozza[d];
     });
     salvaBozza();
@@ -339,11 +429,13 @@
       $('giorni').innerHTML = '<li class="caricamento"><span></span></li>';
     }
     try {
-      const [r, conv, op] = await Promise.all([
+      const [r, conv, op, ons] = await Promise.all([
         DO.dati.mieDisponibilita(), DO.dati.mieConvocazioni().catch(() => null),
         DO.dati.leggiOperativo().catch(() => Object.assign({}, DO.OPERATIVO_PREDEFINITO)),
+        DO.dati.mieiOnsite().catch(() => null),
       ]);
       if (conv) r.convocazioni = conv;
+      if (ons) r.onsite = ons;
       r.operativo = op;
       const settimana = lun;
       applica(r);
