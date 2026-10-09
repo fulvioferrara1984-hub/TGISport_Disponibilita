@@ -48,6 +48,8 @@ Creato dallo script (fogli XML compressi con `Utilities.zip`), date come date di
   | N | Da sostituire | «SI» |
   | O | Tipo | Partita, Remote TL, Remote Support |
   | P | ID evento | id in Firebase |
+  | Q | Ritrovo scritto a mano | il ritrovo scritto sull'evento (vuoto se automatico) |
+  | R | Fine scritta a mano | la fine scritta sull'evento (vuota se automatica) |
 
   Tutti gli eventi, anche annullati e da assegnare, in ordine di data e ritrovo.
 - **On-site**: una riga per giorno di ogni deployment: Luogo, Sport, Titolo, Dal, Al, Giorno, Attività, Partita, Posti TL, Posti OP, On-site TL, On-site OP, Stato, Compenso.
@@ -72,7 +74,7 @@ Creato dallo script (fogli XML compressi con `Utilities.zip`), date come date di
 ## 2. Ripristino
 
 - L'importazione riconosce un backup quando l'intestazione di Convocazioni contiene «ID evento»; altrimenti tratta il file come quello della stagione (comportamento invariato).
-- **Eventi**: id dalla colonna P (riga senza id → id calcolato come per la stagione); tipo da O; stato da L; `daSostituire` da N; maggiorato da M; operatore per nome. Ritrovo e fine: si salvano come «scritti a mano» solo se diversi da quelli automatici con le regole del file; `convocazioneCalcolata` e `fineCalcolata` dalle colonne G e I. `inviata` per gli stati In attesa, Confermato, Rifiutato (e Annullato con operatore). Storico: «Ripristinato dal backup del <giorno>». Eventi presenti nella piattaforma ma non nel file: non si toccano.
+- **Eventi**: id dalla colonna P (riga senza id → id calcolato come per la stagione); tipo da O; stato da L; `daSostituire` da N; maggiorato da M; operatore per nome. Ritrovo e fine scritti a mano dalle colonne Q e R (vuote = automatici); `convocazioneCalcolata` e `fineCalcolata` ricalcolati con le regole del file, come quando si crea un evento. `inviata` per gli stati In attesa, Confermato, Rifiutato (e Annullato con operatore). Storico: «Ripristinato dal backup del <giorno>». Eventi presenti nella piattaforma ma non nel file: non si toccano.
 - **Operatori**: per nome come oggi; nuovi senza codice; per tutti ruolo, contratto, email, telefono, mansione, on-site e attivo dal foglio Operatori.
 - **Impostazioni**: tariffe, notturno, tariffa on-site, sport e competizioni/mansioni (compenso, ore, colore) dal foglio Impostazioni.
 - **On-site**: non si reimporta (foglio da consultare).
@@ -82,7 +84,7 @@ Creato dallo script (fogli XML compressi con `Utilities.zip`), date come date di
 
 - **Prove automatiche** (`node --test`):
   - script: righe dei fogli (colonne, ordine, annullati, turni, date di Excel, orari), file `.xlsx` valido (le parti dello zip e il foglio Convocazioni rileggibili), email con allegato, nome e oggetto; destinatari; casella spenta → niente invio; lettura non riuscita → errore registrato; attivatore del venerdì senza doppioni; «Invia un backup adesso» solo per i supervisori;
-  - importazione: backup riconosciuto, id/stato/tipo/gettone/da sostituire/orari ripresi, ritrovo «a mano» solo se diverso, operatori aggiornati, file della stagione invariato;
+  - importazione: backup riconosciuto, id/stato/tipo/gettone/da sostituire/orari scritti a mano ripresi, operatori aggiornati, file della stagione invariato;
   - riga dell'ultimo backup in Impostazioni.
 - **Prova nel browser**: il file generato dalle prove si apre in Excel con i quattro fogli (Convocazioni, On-site, Operatori, Impostazioni) e si reimporta nella demo senza duplicati.
 
