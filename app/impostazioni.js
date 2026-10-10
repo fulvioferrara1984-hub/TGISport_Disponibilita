@@ -162,6 +162,8 @@
   };
   const testo = (v) => (v == null ? '' : String(v).trim());
   const chiave = (s) => testo(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  // ID scritti nel file: solo lettere, cifre, - e _ (una / romperebbe il percorso del documento in Firebase)
+  const idValido = (v) => (/^[\w-]{1,120}$/.test(testo(v)) ? testo(v) : '');
 
   function leggiFile(X, buffer) {
     const wb = X.read(buffer, { type: 'array' });
@@ -293,6 +295,7 @@
 
     // impostazioni
     const regole = JSON.parse(JSON.stringify(A.regole));
+    const operativo = {};
     const tariffe = {};
     ['P.IVA', 'Coop'].forEach((c) => ['diurno', 'notturno', 'maggiorato'].forEach((t) => { tariffe[('netto ' + c + ' ' + t).toLowerCase()] = [c, t]; }));
     const COMPENSI = { diurno: 'diurno', notturno: 'notturno', maggiorato: 'maggiorato', dimezzato: 'dimezzato' };
@@ -302,6 +305,8 @@
       if (voce.startsWith('tariffa on-site') && typeof r[1] === 'number') regole.tariffaOnsite = r[1];
       if (voce === 'notturno dalle' && oraExcel(r[1])) regole.notteDa = oraExcel(r[1]);
       if (voce === 'notturno alle' && oraExcel(r[1])) regole.notteA = oraExcel(r[1]);
+      if (voce === 'telefono di reperibilità') operativo.telefono = testo(r[1]);
+      if (voce === 'giorni di blocco' && Number.isInteger(r[1]) && r[1] >= 0 && r[1] <= 14) operativo.giorniBlocco = r[1];
       if (testo(r[6]) && !regole.sport.includes(testo(r[6]))) regole.sport.push(testo(r[6]));
       const nome = testo(r[8]);
       if (!nome) return;
@@ -321,15 +326,18 @@
       const nome = testo(x[0]);
       if (!nome) return;
       datiOp[chiave(nome)] = { mansione: testo(x[1]), ruolo: RUOLI[testo(x[2])] || 'OP', contratto: ['P.IVA', 'Coop'].includes(testo(x[3])) ? testo(x[3]) : '',
-        email: testo(x[4]), telefono: testo(x[5]), onsite: ['TL', 'OP'].includes(testo(x[6])) ? testo(x[6]) : '', attivo: testo(x[7]).toUpperCase() !== 'NO', nome };
+        email: testo(x[4]), telefono: testo(x[5]), onsite: ['TL', 'OP'].includes(testo(x[6])) ? testo(x[6]) : '', attivo: testo(x[7]).toUpperCase() !== 'NO', nome, id: idValido(x[8]) };
     });
-    const operatori = [], esistenti = {}, idPerNome = {};
-    const assicura = (nome) => {
+    const operatori = [], esistenti = {}, idPerNome = {}, idVisti = new Set();
+    // per ID (anche se nel frattempo ha cambiato nome), poi per nome come nell'importazione della stagione
+    const assicura = (nome, idOp) => {
       const k = chiave(nome);
-      if (!k) return '';
-      if (idPerNome[k]) return idPerNome[k];
-      const { nome: _, ...campi } = datiOp[k] || {};
-      const e = A.operatori.find((o) => chiave(o.nome) === k);
+      if (!k && !idOp) return '';
+      if (idOp && idVisti.has(idOp)) return idOp;
+      if (!idOp && idPerNome[k]) return idPerNome[k];
+      const { nome: _, id: __, ...campi } = datiOp[k] || {};
+      const e = (idOp && A.operatori.find((o) => o.id === idOp)) || A.operatori.find((o) => chiave(o.nome) === k);
+      if (!e && !k) return '';
       if (e) {
         // degli operatori presenti cambia solo ciò che è diverso, e mai con un campo vuoto (il backup non cancella dati più recenti)
         const diversi = {};
@@ -337,13 +345,15 @@
           if (c === 'attivo' ? campi.attivo !== (e.attivo !== false) : campi[c] !== '' && campi[c] !== (e[c] || '')) diversi[c] = campi[c];
         });
         if (Object.keys(diversi).length) esistenti[e.id] = diversi;
+        idVisti.add(e.id);
         return (idPerNome[k] = e.id);
       }
-      const nuovo = Object.assign({ id: 'xls-' + k, nome: testo(nome), mansione: '', ruolo: 'OP', contratto: '', email: '', telefono: '', onsite: '', attivo: true, nuovo: true }, campi);
+      const nuovo = Object.assign({ id: idOp || 'xls-' + k, nome: testo(nome), mansione: '', ruolo: 'OP', contratto: '', email: '', telefono: '', onsite: '', attivo: true, nuovo: true }, campi);
       operatori.push(nuovo);
+      idVisti.add(nuovo.id);
       return (idPerNome[k] = nuovo.id);
     };
-    Object.values(datiOp).forEach((o) => assicura(o.nome));
+    Object.values(datiOp).forEach((o) => assicura(o.nome, o.id));
 
     // eventi
     const STATI = { 'Da assegnare': 'da-assegnare', 'Da inviare': 'assegnato', 'In attesa di risposta': 'convocato', Confermato: 'confermato', Rifiutato: 'rifiutato', Annullato: 'annullato' };
@@ -354,7 +364,7 @@
       const data = dataExcel(x[3]);
       if (!data) return;
       const tipo = TIPI[testo(x[14])] || 'partita', turno = tipo !== 'partita';
-      const operatoreId = assicura(testo(x[7]));
+      const operatoreId = assicura(testo(x[7]), idValido(x[20]));
       const stato = STATI[testo(x[11])] || (operatoreId ? 'assegnato' : 'da-assegnare');
       const e = {
         tipo, competizione: turno ? DO.mansione(tipo) : testo(x[0]), round: turno ? '' : testo(x[1]), sport: turno ? '' : testo(x[2]), data,
@@ -370,13 +380,14 @@
       e.fineCalcolata = (e.inviata && !e.fine && oraExcel(x[8])) || R.fine(e, r);
       const base = 'xls-' + data + '-' + (chiave(e.titolo) || 'evento') + '-' + e.orario.replace(':', '') + '-' + chiave(e.competizione);
       visti[base] = (visti[base] || 0) + 1;
-      e.id = testo(x[15]) || base + (visti[base] > 1 ? '-' + visti[base] : '');
+      e.id = idValido(x[15]) || base + (visti[base] > 1 ? '-' + visti[base] : '');
       // lo storico di un evento ancora presente resta, con in più il ripristino
       const prima = A.eventi.find((y) => y.id === e.id);
       e.storico = ((prima && prima.storico) || []).concat({ quando: new Date().toISOString(), testo: 'Ripristinato dal backup' + (giornoBackup ? ' del ' + giornoBackup : '') });
       eventi.push(e);
     });
-    return { regole: r, operatori, eventi, disponibilita: [], assenze: 0, avvisi: [], esistenti, backup: giornoBackup || 'file' };
+    return { regole: r, operatori, eventi, disponibilita: [], assenze: 0, avvisi: [], esistenti, backup: giornoBackup || 'file',
+      operativo: Object.keys(operativo).length ? Object.assign({}, A.operativo, operativo) : null };
   }
 
   let pacchetto = null;
@@ -412,7 +423,8 @@
           const o = A.operatori.find((x) => x.id === id), m = pacchetto.esistenti[id];
           return DO.esc(o.nome) + ' (' + [m.ruolo && 'ruolo ' + R.nomeRuolo(m.ruolo), m.contratto && 'contratto ' + m.contratto].filter(Boolean).join(', ') + ')';
         }).join(', ') + '</li>' : '')
-        + (pacchetto.backup ? '<li>Tariffe, sport, competizioni e mansioni come nel backup (i deployment on-site non si reimportano)</li></ul>'
+        + (pacchetto.backup ? '<li>Tariffe, sport, competizioni e mansioni come nel backup (i deployment on-site non si reimportano)</li>'
+          + (pacchetto.operativo ? '<li>Telefono di reperibilità e giorni di blocco come nel backup</li>' : '') + '</ul>'
           : '<li><b>' + pacchetto.assenze + '</b> giorni di assenza da segnare come "Non disponibile"</li>'
           + '<li>Tariffe, sport e competizioni (Europa League e Conference League con compenso dimezzato)</li></ul>')
         + (pacchetto.avvisi.length ? '<p class="nota"><b>Da controllare:</b> ' + pacchetto.avvisi.map(DO.esc).join(' ') + '</p>' : '')
@@ -437,6 +449,7 @@
         if (o) await DO.dati.salvaOperatore(Object.assign({}, o, pacchetto.esistenti[id]));
       }
       await DO.dati.importa(pacchetto);
+      if (pacchetto.operativo) await DO.dati.salvaOperativo(pacchetto.operativo);
       DO.avviso('Importazione completata: ' + pacchetto.eventi.length + ' eventi.', 'ok', 6000);
       pacchetto = null;
       $('imp-anteprima').hidden = true;

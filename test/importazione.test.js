@@ -15,7 +15,8 @@ require('../app/regole.js');
 const DO = window.DO;
 let importato = null;
 DO.admin = { registra() {}, regole: DO.regole.complete(null), operatori: [{ id: 'luca', nome: 'Luca Bianchi', ruolo: 'OP', attivo: true }], eventi: [], disp: {}, vista: '' };
-DO.dati = { importa: async (p) => { importato = p; }, salvaOperatore: async () => {} };
+let operativoSalvato = null;
+DO.dati = { importa: async (p) => { importato = p; }, salvaOperatore: async () => {}, salvaOperativo: async (o) => { operativoSalvato = o; } };
 DO.avviso = () => {};
 require('../app/impostazioni.js');
 
@@ -180,5 +181,26 @@ test('il file della stagione non entra in modalità backup', async () => {
   const p = await importa([['Serie A', '9', 'Calcio', giorno('2026-10-24'), 'Roma-Lazio', '20:45', '', '', '', '', '']]);
   assert.equal(p.eventi[0].id, 'xls-2026-10-24-roma-lazio-2045-serie-a');
   assert.ok(!elemento('imp-anteprima').innerHTML.includes('Backup del'));
+});
+
+test('ripristino: operatori riconosciuti per ID, reperibilità e giorni di blocco', async () => {
+  const operatoriPrima = DO.admin.operatori;
+  DO.admin.operatori = [{ id: 'op7', nome: 'Mario Nuovo', ruolo: 'OP', contratto: 'P.IVA', attivo: true }];
+  operativoSalvato = null;
+  const intestazioni = INTESTAZIONI.concat(['ID operatore']);
+  const riga = (titolo, nome, idOp, id) => ['Serie A', '9', 'Calcio', giorno('2026-10-18'), titolo, '20:45', '16:45', nome, '22:45', '', '', 'Da inviare', '', '', 'Partita', id, '', '', '', '', idOp];
+  const { p, anteprima } = await importaFogli({
+    Convocazioni: [[TITOLO], intestazioni, riga('Roma-Lazio', 'Mario Vecchio', 'op7', 'ev1'), riga('Inter-Monza', 'Ex Operatore', 'op9', 'ev2')],
+    Operatori: [['Nome', 'Mansione', 'Ruolo', 'Contratto', 'Email', 'Telefono', 'On-site', 'Attivo', 'ID'],
+      ['Mario Vecchio', '', 'Remote OP', 'P.IVA', '', '', '', 'SI', 'op7'], ['Ex Operatore', '', 'Remote OP', 'Coop', '', '', '', 'SI', 'op9']],
+    Impostazioni: [['Voce', 'Valore'], ['Telefono di reperibilità', '+39 333 111'], ['Giorni di blocco', 2]],
+  });
+  // rinominato dopo il backup: riconosciuto per ID, nessun doppione; uno che non c'è più torna con il suo ID
+  assert.deepEqual(p.eventi.map((e) => [e.id, e.operatoreId]), [['ev1', 'op7'], ['ev2', 'op9']]);
+  assert.deepEqual(p.operatori.map((o) => [o.id, o.nome]), [['op9', 'Ex Operatore']]);
+  assert.deepEqual(p.operativo, { telefono: '+39 333 111', giorniBlocco: 2 });
+  assert.ok(anteprima.includes('Telefono di reperibilità e giorni di blocco come nel backup'));
+  assert.deepEqual(operativoSalvato, { telefono: '+39 333 111', giorniBlocco: 2 });
+  DO.admin.operatori = operatoriPrima;
 });
 
