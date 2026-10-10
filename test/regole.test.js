@@ -334,6 +334,14 @@ test('riga dell\'ultimo backup', () => {
     'Ultimo backup non riuscito: Nessun indirizzo dei supervisori.');
 });
 
+test('riga dell\'ultimo backup con la copia su Drive', () => {
+  const s = (drive) => R.statoBackup({ backupAttivo: true, backupProgrammato: true,
+    ultimoBackup: Object.assign({ quando: '2026-10-16T16:04:00.000Z', eventi: 152, deployment: 3, errore: '' }, drive === undefined ? {} : { drive }) });
+  assert.equal(s('salvato'), 'Ultimo backup: venerdì 16 ottobre alle 18:04 · 152 eventi, 3 deployment · copia su Drive');
+  assert.equal(s('errore: Drive 403: Insufficient Permission'), 'Ultimo backup: venerdì 16 ottobre alle 18:04 · 152 eventi, 3 deployment · copia su Drive non riuscita: Drive 403: Insufficient Permission');
+  assert.equal(s(undefined), 'Ultimo backup: venerdì 16 ottobre alle 18:04 · 152 eventi, 3 deployment');
+});
+
 test('compenso con un nome di Object.prototype vale Diurno', () => {
   const r = R.complete({ competizioni: [{ nome: 'Strana', compenso: 'toString' }, { nome: 'Remote TL', mansione: true, compenso: 'constructor' }] });
   assert.equal(r.competizioni.find((c) => c.nome === 'Strana').compenso, 'diurno');

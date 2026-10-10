@@ -926,13 +926,66 @@ function giroBackup(adesso, opzioni) {
         + (dashboard ? tasto(dashboard, 'Apri la dashboard') : '') + '</div>',
       attachments: [file],
     });
-    registra({ eventi: c.eventi, annullati: c.annullati, deployment: c.deployment, destinatari: destinatari.length, indirizzi: destinatari.join(','), errore: '' });
+    // copia su Drive: se non riesce il backup resta valido (l'email è partita), la dashboard mostra il motivo
+    let drive = 'salvato';
+    try { salvaSuDrive(file, nome); } catch (e) { drive = 'errore: ' + e.message; console.error('Copia su Drive non riuscita: ' + e.message); }
+    registra({ eventi: c.eventi, annullati: c.annullati, deployment: c.deployment, destinatari: destinatari.length, indirizzi: destinatari.join(','), errore: '', drive });
     return { inviato: true, eventi: c.eventi, deployment: c.deployment, destinatari: destinatari.length };
   } catch (e) {
     registra({ errore: e.message });
     console.error('Backup non riuscito: ' + e.message);
     throw e;
   }
+}
+
+// ---------------------------------------------------------------- backup: copia su Google Drive
+// API di Drive con il gettone del proprietario e l'autorizzazione drive.file: lo script vede solo la cartella e i file che crea lui
+const DRIVE = 'https://www.googleapis.com/drive/v3/files';
+const CARTELLA_BACKUP = 'Backup Disponibilità Ops';
+const BACKUP_SU_DRIVE = 52;
+
+function chiamaDrive(metodo, url, opzioni) {
+  const r = UrlFetchApp.fetch(url, Object.assign({ method: metodo, muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } }, opzioni || {}));
+  const dati = jsonSicuro(r.getContentText());
+  if (r.getResponseCode() >= 300) throw new Error('Drive ' + r.getResponseCode() + (dati.error && dati.error.message ? ': ' + dati.error.message : ''));
+  return dati;
+}
+const cercaDrive = (q) => chiamaDrive('get', DRIVE + '?q=' + encodeURIComponent(q) + '&fields=' + encodeURIComponent('files(id,name,createdTime)') + '&pageSize=1000').files || [];
+const nelCestino = (f) => chiamaDrive('patch', DRIVE + '/' + encodeURIComponent(f.id) + '?fields=id', { contentType: 'application/json', payload: JSON.stringify({ trashed: true }) });
+
+// La cartella dei backup: quella ricordata nelle proprietà, oppure una nuova (la prima volta o se è stata cancellata)
+function cartellaBackup() {
+  const p = PropertiesService.getScriptProperties();
+  const id = p.getProperty('BACKUP_CARTELLA');
+  if (id) {
+    try {
+      if (!chiamaDrive('get', DRIVE + '/' + encodeURIComponent(id) + '?fields=id,trashed').trashed) return id;
+    } catch (e) { /* cartella sparita: se ne crea una nuova */ }
+  }
+  const nuova = chiamaDrive('post', DRIVE + '?fields=id', { contentType: 'application/json', payload: JSON.stringify({ name: CARTELLA_BACKUP, mimeType: 'application/vnd.google-apps.folder' }) });
+  p.setProperty('BACKUP_CARTELLA', nuova.id);
+  return nuova.id;
+}
+
+function salvaSuDrive(file, nome) {
+  const cartella = cartellaBackup();
+  // backup ripetuto nello stesso giorno: il file di prima nel cestino
+  cercaDrive("'" + cartella + "' in parents and trashed = false and name = '" + nome + "'").forEach(nelCestino);
+  const confine = 'confine-backup-tgi-sport';
+  const testa = '--' + confine + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify({ name: nome, parents: [cartella] })
+    + '\r\n--' + confine + '\r\nContent-Type: ' + XLSX_MIME + '\r\n\r\n';
+  const corpo = Utilities.newBlob(testa).getBytes().concat(file.getBytes(), Utilities.newBlob('\r\n--' + confine + '--').getBytes());
+  const nuovo = chiamaDrive('post', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { contentType: 'multipart/related; boundary=' + confine, payload: corpo });
+  // si tengono i 52 più recenti; i più vecchi nel cestino di Drive
+  const tutti = cercaDrive("'" + cartella + "' in parents and trashed = false and name contains 'Backup_TGI_Sport_'");
+  tutti.sort((a, b) => String(b.createdTime).localeCompare(String(a.createdTime)) || String(b.name).localeCompare(String(a.name)));
+  tutti.slice(BACKUP_SU_DRIVE).forEach(nelCestino);
+  return { id: nuovo.id };
+}
+
+// Da eseguire una volta dall'editor dopo l'aggiornamento: chiede il permesso per Drive e prepara la cartella dei backup
+function autorizzaDrive() {
+  console.log('Cartella «' + CARTELLA_BACKUP + '» pronta su Drive: https://drive.google.com/drive/folders/' + cartellaBackup());
 }
 
 // Attivatore del venerdì (creato da attivaPromemoria)

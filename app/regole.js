@@ -280,7 +280,9 @@
     if (u.errore) return 'Ultimo backup non riuscito: ' + u.errore;
     const d = new Date(u.quando), fuso = { timeZone: 'Europe/Rome' };
     return 'Ultimo backup: ' + d.toLocaleDateString('it-IT', Object.assign({ weekday: 'long', day: 'numeric', month: 'long' }, fuso))
-      + ' alle ' + d.toLocaleTimeString('it-IT', Object.assign({ hour: '2-digit', minute: '2-digit' }, fuso)) + ' · ' + u.eventi + ' eventi, ' + u.deployment + ' deployment';
+      + ' alle ' + d.toLocaleTimeString('it-IT', Object.assign({ hour: '2-digit', minute: '2-digit' }, fuso)) + ' · ' + u.eventi + ' eventi, ' + u.deployment + ' deployment'
+      // copia su Drive (gli script precedenti non la registrano)
+      + (u.drive === 'salvato' ? ' · copia su Drive' : u.drive ? ' · copia su Drive non riuscita: ' + String(u.drive).replace(/^errore: /, '') : '');
   }
 
   DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,

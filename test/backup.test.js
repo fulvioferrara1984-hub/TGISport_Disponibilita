@@ -278,3 +278,99 @@ test('invia un backup adesso ripetuto subito: non rispedisce', () => {
   assert.equal(v.email.length, 1);
 });
 
+
+// ---------------------------------------------------------------- copia su Google Drive
+// Drive simulato: cartelle e file in memoria, come le API v3 (q con parents, name =, name contains, trashed)
+function driveFinto({ cartelle = {}, file = [], errore = null } = {}) {
+  const stato = { cartelle: Object.assign({}, cartelle), file: file.map((f) => Object.assign({ trashed: false }, f)), createCartelle: 0, n: 0 };
+  stato.risposte = (url, o = {}) => {
+    if (errore) return { codice: errore.codice, dati: { error: { message: errore.messaggio } } };
+    const metodo = String(o.method || 'get').toLowerCase();
+    if (url.startsWith('https://www.googleapis.com/upload/drive/v3/files')) {
+      const testo = Buffer.from(o.payload).toString('latin1');
+      const meta = JSON.parse(/\r\n\r\n(\{.*?\})\r\n--/.exec(testo)[1]);
+      const nuovo = { id: 'f' + (++stato.n), name: meta.name, parents: meta.parents, createdTime: '2026-10-16T16:04:' + String(stato.n).padStart(2, '0') + 'Z', trashed: false,
+        contenuto: testo, tipo: o.contentType };
+      stato.file.push(nuovo);
+      return { codice: 200, dati: { id: nuovo.id } };
+    }
+    const m = /^https:\/\/www\.googleapis\.com\/drive\/v3\/files(?:\/([^?]+))?(?:\?(.*))?$/.exec(url);
+    if (!m) return null;
+    const id = m[1] && decodeURIComponent(m[1]), query = new URLSearchParams(m[2] || '');
+    if (metodo === 'post') {
+      const meta = JSON.parse(o.payload);
+      stato.createCartelle++;
+      const nuova = 'cart' + stato.createCartelle;
+      stato.cartelle[nuova] = { name: meta.name, trashed: false };
+      return { codice: 200, dati: { id: nuova } };
+    }
+    if (metodo === 'patch') {
+      const f = stato.file.find((x) => x.id === id);
+      if (!f) return { codice: 404, dati: { error: { message: 'File not found' } } };
+      Object.assign(f, JSON.parse(o.payload));
+      return { codice: 200, dati: { id } };
+    }
+    if (id) return stato.cartelle[id] ? { codice: 200, dati: { id, trashed: stato.cartelle[id].trashed } } : { codice: 404, dati: { error: { message: 'File not found' } } };
+    const q = query.get('q');
+    const genitore = /'([^']+)' in parents/.exec(q)[1], uguale = /name = '([^']+)'/.exec(q), contiene = /name contains '([^']+)'/.exec(q);
+    const files = stato.file.filter((f) => f.parents.includes(genitore) && !f.trashed && (!uguale || f.name === uguale[1]) && (!contiene || f.name.includes(contiene[1])));
+    return { codice: 200, dati: { files: files.map((f) => ({ id: f.id, name: f.name, createdTime: f.createdTime })) } };
+  };
+  return stato;
+}
+const conDrive = (drive) => { const fs = firestoreBackup(); return (url, o) => drive.risposte(url, o) || fs(url, o); };
+
+test('copia su Drive: cartella creata, file salvato, esito nell\'ultimo backup', () => {
+  const drive = driveFinto();
+  const t = carica({ proprieta: PROPRIETA, risposte: conDrive(drive) });
+  assert.deepEqual(j(t.gs.giroBackup(ADESSO)), { inviato: true, eventi: 5, deployment: 1, destinatari: 2 });
+  assert.equal(drive.cartelle.cart1.name, 'Backup Disponibilità Ops');
+  assert.equal(t.prop.get('BACKUP_CARTELLA'), 'cart1');
+  assert.deepEqual(drive.file.map((f) => [f.name, f.parents]), [['Backup_TGI_Sport_2026-10-16.xlsx', ['cart1']]]);
+  assert.ok(drive.file[0].tipo.startsWith('multipart/related; boundary='));
+  assert.ok(drive.file[0].contenuto.includes('PK'), 'il file Excel è nel corpo');
+  // sempre con il gettone del proprietario
+  assert.ok(t.chiamate.filter((c) => c.url.includes('googleapis.com/') && c.url.includes('drive')).every((c) => c.opzioni.headers.Authorization === 'Bearer gettone-prova'));
+  assert.equal(ultimoBackup(t).drive, 'salvato');
+});
+
+test('copia su Drive: cartella ritrovata, stesso giorno e oltre 52 file nel cestino', () => {
+  const vecchi = Array.from({ length: 52 }, (_, i) => ({ id: 'v' + i, name: 'Backup_TGI_Sport_2025-' + String(i).padStart(2, '0') + '.xlsx', parents: ['cart9'],
+    createdTime: '2025-01-01T00:00:' + String(i).padStart(2, '0') + 'Z' }));
+  const drive = driveFinto({ cartelle: { cart9: { name: 'Backup Disponibilità Ops', trashed: false } },
+    file: vecchi.concat([{ id: 'oggi', name: 'Backup_TGI_Sport_2026-10-16.xlsx', parents: ['cart9'], createdTime: '2026-10-16T08:41:00Z' }, { id: 'altro', name: 'Note.txt', parents: ['cart9'], createdTime: '2020-01-01T00:00:00Z' }]) });
+  const t = carica({ proprieta: Object.assign({ BACKUP_CARTELLA: 'cart9' }, PROPRIETA), risposte: conDrive(drive) });
+  t.gs.giroBackup(ADESSO);
+  assert.equal(drive.createCartelle, 0);
+  assert.deepEqual(drive.file.filter((f) => f.trashed).map((f) => f.id).sort(), ['oggi', 'v0']);
+  assert.equal(drive.file.filter((f) => !f.trashed && f.name.startsWith('Backup_TGI_Sport_')).length, 52);
+  assert.equal(drive.file.find((f) => f.id === 'altro').trashed, false);
+});
+
+test('copia su Drive: cartella cancellata, se ne crea una nuova', () => {
+  const drive = driveFinto({ cartelle: { vecchia: { name: 'Backup Disponibilità Ops', trashed: true } } });
+  const t = carica({ proprieta: Object.assign({ BACKUP_CARTELLA: 'vecchia' }, PROPRIETA), risposte: conDrive(drive) });
+  t.gs.giroBackup(ADESSO);
+  assert.equal(t.prop.get('BACKUP_CARTELLA'), 'cart1');
+  assert.deepEqual(drive.file.map((f) => f.parents[0]), ['cart1']);
+});
+
+test('copia su Drive non riuscita: il backup per email resta riuscito, con il motivo', () => {
+  const drive = driveFinto({ errore: { codice: 403, messaggio: 'Insufficient Permission' } });
+  const t = carica({ proprieta: PROPRIETA, risposte: (url, o) => (url.includes('googleapis.com/drive') || url.includes('googleapis.com/upload') ? drive.risposte(url, o) : firestoreBackup()(url, o)) });
+  assert.equal(j(t.gs.giroBackup(ADESSO)).inviato, true);
+  assert.equal(t.email.length, 1);
+  const u = ultimoBackup(t);
+  assert.deepEqual([u.errore, u.drive], ['', 'errore: Drive 403: Insufficient Permission']);
+});
+
+test('autorizzaDrive: crea la cartella e lo scrive nel registro; autorizzazione ristretta nel manifesto', () => {
+  const drive = driveFinto();
+  const t = carica({ risposte: conDrive(drive) });
+  t.gs.autorizzaDrive();
+  assert.equal(t.prop.get('BACKUP_CARTELLA'), 'cart1');
+  assert.ok(t.registro.some((r) => r.includes('Backup Disponibilità Ops') && r.includes('https://drive.google.com/drive/folders/cart1')), t.registro.join('\n'));
+  const scope = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../backend/appsscript.json'), 'utf8')).oauthScopes;
+  assert.ok(scope.includes('https://www.googleapis.com/auth/drive.file'));
+  assert.ok(!scope.includes('https://www.googleapis.com/auth/drive'));
+});
