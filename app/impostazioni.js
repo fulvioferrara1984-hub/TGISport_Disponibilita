@@ -414,7 +414,7 @@
       return k ? idPerNome[k] || (A.operatori.find((o) => chiave(o.nome) === k) || {}).id || '' : '';
     };
     const STATI_DISP = { disponibile: 'D', parziale: 'P', 'non disponibile': 'A' };
-    const perOp = {};
+    const perOp = {}, ripristinoIl = new Date().toISOString();
     let dispSaltate = 0;
     const conDisponibilita = !!wb.Sheets['Disponibilità'];
     (conDisponibilita ? foglio('Disponibilità') : []).slice(1).forEach((x) => {
@@ -422,7 +422,8 @@
       const data = dataExcel(x[1]), st = STATI_DISP[testo(x[2]).toLowerCase()] || '', nota = testo(x[3]).slice(0, 200);
       const id = trovaOperatore(testo(x[0]), idValido(x[4]));
       if (!id || !data || (!st && !nota)) { dispSaltate++; return; }
-      (perOp[id] = perOp[id] || {})[data] = { s: st, n: nota };
+      // «t»: la data «Aggiornato» della griglia diventa quella del ripristino
+      (perOp[id] = perOp[id] || {})[data] = { s: st, n: nota, t: ripristinoIl };
     });
     const disponibilitaBackup = Object.keys(perOp).map((id) => ({ id, giorni: perOp[id] }));
 
@@ -433,16 +434,15 @@
     const listaId = (v) => [...new Set(testo(v).split(',').map(idValido).filter(Boolean).map((id) => mappaId[id] || id))];
     const posto = (v) => (Number.isInteger(v) && v >= 0 && v <= 20 ? v : 0);
     const gruppi = {};
-    let onsiteSaltati = 0;
+    let onsiteSaltati = 0, righeSenzaId = 0;
     if (onsiteConId) {
-      let senzaId = false;
       ons.slice(1).forEach((x) => {
         if (!x.some((v) => testo(v))) return;
         const id = idValido(x[14]);
-        if (!id) { senzaId = true; return; }
+        // senza ID non si sa a quale deployment appartiene la riga: si conta a parte
+        if (!id) { righeSenzaId++; return; }
         (gruppi[id] = gruppi[id] || []).push(x);
       });
-      if (senzaId) onsiteSaltati++;
     }
     const onsite = [];
     Object.keys(gruppi).forEach((id) => {
@@ -460,7 +460,7 @@
 
     return { regole: r, operatori, eventi, disponibilita: [], assenze: 0, avvisi: [], esistenti, backup: giornoBackup || 'file',
       operativo: Object.keys(operativo).length ? Object.assign({}, A.operativo, operativo) : null,
-      disponibilitaBackup, onsite, ripristino: { conDisponibilita, dispSaltate, onsiteConId, onsiteVecchi: !onsiteConId && ons.length > 1, onsiteSaltati } };
+      disponibilitaBackup, onsite, ripristino: { conDisponibilita, dispSaltate, onsiteConId, onsiteVecchi: !onsiteConId && ons.length > 1, onsiteSaltati, righeSenzaId } };
   }
 
   // righe dell'anteprima per disponibilità e on-site di un backup
@@ -476,7 +476,8 @@
     if (x.onsiteConId) {
       const presenti = p.onsite.filter((d) => (A.onsite || []).some((y) => y.id === d.id)).length;
       out.push('<li>On-site: ' + quanti(presenti, ' deployment torna', ' deployment tornano') + ' come nel backup, ' + (p.onsite.length - presenti) + ' da ricreare'
-        + (x.onsiteSaltati ? ' · ' + quanti(x.onsiteSaltati, ' saltato', ' saltati') + ' (luogo, giorni o posti non validi)' : '') + '</li>');
+        + (x.onsiteSaltati ? ' · ' + quanti(x.onsiteSaltati, ' saltato', ' saltati') + ' (luogo, giorni o posti non validi)' : '')
+        + (x.righeSenzaId ? ' · ' + quanti(x.righeSenzaId, ' riga', ' righe') + ' senza ID deployment' : '') + '</li>');
     } else if (x.onsiteVecchi) {
       out.push('<li>I deployment on-site di questo backup non si reimportano (versione precedente)</li>');
     }

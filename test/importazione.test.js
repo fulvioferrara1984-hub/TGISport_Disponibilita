@@ -241,6 +241,8 @@ test('ripristino: due operatori con lo stesso nome tengono ciascuno i suoi dati'
 const INTESTAZIONI_ONSITE = ['Luogo', 'Sport', 'Titolo', 'Dal', 'Al', 'Giorno', 'Attività', 'Partita', 'Posti TL', 'Posti OP', 'On-site TL', 'On-site OP', 'Stato', 'Compenso',
   'ID deployment', 'Note', 'Destinatari', 'Accettati TL', 'Accettati OP', 'Hanno rifiutato', 'Esclusi', 'Creato'];
 const convocazioniMinime = () => [[TITOLO], INTESTAZIONI.concat(['ID operatore'])];
+// i giorni ripristinati hanno «t» = ora del ripristino (la data «Aggiornato …» della griglia); nei confronti si toglie
+const senzaT = (lista) => lista.map((d) => ({ id: d.id, giorni: Object.fromEntries(Object.entries(d.giorni).map(([g, { t, ...v }]) => [g, v])) }));
 
 test('ripristino delle disponibilità: per ID, per nome, operatore ricreato, righe saltate', async () => {
   const operatoriPrima = DO.admin.operatori;
@@ -259,7 +261,10 @@ test('ripristino delle disponibilità: per ID, per nome, operatore ricreato, rig
         ['Luca Bianchi', giorno('2026-10-23'), 'Boh', '', 'luca'],
         [null, null, null, null, null]],
     });
-    assert.deepEqual(p.disponibilitaBackup.slice().sort((a, b) => a.id.localeCompare(b.id)), [
+    // la data «Aggiornato» diventa quella del ripristino (non resta quella di una modifica successiva al backup)
+    const tutti = p.disponibilitaBackup.flatMap((d) => Object.values(d.giorni));
+    assert.ok(tutti.every((v) => typeof v.t === 'string' && Date.now() - Date.parse(v.t) < 60000), JSON.stringify(tutti));
+    assert.deepEqual(senzaT(p.disponibilitaBackup).sort((a, b) => a.id.localeCompare(b.id)), [
       { id: 'anna', giorni: { '2026-10-19': { s: 'P', n: 'dalle 18' } } },
       { id: 'luca', giorni: { '2026-10-18': { s: 'D', n: '' }, '2026-10-22': { s: '', n: 'forse' } } },
       { id: 'op5', giorni: { '2026-10-20': { s: 'A', n: '' } } },
@@ -279,7 +284,7 @@ test('ripristino degli on-site: presenti e mancanti, liste di ID controllate, co
       'On-site': [INTESTAZIONI_ONSITE,
         riga('d1', 'Roma', '2026-11-13', 'MD', 'Italia-Francia'), riga('d1', 'Roma', '2026-11-12', 'Travel Day', ''),
         riga('d2', 'Milano', '2026-12-01', 'MD', '', { 12: 'Annullata', 13: 'boh', 8: 0, 9: 1 }),
-        riga('d3', '', '2026-12-05', 'MD', '')],
+        riga('d3', '', '2026-12-05', 'MD', ''), riga('', 'Napoli', '2026-12-06', 'MD', ''), riga('', 'Napoli', '2026-12-07', 'MD', '')],
     });
     assert.deepEqual(p.onsite.map((x) => x.id), ['d1', 'd2']);
     const d1 = p.onsite[0];
@@ -288,7 +293,7 @@ test('ripristino degli on-site: presenti e mancanti, liste di ID controllate, co
       posti: { TL: 1, OP: 2 }, destinatari: ['a', 'c'], accettatiTL: ['a'], accettatiOP: ['c'], rifiuti: ['x'], esclusi: [], stato: 'chiusa',
       creato: '2026-10-01T10:00:00.000Z', compenso: 300 });
     assert.deepEqual([p.onsite[1].stato, p.onsite[1].compenso, p.onsite[1].posti], ['annullata', 0, { TL: 0, OP: 1 }]);
-    assert.ok(anteprima.includes('On-site: 1 deployment torna come nel backup, 1 da ricreare · 1 saltato'), anteprima);
+    assert.ok(anteprima.includes('On-site: 1 deployment torna come nel backup, 1 da ricreare · 1 saltato (luogo, giorni o posti non validi) · 2 righe senza ID deployment'), anteprima);
   } finally { delete DO.admin.onsite; }
 });
 
@@ -313,7 +318,7 @@ test('andata e ritorno: disponibilità e on-site dal backup dello script', async
   const file = gs.fileBackup([{ nome: 'Convocazioni', righe: r.convocazioni }, { nome: 'On-site', righe: r.onsite }, { nome: 'Operatori', righe: r.operatori },
     { nome: 'Impostazioni', righe: r.impostazioni }, { nome: 'Disponibilità', righe: r.disponibilita }], 'b.xlsx');
   const { p } = await importaFogli(fogliDaXlsx(file.getBytes()));
-  assert.deepEqual(p.disponibilitaBackup, disponibilita);
+  assert.deepEqual(senzaT(p.disponibilitaBackup), disponibilita);
   assert.deepEqual(p.onsite, [Object.assign({}, onsite[0], { compenso: 250 })]);
 });
 
@@ -330,7 +335,7 @@ test('ripristino: operatore ricreato con un ID nuovo, riconosciuto per nome anch
         'd1', '', 'vecchioid, altro', 'vecchioid', '', '', '', '2026-10-01T10:00:00.000Z']],
     });
     assert.deepEqual(p.eventi.map((e) => e.operatoreId), ['nuovoid']);
-    assert.deepEqual(p.disponibilitaBackup, [{ id: 'nuovoid', giorni: { '2026-10-18': { s: 'D', n: '' } } }]);
+    assert.deepEqual(senzaT(p.disponibilitaBackup), [{ id: 'nuovoid', giorni: { '2026-10-18': { s: 'D', n: '' } } }]);
     assert.deepEqual([p.onsite[0].destinatari, p.onsite[0].accettatiTL], [['nuovoid', 'altro'], ['nuovoid']]);
   } finally { DO.admin.operatori = operatoriPrima; }
 });

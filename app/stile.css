@@ -672,11 +672,10 @@ body:not(.sola-lettura) .solo-lettura { display: none !important; }
   .griglia th.colonna-op, .griglia td.colonna-op { width: 104px; min-width: 0; }
   .griglia thead th.colonna-op { padding: 8px 10px; font-size: var(--t-12); }
   .op-cella { padding: 7px 8px 7px 10px; }
-  .op-cella b { font-size: var(--t-12); }
   .op-cella b span { overflow: hidden; text-overflow: ellipsis; }
   .op-cella small { font-size: var(--t-12); }
   .giorno-testa { padding: 7px 0 6px; gap: 2px; }
-  .giorno-testa b { font-size: var(--t-12); line-height: 1.2; display: flex; flex-direction: column; align-items: center; }
+  .giorno-testa b { line-height: 1.2; display: flex; flex-direction: column; align-items: center; }
   .giorno-testa b span:first-child { font-weight: 500; color: var(--inchiostro-3); font-size: var(--t-12); }
   .giorno-testa .conti { font-size: var(--t-12); }
   .giorno-testa .conti .st-P, .giorno-testa .conti .st-A { display: none; }
@@ -736,7 +735,7 @@ body:not(.sola-lettura) .solo-lettura { display: none !important; }
   .marchio-logo { height: 30px; }
   .marchio-nome { padding-left: 10px; font-size: var(--t-14); line-height: 1.2; }
   .testata .utente { display: none; }
-  .contenuto { padding: 16px 16px 120px; }
+  .contenuto { padding: 16px 16px 150px; }
   .giorno { grid-template-columns: 1fr; padding: 14px 16px; }
   /* data in riga; le etichette (oggi, bloccato, convocato…) vanno a capo intere invece di schiacciarsi */
   .giorno-data { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
@@ -747,8 +746,10 @@ body:not(.sola-lettura) .solo-lettura { display: none !important; }
   .stati button { height: 46px; font-size: var(--t-14); line-height: 1.15; white-space: normal; text-align: center; padding: 0 4px; }
   .stati button .pallino { display: none; }
   .stati button span:last-child { white-space: normal; overflow: visible; }
-  .barra-invio .stato-invio { font-size: var(--t-12); }
-  .barra-invio button.primario { padding: 0 14px; }
+  /* stato sopra, tasto a tutta larghezza sotto (a 14 px accanto al tasto andrebbe su tre righe) */
+  .barra-invio-dentro { flex-wrap: wrap; gap: 8px; }
+  .barra-invio .stato-invio { flex: 1 1 100%; }
+  .barra-invio button.primario { flex: 1 1 100%; padding: 0 14px; }
   .barra-invio { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
   .barra-invio button.primario { min-width: 0; }
   .navigatore .settimana { min-width: 0; flex: 1; }
@@ -757,7 +758,7 @@ body:not(.sola-lettura) .solo-lettura { display: none !important; }
   .scheda-testa .navigatore .settimana { order: -1; flex: 1 0 100%; }
   .scheda-testa .navigatore { width: 100%; }
   .feed-voce { grid-template-columns: 34px 1fr; }
-  .iniziali { width: 34px; height: 34px; font-size: var(--t-12); }
+  .iniziali { width: 34px; height: 34px; }
   .feed-azioni { grid-column: 2; flex-direction: row; align-items: center; }
   .strumenti select, .strumenti input[type="search"] { flex: 1 1 100%; min-width: 0; }
 }
@@ -818,9 +819,12 @@ body.con-calendario { overflow: hidden; }
 .cal-dettagli .primario { margin-top: 6px; }
 @media (max-width: 640px) {
   .cal-barra { padding: 8px 10px; gap: 6px; }
-  .cal-barra h2 { min-width: 0; font-size: var(--t-16); }
+  /* il mese a 20 px su una riga sua; sotto frecce, Oggi e, a destra, Chiudi */
+  .cal-barra h2 { min-width: 0; order: -1; flex: 1 0 100%; margin: 0 2px 2px; text-align: left; }
+  .cal-barra #cal-chiudi { margin-left: auto; }
   .cal-legenda, #cal-schermo { display: none; }
-  .cal-griglia { --cella: 64px; }
+  /* celle alte abbastanza per le quattro voci a 12 px */
+  .cal-griglia { --cella: 96px; }
   .cal-giorno { padding: 2px; }
   .cal-voce { padding: 1px 3px 1px 5px; font-size: var(--t-12); }
   .cal-altri { font-size: var(--t-12); padding: 0 3px; }
