@@ -531,12 +531,21 @@ function attivaPromemoria() {
     + (prova.inSospeso ? ' · ' + prova.inSospeso + (prova.inSospeso === 1 ? ' evento' : ' eventi') + ' da sistemare' : '')
     : prova.inSospeso ? prova.inSospeso + (prova.inSospeso === 1 ? ' evento' : ' eventi') + ' da sistemare ma nessun destinatario (controlla gli indirizzi dei supervisori).'
       : 'niente in sospeso.'));
-  ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'inviaPromemoria').forEach((t) => ScriptApp.deleteTrigger(t));
-  [8, 11].forEach((ora) => ScriptApp.newTrigger('inviaPromemoria').timeBased().everyDays(1).atHour(ora).inTimezone('Europe/Rome').create());
-  // backup settimanale: il venerdì tra le 18 e le 19 (acceso la prima volta, poi resta la scelta fatta in Impostazioni)
+  // attivatori già presenti (due giri al giorno, un backup il venerdì): restano come sono. Ricrearli dentro la fascia
+  // delle 8 farebbe saltare il giro di oggi, perché Google riparte dal giorno dopo
+  const attivatori = (nome) => ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === nome);
+  const giaAttivi = attivatori('inviaPromemoria').length === 2 && attivatori('inviaBackup').length === 1;
+  if (giaAttivi) {
+    console.log('Attivatori già attivi: lasciati come sono, nessun giro saltato.');
+  } else {
+    attivatori('inviaPromemoria').forEach((t) => ScriptApp.deleteTrigger(t));
+    [8, 11].forEach((ora) => ScriptApp.newTrigger('inviaPromemoria').timeBased().everyDays(1).atHour(ora).inTimezone('Europe/Rome').create());
+    attivatori('inviaBackup').forEach((t) => ScriptApp.deleteTrigger(t));
+    // backup settimanale: il venerdì tra le 18 e le 19
+    ScriptApp.newTrigger('inviaBackup').timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(18).inTimezone('Europe/Rome').create();
+  }
+  // backup acceso la prima volta, poi resta la scelta fatta in Impostazioni
   if (p.getProperty('BACKUP_ATTIVO') === null) p.setProperty('BACKUP_ATTIVO', 'SI');
-  ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'inviaBackup').forEach((t) => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('inviaBackup').timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(18).inTimezone('Europe/Rome').create();
   const imp = leggiImpostazioni();
   console.log('Invio giornaliero attivo tra le 8 e le 9 (nuovo tentativo alle 11) · promemoria ' + (imp.promemoriaAttivi ? 'accesi' : 'spenti') + ', '
     + imp.promemoriaGiorni + ' giorni prima · email ancora disponibili oggi: ' + MailApp.getRemainingDailyQuota());

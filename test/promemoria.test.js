@@ -376,6 +376,18 @@ test('attivazione senza doppioni', () => {
   assert.ok(nuovo.registro.some((r) => r.includes('lettura riuscita')));
 });
 
+test('attivazione ripetuta: gli attivatori già presenti restano, nessun giro saltato', () => {
+  const t = carica({ risposte: firestoreFinto() });
+  t.gs.attivaPromemoria();
+  const primi = t.attivatori.slice(), creati = t.creati.length;
+  // rieseguita dentro la fascia delle 8: ricreare gli attivatori farebbe saltare il giro di oggi
+  t.gs.attivaPromemoria();
+  assert.equal(t.creati.length, creati);
+  assert.equal(t.tolti.length, 0);
+  assert.deepEqual(t.attivatori, primi);
+  assert.ok(t.registro.some((r) => r.includes('già attivi')), t.registro.join('\n'));
+});
+
 test('attivazione con lettura negata: nessun attivatore, messaggio chiaro', () => {
   const t = carica({ risposte: firestoreFinto({ codiceQuery: 403 }) });
   assert.throws(() => t.gs.attivaPromemoria(), /aggiungilo come Editor/);
