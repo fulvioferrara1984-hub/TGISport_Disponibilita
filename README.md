@@ -136,7 +136,7 @@ Ordine **sito → script**, nessuna regola di Firestore da cambiare e nessuna nu
 3. **Attivazione** (una volta): nell'editor scegli **attivaPromemoria** e premi **Esegui**. Nel registro compare anche `Backup ogni venerdì tra le 18 e le 19 · backup acceso`.
 4. **Prova**: in dashboard premi **Invia un backup adesso** e controlla che l'email arrivi con il file Excel allegato.
 
-Dalla versione 27 del sito lo script (nuova versione da pubblicare come sopra, senza rieseguire *attivaPromemoria*) aggiunge al backup telefono di reperibilità, giorni di blocco e gli ID degli operatori, non rispedisce un backup chiesto due volte entro 2 minuti, fa un solo giro di promemoria alla volta e manda al massimo un'email on-site al minuto per operatore.
+Dalla versione 27 del sito lo script (nuova versione da pubblicare come sopra, senza rieseguire *attivaPromemoria*) aggiunge al backup telefono di reperibilità, giorni di blocco e gli ID degli operatori, non rispedisce un backup chiesto di nuovo entro 2 minuti agli stessi indirizzi (la dashboard dice *Backup già inviato alle …*), fa un solo giro di promemoria alla volta e manda al massimo un'email on-site al minuto per operatore.
 
 ### Accessi in sola visualizzazione
 
