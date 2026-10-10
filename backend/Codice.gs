@@ -723,6 +723,7 @@ function giornoExcel(iso) {
 const STATI_BACKUP = { 'da-assegnare': 'Da assegnare', assegnato: 'Da inviare', convocato: 'In attesa di risposta', confermato: 'Confermato', rifiutato: 'Rifiutato', annullato: 'Annullato' };
 const RUOLI_BACKUP = { OP: 'Remote OP', SUP: 'Remote Support', TL: 'Remote TL' };
 const COMPENSI_BACKUP = { diurno: 'Diurno', notturno: 'Notturno', maggiorato: 'Maggiorato', dimezzato: 'Dimezzato' };
+const STATI_DISP_BACKUP = { D: 'Disponibile', P: 'Parziale', A: 'Non disponibile' };
 const TARIFFE_INIZIALI = { 'P.IVA': { diurno: 140, notturno: 210, maggiorato: 210 }, Coop: { diurno: 175, notturno: 262.5, maggiorato: 262.5 } };
 
 // Righe dei quattro fogli. Le date sono { data: 'aaaa-mm-gg' } (diventano date di Excel), il resto testo o numeri.
@@ -750,12 +751,16 @@ function righeBackup(d, adesso) {
     }));
 
   const statiOnsite = { aperta: 'Aperta', chiusa: 'Chiusa', annullata: 'Annullata' };
-  const onsite = [['Luogo', 'Sport', 'Titolo', 'Dal', 'Al', 'Giorno', 'Attività', 'Partita', 'Posti TL', 'Posti OP', 'On-site TL', 'On-site OP', 'Stato', 'Compenso']];
+  // da O a V ciò che serve per ripristinarlo: ID del deployment e degli operatori
+  const onsite = [['Luogo', 'Sport', 'Titolo', 'Dal', 'Al', 'Giorno', 'Attività', 'Partita', 'Posti TL', 'Posti OP', 'On-site TL', 'On-site OP', 'Stato', 'Compenso',
+    'ID deployment', 'Note', 'Destinatari', 'Accettati TL', 'Accettati OP', 'Hanno rifiutato', 'Esclusi', 'Creato']];
+  const ids = (x) => lista(x).map(t).join(', ');
   lista(d.onsite).slice().sort((a, b) => t(a.da).localeCompare(t(b.da))).forEach((x) => {
     const posti = x.posti || {}, compensi = d.compensi || {};
     lista(x.giorni).forEach((g) => onsite.push([t(x.luogo), t(x.sport), t(x.titolo), { data: t(x.da) }, { data: t(x.a) }, { data: t(g.data) }, t(g.attivita), t(g.partita),
       Number(posti.TL || 0) || 0, Number(posti.OP || 0) || 0, lista(x.accettatiTL).map(nome).join(', '), lista(x.accettatiOP).map(nome).join(', '),
-      statiOnsite[x.stato] || t(x.stato), Number(compensi[x.id] || 0)]));
+      statiOnsite[x.stato] || t(x.stato), Number(compensi[x.id] || 0),
+      t(x.id), t(x.note), ids(x.destinatari), ids(x.accettatiTL), ids(x.accettatiOP), ids(x.rifiuti), ids(x.esclusi), t(x.creato)]));
   });
 
   const ops = lista(d.operatori).slice().sort((a, b) => t(a.nome).localeCompare(t(b.nome), 'it'));
@@ -792,8 +797,24 @@ function righeBackup(d, adesso) {
     impostazioni.push([v[0], v[1], '', o ? t(o.nome) : '', o ? t(o.contratto) : '', '', t(sport[i] || ''), ''].concat(c));
   }
 
-  return { titolo, convocazioni, onsite, operatori, impostazioni,
-    conteggi: { eventi: eventi.length, annullati: eventi.filter((e) => e.stato === 'annullato').length, deployment: lista(d.onsite).length } };
+  // Disponibilità: una riga per operatore e giorno della stagione con uno stato o una nota; chi non è più in elenco in fondo
+  const giorniDisp = [];
+  lista(d.disponibilita).forEach((x) => {
+    const g = x.giorni && typeof x.giorni === 'object' ? x.giorni : {};
+    Object.keys(g).forEach((data) => {
+      const v = g[data] || {};
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || data < stagioneDa(oggi) || (!STATI_DISP_BACKUP[v.s] && !t(v.n))) return;
+      giorniDisp.push({ id: t(x.id), nome: nome(x.id), data, stato: STATI_DISP_BACKUP[v.s] || '', nota: t(v.n) });
+    });
+  });
+  const chiaveDisp = (x) => (x.nome ? '0' + x.nome : '1' + x.id);
+  giorniDisp.sort((a, b) => chiaveDisp(a).localeCompare(chiaveDisp(b), 'it') || a.data.localeCompare(b.data));
+  const disponibilita = [['Operatore', 'Data', 'Stato', 'Nota', 'ID operatore']]
+    .concat(giorniDisp.map((x) => [x.nome, { data: x.data }, x.stato, x.nota, x.id]));
+
+  return { titolo, convocazioni, onsite, operatori, impostazioni, disponibilita,
+    conteggi: { eventi: eventi.length, annullati: eventi.filter((e) => e.stato === 'annullato').length, deployment: lista(d.onsite).length,
+      operatoriDisponibilita: new Set(giorniDisp.map((x) => x.id)).size } };
 }
 
 // ---------------------------------------------------------------- backup: file .xlsx scritto a mano (parti XML in uno zip)
@@ -868,7 +889,8 @@ function leggiDatiBackup(oggi) {
   const regole = letturaAdmin(firestoreAdmin('get', '/impostazioni/regole'), [404]);
   const operativo = letturaAdmin(firestoreAdmin('get', '/impostazioni/operativo'), [404]);
   return { eventi: cerca('eventi', 'data'), onsite: cerca('onsite', 'a'), compensi, operatori: elencoAdmin('operatori'),
-    regole: regole.codice === 200 ? daFirestore(regole.dati) : {}, operativo: operativo.codice === 200 ? daFirestore(operativo.dati) : {} };
+    regole: regole.codice === 200 ? daFirestore(regole.dati) : {}, operativo: operativo.codice === 200 ? daFirestore(operativo.dati) : {},
+    disponibilita: elencoAdmin('disponibilita') };
 }
 
 // Il backup del venerdì (o subito, con forza). Ogni esito, anche un errore, resta in ULTIMO_BACKUP per la dashboard.
@@ -889,7 +911,7 @@ function giroBackup(adesso, opzioni) {
     const r = righeBackup(leggiDatiBackup(oggi), adesso);
     const nome = 'Backup_TGI_Sport_' + oggi + '.xlsx';
     const file = fileBackup([{ nome: 'Convocazioni', righe: r.convocazioni }, { nome: 'On-site', righe: r.onsite },
-      { nome: 'Operatori', righe: r.operatori }, { nome: 'Impostazioni', righe: r.impostazioni }], nome);
+      { nome: 'Operatori', righe: r.operatori }, { nome: 'Impostazioni', righe: r.impostazioni }, { nome: 'Disponibilità', righe: r.disponibilita }], nome);
     const c = r.conteggi, inizio = Number(stagioneDa(oggi).slice(0, 4));
     const dashboard = /^https:\/\//.test(imp.urlAdmin) ? imp.urlAdmin.replace(/#.*$/, '') : '';
     MailApp.sendEmail({
@@ -898,7 +920,8 @@ function giroBackup(adesso, opzioni) {
       subject: 'Backup eventi TGI Sport · ' + giornoLungo(oggi),
       htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5">'
         + '<p>In allegato il backup degli eventi della stagione <b>' + inizio + '/' + String(inizio + 1).slice(2) + '</b>: <b>' + c.eventi + ' eventi</b> ('
-        + c.annullati + (c.annullati === 1 ? ' annullato' : ' annullati') + ') e ' + c.deployment + ' deployment on-site.</p>'
+        + c.annullati + (c.annullati === 1 ? ' annullato' : ' annullati') + '), ' + c.deployment + ' deployment on-site e le disponibilità di '
+        + c.operatoriDisponibilita + (c.operatoriDisponibilita === 1 ? ' operatore' : ' operatori') + '.</p>'
         + '<p>Per ripristinare: dashboard → Impostazioni → Importa dal file Excel → scegli questo file.</p>'
         + (dashboard ? tasto(dashboard, 'Apri la dashboard') : '') + '</div>',
       attachments: [file],

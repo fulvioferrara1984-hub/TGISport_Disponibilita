@@ -32,8 +32,14 @@ const EVENTI = [
 ];
 const ONSITE = [{ id: 'd1', luogo: 'Roma', sport: 'Rugby', titolo: 'Sei Nazioni', da: '2026-11-12', a: '2026-11-13', stato: 'aperta', posti: { TL: 1, OP: 2 },
   giorni: [{ data: '2026-11-12', attivita: 'Travel Day', partita: '' }, { data: '2026-11-13', attivita: 'MD', partita: 'Italia-Francia' }],
-  accettatiTL: ['a'], accettatiOP: ['b', 'c'] }];
-const DATI = { eventi: EVENTI, onsite: ONSITE, compensi: { d1: 300 }, operatori: OPERATORI, regole: REGOLE, operativo: { telefono: '+39 333', giorniBlocco: 3 } };
+  accettatiTL: ['a'], accettatiOP: ['b', 'c'], note: 'Hotel centro', destinatari: ['a', 'b', 'c', 'x'], rifiuti: ['x'], esclusi: [], creato: '2026-10-01T10:00:00.000Z' }];
+// disponibilità: un giorno prima della stagione, una nota senza stato, un operatore che non c'è più
+const DISPONIBILITA = [
+  { id: 'a', giorni: { '2026-07-30': { s: 'D', n: '' }, '2026-10-18': { s: 'P', n: 'dalle 18' }, '2026-10-17': { s: 'D', n: '' } } },
+  { id: 'c', giorni: { '2026-10-19': { s: 'A', n: '' }, '2026-10-20': { s: '', n: 'forse' }, '2026-10-22': { s: '', n: '' } } },
+  { id: 'z', giorni: { '2026-10-21': { s: 'D', n: '' } } },
+];
+const DATI = { eventi: EVENTI, onsite: ONSITE, compensi: { d1: 300 }, operatori: OPERATORI, regole: REGOLE, operativo: { telefono: '+39 333', giorniBlocco: 3 }, disponibilita: DISPONIBILITA };
 const { gs } = carica();
 const righe = () => j(gs.righeBackup(DATI, ADESSO));
 
@@ -58,16 +64,33 @@ test('foglio Convocazioni', () => {
     ['Serie A', '9', 'Calcio', d('2026-10-18'), 'Roma-Lazio', '20:45', '16:45', 'Anna Neri', '22:45', 'SI', 'Regia & co', 'Confermato', 'SI', '', 'Partita', 'e1', '', '', 'SI', '', 'a'],
     ['Champions League', 'MD3', 'Calcio', d('2026-10-21'), 'Atalanta-PSG', '21:00', '20:00', '', '23:00', '', '', 'Annullato', '', '', 'Partita', 'e4', '', '', '', '', ''],
   ]);
-  assert.deepEqual(conteggi, { eventi: 5, annullati: 1, deployment: 1 });
+  assert.deepEqual(conteggi, { eventi: 5, annullati: 1, deployment: 1, operatoriDisponibilita: 3 });
 });
 
 test('foglio On-site', () => {
   const { onsite } = righe();
-  assert.deepEqual(onsite[0], ['Luogo', 'Sport', 'Titolo', 'Dal', 'Al', 'Giorno', 'Attività', 'Partita', 'Posti TL', 'Posti OP', 'On-site TL', 'On-site OP', 'Stato', 'Compenso']);
+  assert.deepEqual(onsite[0], ['Luogo', 'Sport', 'Titolo', 'Dal', 'Al', 'Giorno', 'Attività', 'Partita', 'Posti TL', 'Posti OP', 'On-site TL', 'On-site OP', 'Stato', 'Compenso',
+    'ID deployment', 'Note', 'Destinatari', 'Accettati TL', 'Accettati OP', 'Hanno rifiutato', 'Esclusi', 'Creato']);
+  // da O a V: ciò che serve per ripristinarlo (ID degli operatori, non i nomi)
+  const ids = ['d1', 'Hotel centro', 'a, b, c, x', 'a', 'b, c', 'x', '', '2026-10-01T10:00:00.000Z'];
   assert.deepEqual(onsite.slice(1), [
-    ['Roma', 'Rugby', 'Sei Nazioni', { data: '2026-11-12' }, { data: '2026-11-13' }, { data: '2026-11-12' }, 'Travel Day', '', 1, 2, 'Anna Neri', 'Bruno Blu, Carla Verdi', 'Aperta', 300],
-    ['Roma', 'Rugby', 'Sei Nazioni', { data: '2026-11-12' }, { data: '2026-11-13' }, { data: '2026-11-13' }, 'MD', 'Italia-Francia', 1, 2, 'Anna Neri', 'Bruno Blu, Carla Verdi', 'Aperta', 300],
+    ['Roma', 'Rugby', 'Sei Nazioni', { data: '2026-11-12' }, { data: '2026-11-13' }, { data: '2026-11-12' }, 'Travel Day', '', 1, 2, 'Anna Neri', 'Bruno Blu, Carla Verdi', 'Aperta', 300].concat(ids),
+    ['Roma', 'Rugby', 'Sei Nazioni', { data: '2026-11-12' }, { data: '2026-11-13' }, { data: '2026-11-13' }, 'MD', 'Italia-Francia', 1, 2, 'Anna Neri', 'Bruno Blu, Carla Verdi', 'Aperta', 300].concat(ids),
   ]);
+});
+
+test('foglio Disponibilità', () => {
+  const r = righe();
+  assert.deepEqual(r.disponibilita, [
+    ['Operatore', 'Data', 'Stato', 'Nota', 'ID operatore'],
+    ['Anna Neri', { data: '2026-10-17' }, 'Disponibile', '', 'a'],
+    ['Anna Neri', { data: '2026-10-18' }, 'Parziale', 'dalle 18', 'a'],
+    ['Carla Verdi', { data: '2026-10-19' }, 'Non disponibile', '', 'c'],
+    ['Carla Verdi', { data: '2026-10-20' }, '', 'forse', 'c'],
+    // operatore non più in elenco: in fondo, senza nome ma con il suo ID
+    ['', { data: '2026-10-21' }, 'Disponibile', '', 'z'],
+  ]);
+  assert.equal(r.conteggi.operatoriDisponibilita, 3);
 });
 
 test('foglio Operatori', () => {
@@ -97,7 +120,8 @@ test('foglio Impostazioni', () => {
 
 // ---------------------------------------------------------------- file, invio, attivatore, impostazioni
 
-const fogli = (r) => [{ nome: 'Convocazioni', righe: r.convocazioni }, { nome: 'On-site', righe: r.onsite }, { nome: 'Operatori', righe: r.operatori }, { nome: 'Impostazioni', righe: r.impostazioni }];
+const fogli = (r) => [{ nome: 'Convocazioni', righe: r.convocazioni }, { nome: 'On-site', righe: r.onsite }, { nome: 'Operatori', righe: r.operatori }, { nome: 'Impostazioni', righe: r.impostazioni },
+  { nome: 'Disponibilità', righe: r.disponibilita }];
 
 test('file xlsx', () => {
   const r = gs.righeBackup(DATI, ADESSO);
@@ -106,8 +130,8 @@ test('file xlsx', () => {
   assert.equal(file.getContentType(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   const parti = leggiZip(file.getBytes());
   ['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml',
-    'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml', 'xl/worksheets/sheet4.xml'].forEach((x) => assert.ok(x in parti, x));
-  assert.deepEqual([...parti['xl/workbook.xml'].matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]), ['Convocazioni', 'On-site', 'Operatori', 'Impostazioni']);
+    'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml', 'xl/worksheets/sheet4.xml', 'xl/worksheets/sheet5.xml'].forEach((x) => assert.ok(x in parti, x));
+  assert.deepEqual([...parti['xl/workbook.xml'].matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]), ['Convocazioni', 'On-site', 'Operatori', 'Impostazioni', 'Disponibilità']);
   const foglio = parti['xl/worksheets/sheet1.xml'];
   assert.ok(foglio.includes('<c r="A2" t="inlineStr"><is><t xml:space="preserve">Competizione</t></is></c>'));
   assert.ok(foglio.includes('<c r="D3" s="1"><v>46312</v></c>'));   // 17/10/2026 come data di Excel
@@ -139,6 +163,7 @@ function firestoreBackup({ negato = false, supervisore = true } = {}) {
       return { codice: 200, dati: docs.length ? docs.map((d) => ({ document: docREST(coll, d), readTime: 't' })) : [{ readTime: 't' }] };
     }
     if (/\/operatori\?/.test(url)) return { codice: 200, dati: { documents: OPERATORI.map((o) => docREST('operatori', o)) } };
+    if (/\/disponibilita\?/.test(url)) return { codice: 200, dati: { documents: DISPONIBILITA.map((d) => docREST('disponibilita', d)) } };
     if (/\/onsiteRiservato\?/.test(url)) return { codice: 200, dati: { documents: [docREST('onsiteRiservato', { id: 'd1', compenso: 300 })] } };
     if (url.endsWith('/impostazioni/regole')) return { codice: 200, dati: docREST('impostazioni', Object.assign({ id: 'regole' }, REGOLE)) };
     if (url.endsWith('/impostazioni/operativo')) return { codice: 200, dati: docREST('impostazioni', { id: 'operativo', telefono: '+39 333', giorniBlocco: 3 }) };
@@ -158,10 +183,12 @@ test('invio del venerdì', () => {
   assert.equal(m.to, 's1@x.it,s2@x.it');
   assert.equal(m.subject, 'Backup eventi TGI Sport · venerdì 16 ottobre');
   assert.equal(m.attachments[0].getName(), 'Backup_TGI_Sport_2026-10-16.xlsx');
-  ['5 eventi', '1 annullat', '1 deployment', 'Per ripristinare: dashboard → Impostazioni → Importa dal file Excel → scegli questo file.', 'https://x.github.io/sito/admin.html']
+  ['5 eventi', '1 annullat', '1 deployment', 'le disponibilità di 3 operatori', 'Per ripristinare: dashboard → Impostazioni → Importa dal file Excel → scegli questo file.', 'https://x.github.io/sito/admin.html']
     .forEach((x) => assert.ok(m.htmlBody.includes(x), x));
-  // il file allegato contiene gli eventi letti
-  assert.ok(leggiZip(m.attachments[0].getBytes())['xl/worksheets/sheet1.xml'].includes('Roma-Lazio'));
+  // il file allegato contiene gli eventi e le disponibilità letti
+  const allegato = leggiZip(m.attachments[0].getBytes());
+  assert.ok(allegato['xl/worksheets/sheet1.xml'].includes('Roma-Lazio'));
+  assert.ok(allegato['xl/worksheets/sheet5.xml'].includes('dalle 18'));
   const u = ultimoBackup(t);
   assert.deepEqual([u.eventi, u.annullati, u.deployment, u.destinatari, u.errore], [5, 1, 1, 2, '']);
 });
