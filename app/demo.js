@@ -266,6 +266,11 @@
     p.operatori.forEach((o) => { if (!dati.operatori.some((x) => x.id === o.id)) dati.operatori.push(Object.assign({ email: '', telefono: '', attivo: true, ultimoInvio: '', codice: '' }, o)); });
     p.eventi.forEach((e) => { dati.eventi = dati.eventi.filter((x) => x.id !== e.id); dati.eventi.push(e); });
     p.disponibilita.forEach((d) => { dati.disponibilita[d.id] = d.giorni; });
+    (p.disponibilitaBackup || []).forEach((d) => { dati.disponibilita[d.id] = Object.assign({}, dati.disponibilita[d.id] || {}, d.giorni); });
+    (p.onsite || []).forEach(({ compenso, ...doc }) => {
+      dati.onsite = dati.onsite.filter((x) => x.id !== doc.id).concat(doc);
+      dati.onsiteRiservato[doc.id] = { compenso };
+    });
     if (p.regole) dati.regole = p.regole;
     salva();
   }

@@ -401,8 +401,80 @@
       e.storico = ((prima && prima.storico) || []).concat({ quando: new Date().toISOString(), testo: 'Ripristinato dal backup' + (giornoBackup ? ' del ' + giornoBackup : '') });
       eventi.push(e);
     });
+    // disponibilità (foglio dal blocco 9): giorno per giorno; l'operatore per ID, poi per nome, senza crearne di nuovi
+    const trovaOperatore = (nome, idOp) => {
+      if (idOp) return A.operatori.some((o) => o.id === idOp) || operatori.some((o) => o.id === idOp) ? idOp : '';
+      const k = chiave(nome);
+      return k ? idPerNome[k] || (A.operatori.find((o) => chiave(o.nome) === k) || {}).id || '' : '';
+    };
+    const STATI_DISP = { disponibile: 'D', parziale: 'P', 'non disponibile': 'A' };
+    const perOp = {};
+    let dispSaltate = 0;
+    const conDisponibilita = !!wb.Sheets['Disponibilità'];
+    (conDisponibilita ? foglio('Disponibilità') : []).slice(1).forEach((x) => {
+      if (!x.some((v) => testo(v))) return;
+      const data = dataExcel(x[1]), st = STATI_DISP[testo(x[2]).toLowerCase()] || '', nota = testo(x[3]).slice(0, 200);
+      const id = trovaOperatore(testo(x[0]), idValido(x[4]));
+      if (!id || !data || (!st && !nota)) { dispSaltate++; return; }
+      (perOp[id] = perOp[id] || {})[data] = { s: st, n: nota };
+    });
+    const disponibilitaBackup = Object.keys(perOp).map((id) => ({ id, giorni: perOp[id] }));
+
+    // on-site (dal blocco 9, colonna «ID deployment»): le righe-giorno di un deployment insieme
+    const ons = wb.Sheets['On-site'] ? foglio('On-site') : [];
+    const onsiteConId = testo((ons[0] || [])[14]) === 'ID deployment';
+    const STATI_ONSITE = { aperta: 'aperta', chiusa: 'chiusa', annullata: 'annullata' };
+    const listaId = (v) => [...new Set(testo(v).split(',').map(idValido).filter(Boolean))];
+    const posto = (v) => (Number.isInteger(v) && v >= 0 && v <= 20 ? v : 0);
+    const gruppi = {};
+    let onsiteSaltati = 0;
+    if (onsiteConId) {
+      let senzaId = false;
+      ons.slice(1).forEach((x) => {
+        if (!x.some((v) => testo(v))) return;
+        const id = idValido(x[14]);
+        if (!id) { senzaId = true; return; }
+        (gruppi[id] = gruppi[id] || []).push(x);
+      });
+      if (senzaId) onsiteSaltati++;
+    }
+    const onsite = [];
+    Object.keys(gruppi).forEach((id) => {
+      const righe = gruppi[id], x = righe[0];
+      const giorni = righe.map((g) => ({ data: dataExcel(g[5]), attivita: testo(g[6]).slice(0, 30), partita: testo(g[7]).slice(0, 80) }))
+        .sort((a, b) => a.data.localeCompare(b.data)).filter((g, i, l) => g.data && (i === 0 || g.data !== l[i - 1].data));
+      const luogo = testo(x[0]).slice(0, 80), posti = { TL: posto(x[8]), OP: posto(x[9]) };
+      if (!giorni.length || giorni.length !== righe.length || !luogo || (!posti.TL && !posti.OP)) { onsiteSaltati++; return; }
+      onsite.push({ id, luogo, sport: testo(x[1]).slice(0, 40), titolo: testo(x[2]).slice(0, 120), note: testo(x[15]).slice(0, 500),
+        giorni, da: giorni[0].data, a: giorni[giorni.length - 1].data, posti,
+        destinatari: listaId(x[16]), accettatiTL: listaId(x[17]), accettatiOP: listaId(x[18]), rifiuti: listaId(x[19]), esclusi: listaId(x[20]),
+        stato: STATI_ONSITE[testo(x[12]).toLowerCase()] || 'aperta', creato: testo(x[21]) || new Date().toISOString(),
+        compenso: typeof x[13] === 'number' && isFinite(x[13]) && x[13] >= 0 ? Math.round(x[13] * 100) / 100 : 0 });
+    });
+
     return { regole: r, operatori, eventi, disponibilita: [], assenze: 0, avvisi: [], esistenti, backup: giornoBackup || 'file',
-      operativo: Object.keys(operativo).length ? Object.assign({}, A.operativo, operativo) : null };
+      operativo: Object.keys(operativo).length ? Object.assign({}, A.operativo, operativo) : null,
+      disponibilitaBackup, onsite, ripristino: { conDisponibilita, dispSaltate, onsiteConId, onsiteVecchi: !onsiteConId && ons.length > 1, onsiteSaltati } };
+  }
+
+  // righe dell'anteprima per disponibilità e on-site di un backup
+  function anteprimaRipristino(p) {
+    const x = p.ripristino || {}, out = [];
+    const quanti = (n, uno, molti) => n + (n === 1 ? uno : molti);
+    if (x.conDisponibilita) {
+      const giorni = p.disponibilitaBackup.reduce((n, d) => n + Object.keys(d.giorni).length, 0);
+      out.push('<li>Disponibilità: ' + quanti(giorni, ' giorno', ' giorni') + ' di ' + quanti(p.disponibilitaBackup.length, ' operatore', ' operatori')
+        + (giorni === 1 ? ' torna' : ' tornano') + ' come nel backup (gli altri giorni restano come sono)'
+        + (x.dispSaltate ? ' · ' + quanti(x.dispSaltate, ' riga saltata', ' righe saltate') + ' (operatore, data o stato non riconosciuti)' : '') + '</li>');
+    }
+    if (x.onsiteConId) {
+      const presenti = p.onsite.filter((d) => (A.onsite || []).some((y) => y.id === d.id)).length;
+      out.push('<li>On-site: ' + quanti(presenti, ' deployment torna', ' deployment tornano') + ' come nel backup, ' + (p.onsite.length - presenti) + ' da ricreare'
+        + (x.onsiteSaltati ? ' · ' + quanti(x.onsiteSaltati, ' saltato', ' saltati') + ' (luogo, giorni o posti non validi)' : '') + '</li>');
+    } else if (x.onsiteVecchi) {
+      out.push('<li>I deployment on-site di questo backup non si reimportano (versione precedente)</li>');
+    }
+    return out.join('');
   }
 
   let pacchetto = null;
@@ -438,7 +510,7 @@
           const o = A.operatori.find((x) => x.id === id), m = pacchetto.esistenti[id];
           return DO.esc(o.nome) + ' (' + [m.ruolo && 'ruolo ' + R.nomeRuolo(m.ruolo), m.contratto && 'contratto ' + m.contratto].filter(Boolean).join(', ') + ')';
         }).join(', ') + '</li>' : '')
-        + (pacchetto.backup ? '<li>Tariffe, sport, competizioni e mansioni come nel backup (i deployment on-site non si reimportano)</li>'
+        + (pacchetto.backup ? anteprimaRipristino(pacchetto) + '<li>Tariffe, sport, competizioni e mansioni come nel backup</li>'
           + (pacchetto.operativo ? '<li>Regole per gli operatori: telefono di reperibilità ' + DO.esc(pacchetto.operativo.telefono || '—')
             + ', giorni di blocco ' + pacchetto.operativo.giorniBlocco + '</li>' : '') + '</ul>'
           : '<li><b>' + pacchetto.assenze + '</b> giorni di assenza da segnare come "Non disponibile"</li>'

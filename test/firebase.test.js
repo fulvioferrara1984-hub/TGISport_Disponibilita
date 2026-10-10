@@ -142,3 +142,20 @@ test('collega tolto con gli emulatori: il Firestore riaperto resta sull\'emulato
     assert.equal(chiamate.filter((c) => c === 'connectFirestoreEmulator').length, 2, chiamate.join());
   } finally { DO.CONFIG.EMULATORI = false; DO.ricorda(false); }
 });
+
+test('importazione: disponibilità unite ai giorni presenti, on-site per intero con il compenso a parte', async () => {
+  const scritte = [];
+  const { FB } = archivioNuovo({ email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' }, {
+    writeBatch: () => ({ set: (rif, dati, opzioni) => scritte.push([rif.path, dati, opzioni]), commit: async () => {} }),
+  });
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  await FB.importa({ operatori: [], eventi: [], disponibilita: [], regole: null,
+    disponibilitaBackup: [{ id: 'luca', giorni: { '2026-10-18': { s: 'D', n: '' } } }],
+    onsite: [{ id: 'd7', luogo: 'Torino', giorni: [], destinatari: ['luca'], stato: 'aperta', compenso: 250 }] });
+  assert.deepEqual(scritte, [
+    ['disponibilita/luca', { giorni: { '2026-10-18': { s: 'D', n: '' } } }, { merge: true }],
+    ['onsite/d7', { luogo: 'Torino', giorni: [], destinatari: ['luca'], stato: 'aperta' }, undefined],
+    ['onsiteRiservato/d7', { compenso: 250 }, undefined],
+  ]);
+});

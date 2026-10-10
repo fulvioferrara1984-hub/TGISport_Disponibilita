@@ -573,10 +573,16 @@
         storico: e.storico, creato: new Date().toISOString(), fonte: 'excel',
       })]));
       p.disponibilita.forEach((d) => scritture.push(['set', F.doc(db, 'disponibilita', d.id), { giorni: d.giorni }]));
+      // da un backup: disponibilità unite ai giorni presenti; on-site per intero, il compenso nel documento riservato
+      (p.disponibilitaBackup || []).forEach((d) => scritture.push(['set', F.doc(db, 'disponibilita', d.id), { giorni: d.giorni }, { merge: true }]));
+      (p.onsite || []).forEach(({ id, compenso, ...doc }) => {
+        scritture.push(['set', F.doc(db, 'onsite', id), doc]);
+        scritture.push(['set', F.doc(db, 'onsiteRiservato', id), { compenso }]);
+      });
       if (p.regole) scritture.push(['set', F.doc(db, 'impostazioni', 'regole'), p.regole]);
       for (let i = 0; i < scritture.length; i += 400) {
         const batch = F.writeBatch(db);
-        scritture.slice(i, i + 400).forEach(([, rif, dati]) => batch.set(rif, dati));
+        scritture.slice(i, i + 400).forEach(([, rif, dati, opzioni]) => (opzioni ? batch.set(rif, dati, opzioni) : batch.set(rif, dati)));
         await batch.commit();
       }
     });

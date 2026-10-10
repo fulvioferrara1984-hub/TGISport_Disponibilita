@@ -236,3 +236,83 @@ test('ripristino: due operatori con lo stesso nome tengono ciascuno i suoi dati'
     assert.deepEqual(p.eventi.map((e) => [e.id, e.operatoreId]), [['ev1', 'op1'], ['ev2', 'op2'], ['ev3', 'op3']]);
   } finally { DO.admin.operatori = operatoriPrima; }
 });
+
+// ---------------------------------------------------------------- blocco 9: disponibilità e on-site
+const INTESTAZIONI_ONSITE = ['Luogo', 'Sport', 'Titolo', 'Dal', 'Al', 'Giorno', 'Attività', 'Partita', 'Posti TL', 'Posti OP', 'On-site TL', 'On-site OP', 'Stato', 'Compenso',
+  'ID deployment', 'Note', 'Destinatari', 'Accettati TL', 'Accettati OP', 'Hanno rifiutato', 'Esclusi', 'Creato'];
+const convocazioniMinime = () => [[TITOLO], INTESTAZIONI.concat(['ID operatore'])];
+
+test('ripristino delle disponibilità: per ID, per nome, operatore ricreato, righe saltate', async () => {
+  const operatoriPrima = DO.admin.operatori;
+  DO.admin.operatori = [{ id: 'luca', nome: 'Luca Bianchi', ruolo: 'OP', attivo: true }, { id: 'anna', nome: 'Anna Neri', ruolo: 'TL', attivo: true }];
+  try {
+    const { p, anteprima } = await importaFogli({
+      Convocazioni: convocazioniMinime(), Impostazioni: [['Voce', 'Valore']],
+      Operatori: [['Nome', 'Mansione', 'Ruolo', 'Contratto', 'Email', 'Telefono', 'On-site', 'Attivo', 'ID'], ['Nuovo Op', '', 'Remote OP', 'Coop', '', '', '', 'SI', 'op5']],
+      'Disponibilità': [['Operatore', 'Data', 'Stato', 'Nota', 'ID operatore'],
+        ['Luca Bianchi', giorno('2026-10-18'), 'Disponibile', '', 'luca'],
+        ['Anna Neri', giorno('2026-10-19'), 'Parziale', 'dalle 18', null],
+        ['Nuovo Op', giorno('2026-10-20'), 'Non disponibile', '', 'op5'],
+        ['Sparito', giorno('2026-10-21'), 'Disponibile', '', 'op99'],
+        ['Luca Bianchi', 'domani', 'Disponibile', '', 'luca'],
+        ['Luca Bianchi', giorno('2026-10-22'), '', 'forse', 'luca'],
+        ['Luca Bianchi', giorno('2026-10-23'), 'Boh', '', 'luca'],
+        [null, null, null, null, null]],
+    });
+    assert.deepEqual(p.disponibilitaBackup.slice().sort((a, b) => a.id.localeCompare(b.id)), [
+      { id: 'anna', giorni: { '2026-10-19': { s: 'P', n: 'dalle 18' } } },
+      { id: 'luca', giorni: { '2026-10-18': { s: 'D', n: '' }, '2026-10-22': { s: '', n: 'forse' } } },
+      { id: 'op5', giorni: { '2026-10-20': { s: 'A', n: '' } } },
+    ]);
+    assert.ok(anteprima.includes('Disponibilità: 4 giorni di 3 operatori tornano come nel backup'), anteprima);
+    assert.ok(anteprima.includes('3 righe saltate'), anteprima);
+  } finally { DO.admin.operatori = operatoriPrima; }
+});
+
+test('ripristino degli on-site: presenti e mancanti, liste di ID controllate, compenso, gruppi saltati', async () => {
+  DO.admin.onsite = [{ id: 'd1', luogo: 'Vecchio' }];
+  try {
+    const riga = (id, luogo, data, attivita, partita, extra) => Object.assign([luogo, 'Rugby', 'Sei Nazioni', giorno('2026-11-12'), giorno('2026-11-13'), giorno(data), attivita, partita,
+      1, 2, 'Anna', 'Bruno', 'Chiusa', 300, id, 'Hotel', ' a , ,b/x, c', 'a', 'c', 'x', '', '2026-10-01T10:00:00.000Z'], extra || {});
+    const { p, anteprima } = await importaFogli({
+      Convocazioni: convocazioniMinime(), Impostazioni: [['Voce', 'Valore']],
+      'On-site': [INTESTAZIONI_ONSITE,
+        riga('d1', 'Roma', '2026-11-13', 'MD', 'Italia-Francia'), riga('d1', 'Roma', '2026-11-12', 'Travel Day', ''),
+        riga('d2', 'Milano', '2026-12-01', 'MD', '', { 12: 'Annullata', 13: 'boh', 8: 0, 9: 1 }),
+        riga('d3', '', '2026-12-05', 'MD', '')],
+    });
+    assert.deepEqual(p.onsite.map((x) => x.id), ['d1', 'd2']);
+    const d1 = p.onsite[0];
+    assert.deepEqual(d1, { id: 'd1', luogo: 'Roma', sport: 'Rugby', titolo: 'Sei Nazioni', note: 'Hotel',
+      giorni: [{ data: '2026-11-12', attivita: 'Travel Day', partita: '' }, { data: '2026-11-13', attivita: 'MD', partita: 'Italia-Francia' }], da: '2026-11-12', a: '2026-11-13',
+      posti: { TL: 1, OP: 2 }, destinatari: ['a', 'c'], accettatiTL: ['a'], accettatiOP: ['c'], rifiuti: ['x'], esclusi: [], stato: 'chiusa',
+      creato: '2026-10-01T10:00:00.000Z', compenso: 300 });
+    assert.deepEqual([p.onsite[1].stato, p.onsite[1].compenso, p.onsite[1].posti], ['annullata', 0, { TL: 0, OP: 1 }]);
+    assert.ok(anteprima.includes('On-site: 1 deployment torna come nel backup, 1 da ricreare · 1 saltato'), anteprima);
+  } finally { delete DO.admin.onsite; }
+});
+
+test('backup di una versione precedente: on-site non reimportati, disponibilità assenti', async () => {
+  const { p, anteprima } = await importaFogli({
+    Convocazioni: convocazioniMinime(), Impostazioni: [['Voce', 'Valore']],
+    'On-site': [INTESTAZIONI_ONSITE.slice(0, 14), ['Roma', 'Rugby', '', giorno('2026-11-12'), giorno('2026-11-12'), giorno('2026-11-12'), 'MD', '', 1, 0, '', '', 'Aperta', 0]],
+  });
+  assert.deepEqual([p.onsite, p.disponibilitaBackup], [[], []]);
+  assert.ok(anteprima.includes('I deployment on-site di questo backup non si reimportano (versione precedente)'), anteprima);
+  assert.ok(!anteprima.includes('Disponibilità:'));
+});
+
+test('andata e ritorno: disponibilità e on-site dal backup dello script', async () => {
+  const { gs } = caricaScript();
+  const operatori = [{ id: 'luca', nome: 'Luca Bianchi', ruolo: 'TL', contratto: 'P.IVA', attivo: true }];
+  const onsite = [{ id: 'd7', luogo: 'Torino', sport: 'Calcio', titolo: 'Finale', note: 'A&B', da: '2026-11-20', a: '2026-11-21', stato: 'aperta', posti: { TL: 1, OP: 0 },
+    giorni: [{ data: '2026-11-20', attivita: 'MD-1', partita: '' }, { data: '2026-11-21', attivita: 'MD', partita: 'Juve-Toro' }],
+    destinatari: ['luca'], accettatiTL: ['luca'], accettatiOP: [], rifiuti: [], esclusi: [], creato: '2026-10-02T09:00:00.000Z' }];
+  const disponibilita = [{ id: 'luca', giorni: { '2026-10-18': { s: 'P', n: 'dalle 18 «é»' }, '2026-10-19': { s: 'A', n: '' } } }];
+  const r = gs.righeBackup({ eventi: [], onsite, compensi: { d7: 250 }, operatori, regole: {}, disponibilita }, new Date('2026-10-16T16:04:00Z'));
+  const file = gs.fileBackup([{ nome: 'Convocazioni', righe: r.convocazioni }, { nome: 'On-site', righe: r.onsite }, { nome: 'Operatori', righe: r.operatori },
+    { nome: 'Impostazioni', righe: r.impostazioni }, { nome: 'Disponibilità', righe: r.disponibilita }], 'b.xlsx');
+  const { p } = await importaFogli(fogliDaXlsx(file.getBytes()));
+  assert.deepEqual(p.disponibilitaBackup, disponibilita);
+  assert.deepEqual(p.onsite, [Object.assign({}, onsite[0], { compenso: 250 })]);
+});
