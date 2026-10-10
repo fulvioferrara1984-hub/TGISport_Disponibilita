@@ -105,8 +105,8 @@
       return;
     }
     const competizioni = righe.map((c) => (c.mansione
-      ? { nome: c.nome, mansione: true, sport: '', compenso: c.compenso || 'diurno', uefa: c.compenso === 'dimezzato', prima: 0, dopo: ore(c.dopo, 0.5, 16), colore: c.colore || '' }
-      : { nome: c.nome.trim(), sport: c.sport || '', compenso: c.compenso || 'diurno', uefa: c.compenso === 'dimezzato', prima: ore(c.prima, 0, 12), dopo: ore(c.dopo, 0, 12), colore: c.colore || '' }));
+      ? { nome: c.nome, mansione: true, sport: '', compenso: c.compenso || 'diurno', prima: 0, dopo: ore(c.dopo, 0.5, 16), colore: c.colore || '' }
+      : { nome: c.nome.trim(), sport: c.sport || '', compenso: c.compenso || 'diurno', prima: ore(c.prima, 0, 12), dopo: ore(c.dopo, 0, 12), colore: c.colore || '' }));
     const sport = $('reg-sport').value.split(',').map((s) => s.trim()).filter(Boolean);
     bozzaComp = null;
     salva({ competizioni, sport }, 'Competizioni salvate.');
@@ -201,8 +201,8 @@
     elenco.sport.forEach((s) => { if (!regole.sport.includes(s)) regole.sport.push(s); });
     elenco.comp.concat(['Europa League', 'Conference League']).forEach((c) => {
       // competizioni UEFA (Champions, Europa, Conference League): compenso dimezzato
-      const uefa = /champions|europa league|conference/i.test(c);
-      if (!regole.competizioni.some((x) => x.nome === c)) regole.competizioni.push({ nome: c, sport: uefa ? 'Calcio' : '', compenso: uefa ? 'dimezzato' : 'diurno', uefa });
+      const coppaEuropea = /champions|europa league|conference/i.test(c);
+      if (!regole.competizioni.some((x) => x.nome === c)) regole.competizioni.push({ nome: c, sport: coppaEuropea ? 'Calcio' : '', compenso: coppaEuropea ? 'dimezzato' : 'diurno' });
     });
 
     // operatori: si riconoscono per nome tra quelli già presenti
@@ -321,7 +321,7 @@
       const nome = testo(r[8]);
       if (!nome) return;
       const compenso = COMPENSI[testo(r[9]).toLowerCase()] || 'diurno';
-      const campi = Object.assign({ nome, compenso, uefa: compenso === 'dimezzato', prima: numero(r[10]), dopo: numero(r[11]), colore: testo(r[12]) },
+      const campi = Object.assign({ nome, compenso, prima: numero(r[10]), dopo: numero(r[11]), colore: testo(r[12]) },
         testo(r[13]) ? { sport: testo(r[13]) } : {});
       const i = regole.competizioni.findIndex((c) => c.nome === nome);
       if (i >= 0) regole.competizioni[i] = Object.assign({}, regole.competizioni[i], campi);

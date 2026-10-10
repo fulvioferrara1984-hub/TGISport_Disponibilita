@@ -314,12 +314,10 @@ test('operatori assegnabili a un evento', () => {
   assert.deepEqual(ids({ tipo: 'partita', operatoreId: 'd' }), ['a', 'b', 'c', 'd']);
 });
 
-test('compatibilità con le dashboard della versione precedente: Dimezzato scritto anche come uefa', () => {
-  const r = R.complete({ competizioni: [{ nome: 'Champions League', compenso: 'dimezzato' }, { nome: 'Serie A', compenso: 'notturno' }] });
-  assert.deepEqual(normali(r).map((c) => c.uefa), [true, false]);
-  // una dashboard vecchia che risalva { uefa } senza compenso non perde il Dimezzato
-  const risalvato = R.complete({ competizioni: normali(r).map((c) => ({ nome: c.nome, uefa: c.uefa })) });
-  assert.equal(normali(risalvato)[0].compenso, 'dimezzato');
+test('il vecchio campo uefa non si scrive più, ma nei dati vecchi vale ancora Dimezzato', () => {
+  const r = R.complete({ competizioni: [{ nome: 'Champions League', compenso: 'dimezzato' }, { nome: 'Coppa Vecchia', uefa: true }, { nome: 'Serie A', compenso: 'notturno' }] });
+  assert.ok(r.competizioni.every((c) => !('uefa' in c)), JSON.stringify(r.competizioni.filter((c) => 'uefa' in c)));
+  assert.deepEqual(normali(r).map((c) => c.compenso), ['dimezzato', 'dimezzato', 'notturno']);
 });
 
 test('riga dell\'ultimo backup', () => {

@@ -45,9 +45,7 @@
   function complete(r) {
     const x = Object.assign({}, PREDEFINITE, r || {});
     // prima/dopo per competizione: vuoti = valori generali
-    // competizioni salvate prima del tipo di compenso: la vecchia casella «UEFA ½» diventa «dimezzato».
-    // «uefa» si continua a scrivere uguale a «dimezzato» perché le dashboard ancora aperte sulla versione
-    // precedente calcolino giusto e, se risalvano, non perdano il Dimezzato.
+    // competizioni salvate prima del tipo di compenso: la vecchia casella «UEFA ½» (campo uefa, non più scritto) diventa «dimezzato»
     // competizioni senza ore (salvate quando c'erano i valori generali): si completano con quelli usati finora
     const anticipo = ore(x.anticipoOre) === null ? PREDEFINITE.anticipoOre : x.anticipoOre;
     const dopoGenerale = ore(x.fineOre) === null ? PREDEFINITE.fineOre : x.fineOre;
@@ -56,12 +54,12 @@
       const s = salvate.find((c) => c.nome === nome) || {};
       const predefinita = nome === 'Remote TL' ? durataValida(x.durataSupervisioneOre) || 6 : 6;
       const compenso = tipoValido(s.compenso) ? s.compenso : 'diurno';
-      return { nome, mansione: true, sport: '', prima: 0, dopo: durataValida(s.dopo) || predefinita, compenso, colore: coloreValido(s.colore), uefa: compenso === 'dimezzato' };
+      return { nome, mansione: true, sport: '', prima: 0, dopo: durataValida(s.dopo) || predefinita, compenso, colore: coloreValido(s.colore) };
     });
     x.competizioni = mansioni.concat(salvate.filter((c) => !RIGHE_MANSIONE.includes(c.nome)).map(({ uefa, mansione, ...c }) => {
       const compenso = tipoValido(c.compenso) ? c.compenso : uefa && c.compenso === undefined ? 'dimezzato' : 'diurno';
       const prima = ore(c.prima), dopo = ore(c.dopo);
-      return Object.assign({}, c, { prima: prima === null ? anticipo : prima, dopo: dopo === null ? dopoGenerale : dopo, colore: coloreValido(c.colore), compenso, uefa: compenso === 'dimezzato' });
+      return Object.assign({}, c, { prima: prima === null ? anticipo : prima, dopo: dopo === null ? dopoGenerale : dopo, colore: coloreValido(c.colore), compenso });
     }));
     x.tariffe = {
       'P.IVA': Object.assign({}, PREDEFINITE.tariffe['P.IVA'], (r && r.tariffe && r.tariffe['P.IVA']) || {}),
