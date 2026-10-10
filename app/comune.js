@@ -75,6 +75,7 @@
   const GIORNI = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
   const GIORNI_BREVI = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+  const nomeMese = (i) => MESI[i][0].toUpperCase() + MESI[i].slice(1);
   const indiceGiorno = (s) => (daIso(s).getDay() + 6) % 7;
   // giorni di calendario fra oggi e la data (negativo se passata); arrotondato per il cambio dell'ora
   const giorniA = (data, oggiIso) => Math.round((daIso(data) - daIso(oggiIso)) / 864e5);
@@ -197,7 +198,10 @@
   // ---------- avvisi ----------
   function avviso(testo, tipo, durata) {
     let box = document.querySelector('.avvisi');
-    if (!box) { box = document.createElement('div'); box.className = 'avvisi'; box.setAttribute('role', 'status'); document.body.appendChild(box); }
+    if (!box) { box = document.createElement('div'); box.className = 'avvisi'; box.setAttribute('role', 'status'); }
+    // a schermo intero si vede solo quell'elemento: gli avvisi vanno lì dentro
+    const dove = document.fullscreenElement || document.body;
+    if (box.parentNode !== dove) dove.appendChild(box);
     const el = document.createElement('div');
     el.className = 'avviso' + (tipo ? ' ' + tipo : '');
     el.textContent = testo;
@@ -295,6 +299,6 @@
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
     versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno, tipoEvento, normalizzaEmail, tipoAccesso, controllaVisualizzatore, invitoVisualizzatore,
-    testoBlocco, telefonoValido, giorniDaCompilare,
+    testoBlocco, telefonoValido, giorniDaCompilare, nomeMese,
   });
 })(window.DO = window.DO || {});

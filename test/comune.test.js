@@ -178,3 +178,8 @@ test('script delle email non aggiornato: messaggio chiaro', async () => {
     await assert.rejects(DO.inviaEmail('emailRichiesta', {}), /^Error: Accesso non consentito\.$/);
   } finally { global.fetch = prima; delete DO.CONFIG.EMAIL_URL; }
 });
+
+test('nome del mese con la maiuscola (un solo elenco dei mesi)', () => {
+  assert.equal(DO.nomeMese(0), 'Gennaio');
+  assert.equal(DO.nomeMese(11), 'Dicembre');
+});

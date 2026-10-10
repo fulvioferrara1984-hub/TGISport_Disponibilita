@@ -414,7 +414,7 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 .copia-riga input { font-size: 12.5px; }
 
 /* ---------- avvisi ---------- */
-.avvisi { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 30; pointer-events: none; width: calc(100% - 32px); }
+.avvisi { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 70; pointer-events: none; width: calc(100% - 32px); }
 .avviso {
   pointer-events: auto; max-width: 560px; padding: 10px 16px; border-radius: 10px; background: #15171c; color: #fff; font-size: 13px; line-height: 1.45;
   box-shadow: 0 10px 30px rgba(0,0,0,.25); animation: entra .2s ease;
@@ -495,7 +495,7 @@ dialog h2 { margin: 0 0 16px; font-size: 18px; letter-spacing: -.015em; }
 .nuova-versione .primario { flex: none; height: 32px; }
 /* collega in sola visualizzazione: spariscono i comandi che modificano */
 body.sola-lettura .solo-modifica { display: none !important; }
-.sola-etichetta { margin-left: 12px; background: #fff4e0; color: #9a5b00; white-space: nowrap; }
+body:not(.sola-lettura) .solo-lettura { display: none !important; }
 .riga-aggiungi { display: flex; gap: 8px; margin-bottom: 10px; }
 .riga-aggiungi input { flex: 1; min-width: 0; }
 .elenco-visualizzatori { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -543,7 +543,6 @@ body.sola-lettura .solo-modifica { display: none !important; }
 .intestazione-competizioni { display: grid; grid-template-columns: minmax(0, 1fr) 110px 50px 50px 62px 96px 30px; gap: 8px; font-size: 11px; color: var(--inchiostro-3); margin: 0 4px 4px 0; text-align: center; }
 .intestazione-competizioni span:first-child { text-align: left; }
 .elenco-competizioni input[type="text"], .elenco-competizioni select { height: 32px; font-size: 13px; }
-.elenco-competizioni .spunta { margin: 0; font-size: 12px; white-space: nowrap; }
 .elenco-competizioni .icona { width: 30px; height: 30px; font-size: 12px; }
 .elenco-competizioni li.mansione input[readonly] { grid-column: span 2; background: var(--vuoto); font-weight: 600; }
 .elenco-competizioni li.mansione input:disabled { opacity: .55; }

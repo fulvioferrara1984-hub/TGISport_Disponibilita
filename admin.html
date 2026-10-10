@@ -13,7 +13,7 @@
   <header class="testata con-schede">
     <div class="marchio">
       <img class="marchio-logo" src="Logo/TGI-Sport_black.png" alt="TGI Sport" onerror="this.remove()">
-      <span class="marchio-nome">Disponibilità · Supervisori</span>
+      <span class="marchio-nome" id="marchio-nome">Disponibilità · Supervisori</span>
     </div>
     <nav class="schede" role="tablist" aria-label="Sezioni" id="schede" hidden>
       <button type="button" role="tab" data-vista="convocazioni" aria-selected="true">Convocazioni <span class="badge" id="badge-conv"></span></button>
@@ -23,7 +23,6 @@
       <button type="button" role="tab" data-vista="operatori" aria-selected="false">Operatori</button>
       <button type="button" role="tab" data-vista="impostazioni" aria-selected="false">Impostazioni</button>
     </nav>
-    <span class="etichetta sola-etichetta" id="sola-etichetta" hidden>Sola visualizzazione</span>
     <span class="spazio"></span>
     <button type="button" class="esci" id="btn-esci" hidden>Esci</button>
   </header>
@@ -56,7 +55,7 @@
       <div class="titolo-pagina">
         <div>
           <h1>Convocazioni</h1>
-          <p>Crea partite e turni Remote TL e Remote Support, assegna gli operatori e invia le convocazioni.</p>
+          <p><span class="solo-modifica">Crea partite e turni Remote TL e Remote Support, assegna gli operatori e invia le convocazioni.</span><span class="solo-lettura">Partite e turni Remote TL e Remote Support con gli operatori assegnati e lo stato delle convocazioni.</span></p>
         </div>
         <div class="strumenti">
           <input type="month" id="ev-mese" aria-label="Mese da esportare" class="solo-desktop">
@@ -209,7 +208,7 @@
       <div class="titolo-pagina">
         <div>
           <h1>Operatori</h1>
-          <p>Ogni operatore entra con un codice personale: crealo qui e invialo con il link d'invito.</p>
+          <p><span class="solo-modifica">Ogni operatore entra con un codice personale: crealo qui e invialo con il link d'invito.</span><span class="solo-lettura">Gli operatori del team con ruolo, contratto e contatti.</span></p>
         </div>
         <button type="button" class="primario solo-modifica" id="btn-nuovo-op">+ Nuovo operatore</button>
       </div>
@@ -243,7 +242,7 @@
           </section>
           <section class="scheda">
             <div class="scheda-testa"><h2>Accessi in sola visualizzazione</h2></div>
-            <form class="scheda-corpo" id="form-visualizzatori">
+            <form class="scheda-corpo" id="form-visualizzatori" novalidate>
               <p class="nota" style="margin: 0 0 10px;">Colleghi che vedono Convocazioni, Riepilogo e Operatori senza poter modificare nulla. Al primo accesso premono «Crea account» con questa email.</p>
               <div class="riga-aggiungi"><input type="email" id="vis-email" placeholder="nome@tgisport.com" aria-label="Email del collega" autocomplete="off"><button type="submit" class="bottone" id="vis-aggiungi">Aggiungi</button></div>
               <ul class="elenco-visualizzatori" id="vis-elenco"></ul>
@@ -448,7 +447,7 @@
       </button>
       <button type="button" class="bottone" id="cal-oggi">Oggi</button>
       <span class="spazio"></span>
-      <div class="cal-legenda" aria-label="Legenda">
+      <div class="cal-legenda" role="group" aria-label="Legenda dei colori">
         <span class="cal-verde">Confermato</span><span class="cal-blu">In attesa di conferma</span>
         <span class="cal-arancione">Senza operatore</span><span class="cal-rosso">Senza operatore, a ridosso</span>
       </div>

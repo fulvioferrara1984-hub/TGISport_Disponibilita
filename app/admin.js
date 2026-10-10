@@ -633,7 +633,7 @@
   function disegnaOperatori() {
     const elenco = operatori.slice().sort((a, b) => (b.attivo - a.attivo) || a.nome.localeCompare(b.nome, 'it'));
     if (!elenco.length) {
-      $('tabella-operatori').innerHTML = '<div class="griglia-vuota">Nessun operatore. Crea il primo con <b>+ Nuovo operatore</b>.</div>';
+      $('tabella-operatori').innerHTML = '<div class="griglia-vuota">Nessun operatore.' + (solaLettura ? '' : ' Crea il primo con <b>+ Nuovo operatore</b>.') + '</div>';
       return;
     }
     // sul telefono ogni riga diventa una scheda con tutte le voci (data-voce fa da etichetta)
@@ -742,11 +742,15 @@
     $('imp-backup-stato').textContent = DO.regole.statoBackup(r);
   }
 
+  // indirizzi come li conosce lo script: il backup immediato parte verso quelli, non verso quelli scritti e non salvati
+  const elencoEmail = (s) => String(s || '').split(/[,;\s]+/).filter(Boolean).join(',');
+  let emailSalvate = null;
   async function caricaImpostazioni() {
     $('imp-email').placeholder = 'Caricamento…';
     try {
       const r = await DO.dati.leggiImpostazioni();
       $('imp-email').value = r.emailSupervisori.split(',').filter(Boolean).join(', ');
+      emailSalvate = elencoEmail($('imp-email').value);
       $('imp-email-attive').checked = r.emailAttive;
       mostraPromemoria(r);
     } catch (e) {
@@ -773,6 +777,7 @@
     b.disabled = true;
     try {
       mostraPromemoria(await DO.dati.salvaImpostazioni(dati));
+      emailSalvate = elencoEmail(dati.emailSupervisori);
       DO.avviso('Impostazioni salvate.', 'ok');
     } catch (err) {
       DO.avviso(err.message, 'errore');
@@ -782,6 +787,7 @@
   });
 
   $('imp-backup-ora').addEventListener('click', async (e) => {
+    if (emailSalvate !== null && elencoEmail($('imp-email').value) !== emailSalvate) { DO.avviso('Salva prima gli indirizzi dei supervisori.', 'errore'); return; }
     const b = e.target;
     b.disabled = true;
     b.textContent = 'Invio in corso…';
@@ -834,7 +840,7 @@
     // collega in sola visualizzazione: solo Convocazioni, Riepilogo e Operatori, nessun tasto di modifica
     solaLettura = !!(u && u.sola);
     document.body.classList.toggle('sola-lettura', solaLettura);
-    $('sola-etichetta').hidden = !solaLettura;
+    $('marchio-nome').textContent = 'Disponibilità · ' + (solaLettura ? 'Sola visualizzazione' : 'Supervisori');
     document.querySelectorAll('#schede [data-vista]').forEach((b) => { b.hidden = solaLettura && !VISTE_SOLA.includes(b.dataset.vista); });
     $('pagina').hidden = false;
     $('schede').hidden = false;
@@ -885,6 +891,7 @@
 
   DO.avviaPagina('admin', (messaggio) => {
     if (ferma) { ferma(); ferma = null; }
+    if (DO.calendario) DO.calendario.chiudi();
     DO.avviso(messaggio, 'errore');
     entra();
   });

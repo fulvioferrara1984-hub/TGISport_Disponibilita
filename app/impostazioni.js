@@ -68,11 +68,14 @@
   $('reg-competizioni').addEventListener('input', (e) => {
     const li = e.target.closest('li'), campo = e.target.dataset.campo;
     if (!li || !campo) return;
-    bozzaComp[li.dataset.i][campo] = e.target.value;
+    const c = bozzaComp[li.dataset.i];
+    c[campo] = e.target.value;
+    // colore automatico: segue il nome mentre lo si scrive
+    if (campo === 'nome' && !c.colore) li.querySelector('[data-campo="colore"]').value = R.coloreCompetizione(c.nome, { competizioni: [c] });
   });
   $('reg-competizioni').addEventListener('change', (e) => {
     const li = e.target.closest('li');
-    if (li && e.target.dataset.campo) bozzaComp[li.dataset.i][e.target.dataset.campo] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (li && e.target.dataset.campo) bozzaComp[li.dataset.i][e.target.dataset.campo] = e.target.value;
     if (li && e.target.dataset.campo === 'colore') disegnaCompetizioni();
   });
   $('reg-competizioni').addEventListener('click', (e) => {
@@ -92,6 +95,11 @@
     e.preventDefault();
     const ore = (v, min, max) => R.numero(v === null || v === undefined ? '' : v, { min, max });
     const righe = bozzaComp.filter((c) => c.mansione || c.nome.trim());
+    const riservati = righe.filter((c) => c.mansione).map((c) => c.nome.toLowerCase());
+    if (righe.some((c) => !c.mansione && riservati.includes(c.nome.trim().toLowerCase()))) {
+      DO.avviso('Remote TL e Remote Support sono già le righe dei turni: scegli un altro nome.', 'errore');
+      return;
+    }
     if (righe.some((c) => (c.mansione ? ore(c.dopo, 0.5, 16) === null : ore(c.prima, 0, 12) === null || ore(c.dopo, 0, 12) === null))) {
       DO.avviso('Indica le ore di ogni competizione (da 0 a 12; durata dei turni da 0,5 a 16).', 'errore');
       return;
@@ -142,6 +150,7 @@
     e.preventDefault();
     const giorni = R.numero($('op-giorni-blocco').value, { min: 0, max: 14, intero: true });
     if (giorni === null) { DO.avviso('Indica i giorni di blocco: un numero intero da 0 a 14.', 'errore'); return; }
+    if (!DO.telefonoValido($('op-telefono-rep').value)) { DO.avviso('Scrivi un numero di telefono valido (cifre, spazi e + - / . ( ), almeno 6 cifre).', 'errore'); return; }
     try {
       await DO.dati.salvaOperativo({ telefono: $('op-telefono-rep').value.trim(), giorniBlocco: giorni });
       DO.avviso('Regole per gli operatori salvate.', 'ok');

@@ -98,8 +98,11 @@
     const conv = DO.esc(R.convocazione(e, A.regole)), fine = DO.esc(R.fine(e, A.regole)), notte = R.notturno(e, A.regole), annullato = e.stato === 'annullato';
     const tag = [];
     if (turno(e)) tag.push('<span class="tag tag-sup">' + R.nomeTipo(e.tipo) + '</span>');
-    if (R.compensoCompetizione(R.competizioneDi(e), A.regole) === 'dimezzato') tag.push('<span class="tag">Dimezzato</span>');
-    if (e.gettone === 'maggiorato') tag.push('<span class="tag tag-magg">Maggiorato</span>');
+    // compenso come nel calcolo dei gettoni: il maggiorato vale su tutto, poi quello della competizione
+    const comp = R.compensoCompetizione(R.competizioneDi(e), A.regole);
+    if (e.gettone === 'maggiorato' || comp === 'maggiorato') tag.push('<span class="tag tag-magg">Maggiorato</span>');
+    else if (comp === 'dimezzato') tag.push('<span class="tag">Dimezzato</span>');
+    else if (comp === 'notturno') tag.push('<span class="tag">Notturno</span>');
     if (e.daSostituire && !annullato) tag.push('<span class="tag tag-errore">Da sostituire</span>');
     // nella finestra di blocco gli operatori non possono più cambiare: ciò che manca va sistemato ora
     if ((e.stato === 'da-assegnare' || e.stato === 'convocato') && e.data >= DO.oggi() && DO.bloccato(e.data, DO.oggi(), A.operativo.giorniBlocco)) {
@@ -116,7 +119,7 @@
       + '<div class="ev-op">' + selettore(e) + avvisiOperatore(e) + '</div>'
       + '<div class="ev-stato"><span class="stato-chip ' + st.cls + '" title="' + DO.esc(e.risposta || '') + '">' + st.nome + '</span>'
         + (e.stato === 'rifiutato' && e.risposta ? '<small class="testo-errore">' + DO.esc(e.risposta) + '</small>' : '') + '</div>'
-      + '<button type="button" class="icona ev-modifica" data-modifica-evento="' + e.id + '" aria-label="Modifica evento">'
+      + '<button type="button" class="icona ev-modifica" data-modifica-evento="' + e.id + '" aria-label="' + (A.solaLettura ? 'Apri evento' : 'Modifica evento') + '">'
         + '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg></button>'
       + '</div>';
   }
@@ -530,6 +533,11 @@
 
   // ---------- esportazione mensile (solo presenze, nessun compenso) ----------
   async function esportaMese(mese) {
+    // la dashboard legge solo la stagione in corso: un mese precedente uscirebbe vuoto o a metà
+    if (mese < R.stagione(DO.oggi()).da.slice(0, 7)) {
+      DO.avviso('La dashboard carica la stagione in corso (dal 1° agosto): per i mesi precedenti usa un backup.', 'errore', 8000);
+      return;
+    }
     let X;
     try { X = await DO.caricaXlsx(); } catch (e) { DO.avviso(e.message, 'errore'); return; }
     const { convocazioni, presenze } = R.righeMese(A.eventi, A.operatori, A.regole, mese, A.onsite);

@@ -5,7 +5,6 @@
   'use strict';
 
   const $ = DO.$, A = DO.admin, R = DO.regole;
-  const MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
   const TIPI = ['diurno', 'notturno', 'maggiorato', 'dimezzato'];
 
   function periodi() {
@@ -14,7 +13,7 @@
       const d = DO.daIso(st.da);
       d.setMonth(d.getMonth() + i);
       const inizio = DO.iso(d), fine = DO.iso(new Date(d.getFullYear(), d.getMonth() + 1, 0));
-      out.push({ id: inizio.slice(0, 7), nome: MESI[d.getMonth()] + ' ' + d.getFullYear(), da: inizio, a: fine });
+      out.push({ id: inizio.slice(0, 7), nome: DO.nomeMese(d.getMonth()) + ' ' + d.getFullYear(), da: inizio, a: fine });
     }
     return out;
   }
