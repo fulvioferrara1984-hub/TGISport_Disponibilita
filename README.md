@@ -249,7 +249,8 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/onsite.js`, `app/onsite-admin.js` | deployment on-site: calcoli (giorni, posti, presenze, compensi) e richiesta/scheda nella dashboard |
 | `app/convocazioni.js`, `app/riepilogo.js`, `app/impostazioni.js` | schede Convocazioni, Riepilogo, regole e importazione |
 | `app/config.js` | collegamento a Firebase e allo script delle email |
-| `app/stile.css`, `Logo/`, favicon | identità TGI Sport (come Mockup Studio) |
+| `app/stile.css`, `Logo/`, favicon | identità TGI Sport: colori del logo, orari e date in Archivo stretto |
+| `app/font/` | carattere Archivo incluso nel sito (nessuna richiesta a Google Fonts), licenza in `OFL.txt` |
 | `firebase/` | regole di sicurezza di Firestore e configurazione dell'emulatore |
 | `backend/` | script Google Apps Script per le email e i promemoria |
 | `test/` | prove automatiche: `node --test test/*.test.js` |
