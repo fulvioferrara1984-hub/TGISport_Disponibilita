@@ -417,3 +417,38 @@ test('errori di Firebase: si riporta anche la risposta di Google', () => {
   const serie = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ codiceQuery: 500, erroreQuery: [{ error: { message: 'Backend non disponibile' } }] }) });
   assert.throws(() => serie.gs.giroPromemoria(ADESSO), /Lettura di Firebase non riuscita \(500\)\. Risposta di Google: Backend non disponibile/);
 });
+
+// ---------------------------------------------------------------- piccoli miglioramenti
+test('giro già in corso: niente doppio invio', () => {
+  const t = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ eventi: [ev({})] }), bloccato: true });
+  assert.deepEqual(j(t.gs.giroPromemoria(ADESSO)), { saltato: 'in corso', oggi: '2026-10-09' });
+  assert.equal(t.email.length, 0);
+});
+
+test('pagina d\'errore di Google (502) invece della risposta', () => {
+  const finto = firestoreFinto();
+  const t = carica({ risposte: (url, o) => (url.endsWith(':runQuery') ? { codice: 502, testo: '<html>Bad Gateway</html>' } : finto(url, o)) });
+  assert.throws(() => t.gs.leggiDatiPromemoria('2026-10-09', '2026-10-12'), /Lettura di Firebase non riuscita \(502\)\./);
+});
+
+test('anteprima dell\'attivazione con il numero di eventi da sistemare', () => {
+  const t = carica({ proprieta: { EMAIL_SUPERVISORI: 's@x.it' }, risposte: firestoreFinto({ eventi: [ev({ stato: 'da-assegnare', operatoreId: '' })] }) });
+  t.gs.attivaPromemoria();
+  assert.ok(t.registro.some((r) => /Anteprima di oggi.*s@x\.it · 1 evento da sistemare/.test(r)), t.registro.join('\n'));
+});
+
+test('impostazioni anche se gli attivatori non si leggono', () => {
+  const imp = j(carica({ erroreAttivatori: true }).gs.impostazioniDashboard());
+  assert.deepEqual([imp.promemoriaProgrammato, imp.backupProgrammato], [false, false]);
+});
+
+test('impostazioni/operativo assente: nessun numero di reperibilità', () => {
+  assert.equal(j(carica({ risposte: firestoreFinto({ telefono: null }) }).gs.leggiDatiPromemoria('2026-10-09', '2026-10-12')).telefono, '');
+});
+
+test('salvataggio con il solo interruttore dei promemoria', () => {
+  const t = carica({ proprieta: { PROMEMORIA_GIORNI: '5', PROMEMORIA_ATTIVI: 'NO' } });
+  t.gs.salvaImpostazioni({ emailSupervisori: 's@x.it', promemoriaAttivi: true });
+  assert.deepEqual([t.prop.get('PROMEMORIA_ATTIVI'), t.prop.get('PROMEMORIA_GIORNI')], ['SI', '5']);
+});
+

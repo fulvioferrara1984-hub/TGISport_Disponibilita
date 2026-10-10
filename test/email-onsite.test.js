@@ -88,3 +88,14 @@ test('richiesta on-site: niente email a chi ha un ruolo senza posti', () => {
   assert.deepEqual([r.email, r.nonInviate, r.senzaPosto], [1, [], ['Luca Bianchi']]);
   assert.deepEqual(t.email.map((m) => m.to), ['m@x.it']);
 });
+
+test('notifica on-site: niente per un deployment annullato, al massimo una al minuto', () => {
+  const annullato = carica({ proprieta: NOTIFICHE, risposte: firestoreFinto(dep({ stato: 'annullata' })) });
+  assert.deepEqual(j(annullato.gs.notificaOnsite({ idToken: gettone, id: 'd1' })), { inviata: false });
+  assert.equal(annullato.email.length, 0);
+  const t = carica({ proprieta: NOTIFICHE, risposte: firestoreFinto(dep()), cacheVera: true });
+  assert.deepEqual(j(t.gs.notificaOnsite({ idToken: gettone, id: 'd1' })), { inviata: true });
+  assert.deepEqual(j(t.gs.notificaOnsite({ idToken: gettone, id: 'd1' })), { inviata: false });
+  assert.equal(t.email.length, 1);
+});
+

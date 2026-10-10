@@ -67,7 +67,7 @@ function carica(stub = {}) {
   const prop = new Map(Object.entries(stub.proprieta || {}));
   const email = [], chiamate = [], registro = [];
   const attivatori = (stub.attivatori || []).map((nome) => ({ getHandlerFunction: () => nome }));
-  const creati = [], tolti = [];
+  const creati = [], tolti = [], cache = new Map();
   const catena = (nome) => {
     const c = { impostazioni: {} };
     ['timeBased', 'everyDays', 'atHour', 'inTimezone', 'onWeekDay'].forEach((m) => { c[m] = (v) => { c.impostazioni[m] = v === undefined ? true : v; return c; }; });
@@ -93,12 +93,13 @@ function carica(stub = {}) {
       fetch: (url, opzioni = {}) => {
         chiamate.push({ url, opzioni });
         const r = (stub.risposte || (() => ({ codice: 404, dati: {} })))(url, opzioni);
-        return { getResponseCode: () => r.codice, getContentText: () => JSON.stringify(r.dati) };
+        // testo: risposta non JSON (per esempio la pagina d'errore 502 di Google)
+        return { getResponseCode: () => r.codice, getContentText: () => (r.testo !== undefined ? r.testo : JSON.stringify(r.dati)) };
       },
     },
     ScriptApp: {
       getOAuthToken: () => 'gettone-prova',
-      getProjectTriggers: () => attivatori.slice(),
+      getProjectTriggers: () => { if (stub.erroreAttivatori) throw new Error('Servizio non disponibile'); return attivatori.slice(); },
       deleteTrigger: (t) => { tolti.push(t); attivatori.splice(attivatori.indexOf(t), 1); },
       newTrigger: (nome) => catena(nome),
       WeekDay: { MONDAY: 'MONDAY', FRIDAY: 'FRIDAY', SUNDAY: 'SUNDAY' },
@@ -109,7 +110,10 @@ function carica(stub = {}) {
       newBlob: (dati, tipo, nome) => blob(dati, tipo, nome),
       zip: (blobs, nome) => blob([...zipSemplice(blobs)], 'application/zip', nome),
     },
-    CacheService: { getScriptCache: () => ({ get: () => null, put: () => {} }) },
+    // cacheVera: la cache ricorda (per le prove sui limiti di frequenza); altrimenti è sempre vuota
+    CacheService: { getScriptCache: () => (stub.cacheVera ? { get: (k) => (cache.has(k) ? cache.get(k) : null), put: (k, v) => cache.set(k, v) } : { get: () => null, put: () => {} }) },
+    // bloccato: un altro giro tiene già il blocco dello script
+    LockService: { getScriptLock: () => ({ tryLock: () => !stub.bloccato, releaseLock: () => {} }) },
     ContentService: { createTextOutput: (t) => ({ setMimeType: () => t }), MimeType: { JSON: 'json' } },
   };
   vm.createContext(gs);

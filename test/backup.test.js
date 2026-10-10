@@ -33,7 +33,7 @@ const EVENTI = [
 const ONSITE = [{ id: 'd1', luogo: 'Roma', sport: 'Rugby', titolo: 'Sei Nazioni', da: '2026-11-12', a: '2026-11-13', stato: 'aperta', posti: { TL: 1, OP: 2 },
   giorni: [{ data: '2026-11-12', attivita: 'Travel Day', partita: '' }, { data: '2026-11-13', attivita: 'MD', partita: 'Italia-Francia' }],
   accettatiTL: ['a'], accettatiOP: ['b', 'c'] }];
-const DATI = { eventi: EVENTI, onsite: ONSITE, compensi: { d1: 300 }, operatori: OPERATORI, regole: REGOLE };
+const DATI = { eventi: EVENTI, onsite: ONSITE, compensi: { d1: 300 }, operatori: OPERATORI, regole: REGOLE, operativo: { telefono: '+39 333', giorniBlocco: 3 } };
 const { gs } = carica();
 const righe = () => j(gs.righeBackup(DATI, ADESSO));
 
@@ -49,14 +49,14 @@ test('foglio Convocazioni', () => {
   assert.equal(titolo, 'Backup eventi · Disponibilità Ops TGI Sport · venerdì 16 ottobre alle 18:04 · stagione 2026/27');
   assert.deepEqual(convocazioni[0], [titolo]);
   assert.deepEqual(convocazioni[1], ['Competizione', 'Round', 'Sport', 'Data', 'Partita / turno', 'Orario evento', 'Ritrovo', 'Operatore', 'Fine turno', 'Conferma',
-    'Note', 'Stato', 'Gettone maggiorato', 'Da sostituire', 'Tipo', 'ID evento', 'Ritrovo scritto a mano', 'Fine scritta a mano', 'Inviata', 'Motivo del rifiuto']);
+    'Note', 'Stato', 'Gettone maggiorato', 'Da sostituire', 'Tipo', 'ID evento', 'Ritrovo scritto a mano', 'Fine scritta a mano', 'Inviata', 'Motivo del rifiuto', 'ID operatore']);
   const d = (iso) => ({ data: iso });
   assert.deepEqual(convocazioni.slice(2), [
-    ['Remote Support', '', '', d('2026-10-17'), 'Remote Support', '', '12:00', '', '18:00', '', '', 'Da assegnare', '', '', 'Remote Support', 'e3', '12:00', '', '', ''],
-    ['Remote TL', '', '', d('2026-10-18'), 'Remote TL', '', '10:00', 'Anna Neri', '16:00', '', '', 'In attesa di risposta', '', '', 'Remote TL', 'e2', '10:00', '', 'SI', ''],
-    ['Serie A', '9', 'Calcio', d('2026-10-18'), 'Inter-Monza', '15:00', '11:00', 'Carla Verdi', '18:30', '', '', 'Rifiutato', '', 'SI', 'Partita', 'e5', '', '18:30', 'SI', 'Malato'],
-    ['Serie A', '9', 'Calcio', d('2026-10-18'), 'Roma-Lazio', '20:45', '16:45', 'Anna Neri', '22:45', 'SI', 'Regia & co', 'Confermato', 'SI', '', 'Partita', 'e1', '', '', 'SI', ''],
-    ['Champions League', 'MD3', 'Calcio', d('2026-10-21'), 'Atalanta-PSG', '21:00', '20:00', '', '23:00', '', '', 'Annullato', '', '', 'Partita', 'e4', '', '', '', ''],
+    ['Remote Support', '', '', d('2026-10-17'), 'Remote Support', '', '12:00', '', '18:00', '', '', 'Da assegnare', '', '', 'Remote Support', 'e3', '12:00', '', '', '', ''],
+    ['Remote TL', '', '', d('2026-10-18'), 'Remote TL', '', '10:00', 'Anna Neri', '16:00', '', '', 'In attesa di risposta', '', '', 'Remote TL', 'e2', '10:00', '', 'SI', '', 'a'],
+    ['Serie A', '9', 'Calcio', d('2026-10-18'), 'Inter-Monza', '15:00', '11:00', 'Carla Verdi', '18:30', '', '', 'Rifiutato', '', 'SI', 'Partita', 'e5', '', '18:30', 'SI', 'Malato', 'c'],
+    ['Serie A', '9', 'Calcio', d('2026-10-18'), 'Roma-Lazio', '20:45', '16:45', 'Anna Neri', '22:45', 'SI', 'Regia & co', 'Confermato', 'SI', '', 'Partita', 'e1', '', '', 'SI', '', 'a'],
+    ['Champions League', 'MD3', 'Calcio', d('2026-10-21'), 'Atalanta-PSG', '21:00', '20:00', '', '23:00', '', '', 'Annullato', '', '', 'Partita', 'e4', '', '', '', '', ''],
   ]);
   assert.deepEqual(conteggi, { eventi: 5, annullati: 1, deployment: 1 });
 });
@@ -72,23 +72,23 @@ test('foglio On-site', () => {
 
 test('foglio Operatori', () => {
   assert.deepEqual(righe().operatori, [
-    ['Nome', 'Mansione', 'Ruolo', 'Contratto', 'Email', 'Telefono', 'On-site', 'Attivo'],
-    ['Anna Neri', 'Regia', 'Remote TL', 'P.IVA', 'anna@x.it', '+39 1', 'TL', 'SI'],
-    ['Bruno Blu', '', 'Remote Support', 'Coop', '', '', '', 'NO'],
-    ['Carla Verdi', '', 'Remote OP', '', '', '', '', 'SI'],
+    ['Nome', 'Mansione', 'Ruolo', 'Contratto', 'Email', 'Telefono', 'On-site', 'Attivo', 'ID'],
+    ['Anna Neri', 'Regia', 'Remote TL', 'P.IVA', 'anna@x.it', '+39 1', 'TL', 'SI', 'a'],
+    ['Bruno Blu', '', 'Remote Support', 'Coop', '', '', '', 'NO', 'b'],
+    ['Carla Verdi', '', 'Remote OP', '', '', '', '', 'SI', 'c'],
   ]);
 });
 
 test('foglio Impostazioni', () => {
   const imp = righe().impostazioni;
   assert.deepEqual(imp[0], ['Voce', 'Valore', '', 'Operatore', 'Contratto', '', 'Sport', '', 'Competizione / mansione', 'Compenso', 'Ore prima', 'Ore dopo', 'Colore', 'Sport della competizione']);
-  assert.equal(imp.length, 10);   // intestazione + 9 voci (le più lunghe delle quattro liste)
+  assert.equal(imp.length, 12);   // intestazione + 11 voci (le più lunghe delle quattro liste)
   assert.deepEqual(imp[1], ['Netto P.IVA diurno', 140, '', 'Anna Neri', 'P.IVA', '', 'Calcio', '', 'Remote TL', 'Diurno', 0, 6, '', '']);
   assert.deepEqual(imp[2], ['Netto P.IVA notturno', 210, '', 'Bruno Blu', 'Coop', '', 'Rugby', '', 'Remote Support', 'Diurno', 0, 6, '', '']);
   assert.deepEqual(imp[3], ['Netto P.IVA maggiorato', 210, '', 'Carla Verdi', '', '', '', '', 'Serie A', 'Diurno', 4, 2, '#a16207', 'Calcio']);
   assert.deepEqual(imp[4], ['Netto Coop diurno', 175, '', '', '', '', '', '', 'Champions League', 'Dimezzato', 4, 2, '', 'Calcio']);
   assert.deepEqual(imp.slice(5).map((r) => r.slice(0, 2)), [['Netto Coop notturno', 262.5], ['Netto Coop maggiorato', 262.5],
-    ['Tariffa on-site (€ al giorno)', 150], ['Notturno dalle', '22:00'], ['Notturno alle', '06:00']]);
+    ['Tariffa on-site (€ al giorno)', 150], ['Notturno dalle', '22:00'], ['Notturno alle', '06:00'], ['Telefono di reperibilità', '+39 333'], ['Giorni di blocco', 3]]);
   // regole mai salvate: tariffe e righe mansione con i valori iniziali (Remote TL dalla vecchia durata della supervisione)
   const vuote = j(gs.righeBackup({ eventi: [], onsite: [], compensi: {}, operatori: [], regole: { durataSupervisioneOre: 8 } }, ADESSO)).impostazioni;
   assert.deepEqual(vuote[1].slice(0, 2), ['Netto P.IVA diurno', 140]);
@@ -141,7 +141,7 @@ function firestoreBackup({ negato = false, supervisore = true } = {}) {
     if (/\/operatori\?/.test(url)) return { codice: 200, dati: { documents: OPERATORI.map((o) => docREST('operatori', o)) } };
     if (/\/onsiteRiservato\?/.test(url)) return { codice: 200, dati: { documents: [docREST('onsiteRiservato', { id: 'd1', compenso: 300 })] } };
     if (url.endsWith('/impostazioni/regole')) return { codice: 200, dati: docREST('impostazioni', Object.assign({ id: 'regole' }, REGOLE)) };
-    if (url.endsWith('/impostazioni/operativo')) return { codice: 404, dati: {} };
+    if (url.endsWith('/impostazioni/operativo')) return { codice: 200, dati: docREST('impostazioni', { id: 'operativo', telefono: '+39 333', giorniBlocco: 3 }) };
     return { codice: 404, dati: {} };
   };
 }
@@ -221,5 +221,20 @@ test('impostazioni del backup', () => {
   assert.equal(j(carica({}).gs.impostazioniDashboard()).backupProgrammato, false);
   // finché nessuno lo spegne il backup è acceso (anche prima di attivaPromemoria)
   assert.equal(j(carica({}).gs.leggiImpostazioni()).backupAttivo, true);
+});
+
+test('invia un backup adesso ripetuto subito: non rispedisce', () => {
+  const recente = JSON.stringify({ quando: new Date(ADESSO.getTime() - 60000).toISOString(), eventi: 5, annullati: 1, deployment: 1, destinatari: 2, errore: '' });
+  const t = carica({ proprieta: Object.assign({}, PROPRIETA, { ULTIMO_BACKUP: recente }), risposte: firestoreBackup() });
+  assert.deepEqual(j(t.gs.giroBackup(ADESSO, { forza: true })), { inviato: true, eventi: 5, deployment: 1, destinatari: 2, ripetuto: true });
+  assert.equal(t.email.length, 0);
+  const vecchio = JSON.stringify({ quando: new Date(ADESSO.getTime() - 5 * 60000).toISOString(), eventi: 5, errore: '' });
+  const s = carica({ proprieta: Object.assign({}, PROPRIETA, { ULTIMO_BACKUP: vecchio }), risposte: firestoreBackup() });
+  assert.equal(j(s.gs.giroBackup(ADESSO, { forza: true })).inviato, true);
+  assert.equal(s.email.length, 1);
+  // il venerdì (senza forza) parte comunque
+  const v = carica({ proprieta: Object.assign({}, PROPRIETA, { ULTIMO_BACKUP: recente }), risposte: firestoreBackup() });
+  v.gs.giroBackup(ADESSO);
+  assert.equal(v.email.length, 1);
 });
 

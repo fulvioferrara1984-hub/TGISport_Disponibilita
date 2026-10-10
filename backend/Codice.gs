@@ -60,7 +60,12 @@ function verificaAutorizzazioni() {
 function firestore(percorso, idToken) {
   const url = 'https://firestore.googleapis.com/v1/projects/' + CONFIG.FIREBASE_PROJECT_ID + '/databases/(default)/documents/' + percorso;
   const r = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + idToken }, muteHttpExceptions: true });
-  return { codice: r.getResponseCode(), dati: JSON.parse(r.getContentText() || '{}') };
+  return { codice: r.getResponseCode(), dati: jsonSicuro(r.getContentText()) };
+}
+
+// Google a volte risponde con una sua pagina d'errore (502) invece del JSON: conta solo il codice
+function jsonSicuro(testo) {
+  try { return JSON.parse(testo || '{}'); } catch (e) { return {}; }
 }
 
 const campo = (doc, nome) => ((doc.fields || {})[nome] || {}).stringValue || '';
@@ -237,9 +242,12 @@ function leggiImpostazioni() {
 
 // Per la dashboard: anche se l'invio giornaliero è stato attivato (attivaPromemoria)
 function impostazioniDashboard() {
+  // se l'elenco degli attivatori non si legge, il riquadro delle notifiche si carica lo stesso
+  let attivatori = [];
+  try { attivatori = ScriptApp.getProjectTriggers().map((t) => t.getHandlerFunction()); } catch (e) { console.error('Attivatori non letti: ' + e.message); }
   return Object.assign(leggiImpostazioni(), {
-    promemoriaProgrammato: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'inviaPromemoria'),
-    backupProgrammato: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'inviaBackup'),
+    promemoriaProgrammato: attivatori.indexOf('inviaPromemoria') >= 0,
+    backupProgrammato: attivatori.indexOf('inviaBackup') >= 0,
   });
 }
 
@@ -398,7 +406,7 @@ function firestoreAdmin(metodo, percorso, corpo) {
   };
   if (corpo) { opzioni.contentType = 'application/json'; opzioni.payload = JSON.stringify(corpo); }
   const r = UrlFetchApp.fetch('https://firestore.googleapis.com/v1/projects/' + CONFIG.FIREBASE_PROJECT_ID + '/databases/(default)/documents' + percorso, opzioni);
-  return { codice: r.getResponseCode(), dati: JSON.parse(r.getContentText() || '{}') };
+  return { codice: r.getResponseCode(), dati: jsonSicuro(r.getContentText()) };
 }
 
 // Risposta di una lettura con l'account dello script: errori chiari, con il messaggio di Google
@@ -445,6 +453,17 @@ function giroPromemoria(adesso, opzioni) {
   if (!anteprima && !imp.promemoriaAttivi) return { saltato: 'spenti', oggi };
   // un giro in cui non è partita nessuna email non conta: il successivo riprova
   if (!anteprima && imp.ultimoPromemoria && imp.ultimoPromemoria.giorno === oggi && !imp.ultimoPromemoria.fallito) return { saltato: 'già fatto', oggi };
+  // un solo giro alla volta (l'attivatore e un inviaPromemoria lanciato a mano insieme): il secondo non spedisce
+  const blocco = anteprima ? null : LockService.getScriptLock();
+  if (blocco && !blocco.tryLock(1000)) return { saltato: 'in corso', oggi };
+  try {
+    return eseguiGiroPromemoria(adesso, anteprima, imp, oggi);
+  } finally {
+    if (blocco) blocco.releaseLock();
+  }
+}
+
+function eseguiGiroPromemoria(adesso, anteprima, imp, oggi) {
   const dati = leggiDatiPromemoria(oggi, aggiungiGiorni(oggi, imp.promemoriaGiorni));
   const scelta = selezionaPromemoria(dati.eventi, dati.operatori, oggi, imp.promemoriaGiorni);
   const link = indirizzi(imp.urlAdmin);
@@ -502,6 +521,7 @@ function attivaPromemoria() {
   if (p.getProperty('PROMEMORIA_GIORNI') === null) p.setProperty('PROMEMORIA_GIORNI', '3');
   const prova = giroPromemoria(new Date(), { anteprima: true });
   console.log('Anteprima di oggi, nessuna email spedita: ' + (prova.destinatari.length ? prova.destinatari.join(', ')
+    + (prova.inSospeso ? ' · ' + prova.inSospeso + (prova.inSospeso === 1 ? ' evento' : ' eventi') + ' da sistemare' : '')
     : prova.inSospeso ? prova.inSospeso + (prova.inSospeso === 1 ? ' evento' : ' eventi') + ' da sistemare ma nessun destinatario (controlla gli indirizzi dei supervisori).'
       : 'niente in sospeso.'));
   ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'inviaPromemoria').forEach((t) => ScriptApp.deleteTrigger(t));
@@ -595,8 +615,13 @@ function notificaOnsite(r) {
   const d = daFirestore(letto.dati);
   const ruolo = ['TL', 'OP'].find((x) => (Array.isArray(d['accettati' + x]) ? d['accettati' + x] : []).indexOf(op.id) >= 0);
   if (!ruolo) throw new Error('Accesso non consentito.');
+  if (d.stato === 'annullata') return { inviata: false };
   const imp = leggiImpostazioni();
   if (!imp.emailAttive || !imp.emailSupervisori) return { inviata: false };
+  // come per le disponibilità: al massimo un'email al minuto per operatore
+  const cache = CacheService.getScriptCache();
+  if (cache.get('onsite-' + op.uid)) return { inviata: false };
+  cache.put('onsite-' + op.uid, '1', CONFIG.PAUSA_NOTIFICHE_SECONDI);
   const testo = testoNotificaOnsite(op.nome, ruolo, d, indirizzi(imp.urlAdmin).convocazioni);
   MailApp.sendEmail({ to: imp.emailSupervisori, name: CONFIG.MITTENTE, subject: testo.subject, htmlBody: testo.htmlBody });
   return { inviata: true };
@@ -708,13 +733,13 @@ function righeBackup(d, adesso) {
 
   const eventi = lista(d.eventi).slice().sort((a, b) => t(a.data).localeCompare(t(b.data)) || ritrovo(a).localeCompare(ritrovo(b)));
   const convocazioni = [[titolo], ['Competizione', 'Round', 'Sport', 'Data', 'Partita / turno', 'Orario evento', 'Ritrovo', 'Operatore', 'Fine turno', 'Conferma',
-    'Note', 'Stato', 'Gettone maggiorato', 'Da sostituire', 'Tipo', 'ID evento', 'Ritrovo scritto a mano', 'Fine scritta a mano', 'Inviata', 'Motivo del rifiuto']]
+    'Note', 'Stato', 'Gettone maggiorato', 'Da sostituire', 'Tipo', 'ID evento', 'Ritrovo scritto a mano', 'Fine scritta a mano', 'Inviata', 'Motivo del rifiuto', 'ID operatore']]
     .concat(eventi.map((e) => {
       const turno = eTurno(e), nomeTurno = turno ? TURNI_REMOTI[e.tipo] : '';
       return [turno ? nomeTurno : t(e.competizione), turno ? '' : t(e.round), turno ? '' : t(e.sport), { data: t(e.data) }, turno ? nomeTurno : t(e.titolo),
         turno ? '' : t(e.orario), ritrovo(e), nome(e.operatoreId), t(e.fine || e.fineCalcolata), e.stato === 'confermato' ? 'SI' : '', t(e.note),
         STATI_BACKUP[e.stato] || t(e.stato), e.gettone === 'maggiorato' ? 'SI' : '', e.daSostituire ? 'SI' : '', turno ? nomeTurno : 'Partita', t(e.id),
-        t(e.convocazione), t(e.fine), e.inviata ? 'SI' : '', t(e.risposta)];
+        t(e.convocazione), t(e.fine), e.inviata ? 'SI' : '', t(e.risposta), t(e.operatoreId)];
     }));
 
   const statiOnsite = { aperta: 'Aperta', chiusa: 'Chiusa', annullata: 'Annullata' };
@@ -727,8 +752,8 @@ function righeBackup(d, adesso) {
   });
 
   const ops = lista(d.operatori).slice().sort((a, b) => t(a.nome).localeCompare(t(b.nome), 'it'));
-  const operatori = [['Nome', 'Mansione', 'Ruolo', 'Contratto', 'Email', 'Telefono', 'On-site', 'Attivo']]
-    .concat(ops.map((o) => [t(o.nome), t(o.mansione), RUOLI_BACKUP[o.ruolo] || 'Remote OP', t(o.contratto), t(o.email), t(o.telefono), t(o.onsite), o.attivo === false ? 'NO' : 'SI']));
+  const operatori = [['Nome', 'Mansione', 'Ruolo', 'Contratto', 'Email', 'Telefono', 'On-site', 'Attivo', 'ID']]
+    .concat(ops.map((o) => [t(o.nome), t(o.mansione), RUOLI_BACKUP[o.ruolo] || 'Remote OP', t(o.contratto), t(o.email), t(o.telefono), t(o.onsite), o.attivo === false ? 'NO' : 'SI', t(o.id)]));
 
   // Impostazioni: stesse colonne del file della stagione (A/B voci, D/E operatori, G sport, I competizioni) più compenso, ore e colore
   const r = d.regole || {};
@@ -740,6 +765,8 @@ function righeBackup(d, adesso) {
   ['P.IVA', 'Coop'].forEach((c) => ['diurno', 'notturno', 'maggiorato'].forEach((tipo) => voci.push(['Netto ' + c + ' ' + tipo, tariffa(c, tipo)])));
   voci.push(['Tariffa on-site (€ al giorno)', typeof r.tariffaOnsite === 'number' ? r.tariffaOnsite : 150]);
   voci.push(['Notturno dalle', t(r.notteDa || '22:00')], ['Notturno alle', t(r.notteA || '06:00')]);
+  const op = d.operativo || {};
+  voci.push(['Telefono di reperibilità', t(op.telefono)], ['Giorni di blocco', typeof op.giorniBlocco === 'number' ? op.giorniBlocco : 3]);
   const ore = (v, generale) => (typeof v === 'number' && isFinite(v) ? v : generale);
   const anticipo = ore(r.anticipoOre, 4), dopo = ore(r.fineOre, 2);
   const salvate = lista(r.competizioni);
@@ -832,14 +859,20 @@ function leggiDatiBackup(oggi) {
   const compensi = {};
   elencoAdmin('onsiteRiservato').forEach((x) => { compensi[x.id] = x.compenso; });
   const regole = letturaAdmin(firestoreAdmin('get', '/impostazioni/regole'), [404]);
+  const operativo = letturaAdmin(firestoreAdmin('get', '/impostazioni/operativo'), [404]);
   return { eventi: cerca('eventi', 'data'), onsite: cerca('onsite', 'a'), compensi, operatori: elencoAdmin('operatori'),
-    regole: regole.codice === 200 ? daFirestore(regole.dati) : {} };
+    regole: regole.codice === 200 ? daFirestore(regole.dati) : {}, operativo: operativo.codice === 200 ? daFirestore(operativo.dati) : {} };
 }
 
 // Il backup del venerdì (o subito, con forza). Ogni esito, anche un errore, resta in ULTIMO_BACKUP per la dashboard.
 function giroBackup(adesso, opzioni) {
   const imp = leggiImpostazioni();
   if (!(opzioni && opzioni.forza) && !imp.backupAttivo) return { saltato: 'spento' };
+  // «Invia un backup adesso» ripetuto subito (doppio clic o nuovo tentativo della pagina): non si rispedisce
+  const u = imp.ultimoBackup;
+  if (opzioni && opzioni.forza && u && !u.errore && adesso.getTime() - new Date(u.quando).getTime() < 2 * 60000) {
+    return { inviato: true, eventi: u.eventi, deployment: u.deployment, destinatari: u.destinatari, ripetuto: true };
+  }
   const registra = (dati) => PropertiesService.getScriptProperties().setProperty('ULTIMO_BACKUP', JSON.stringify(Object.assign({ quando: adesso.toISOString() }, dati)));
   try {
     const destinatari = String(imp.emailSupervisori || '').split(',').filter(Boolean);
