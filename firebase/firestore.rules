@@ -148,8 +148,7 @@ service cloud.firestore {
               && request.time < dataEvento() - duration.value(giorniBlocco(), 'd'))));
     }
 
-    // Tariffe, competizioni e regole: solo i supervisori (gli operatori non vedono i compensi).
-    // "operativo" (telefono di reperibilità e giorni di blocco) lo leggono anche gli operatori attivi.
+    // deployment on-site: l'operatore vede solo quelli mandati a lui
     match /onsite/{id} {
       allow read: if lettore() || (operatore() && mioOperatore() in resource.data.destinatari);
       allow create, delete: if supervisore();
@@ -178,6 +177,8 @@ service cloud.firestore {
       allow delete: if supervisore();
     }
 
+    // Tariffe, competizioni e regole: solo i supervisori (gli operatori non vedono i compensi).
+    // "operativo" (telefono di reperibilità e giorni di blocco) lo leggono anche gli operatori attivi.
     match /impostazioni/{documento} {
       allow read: if supervisore() || (documento == 'operativo' && operatore())
         || (visualizzatore() && documento in ['regole', 'operativo']);

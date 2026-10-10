@@ -34,9 +34,13 @@
     const adesso = DO.iso(new Date());
     if (adesso <= oggi) return false;
     oggi = adesso;
+    pulisciBozza();
+    return true;
+  }
+  // via dalla bozza i giorni che non si possono più cambiare (passati, bloccati, diventati on-site)
+  function pulisciBozza() {
     Object.keys(bozza).forEach((d) => { if (!modificabile(d)) delete bozza[d]; });
     salvaBozza();
-    return true;
   }
   const richiesto = (d) => modificabile(d) && richieste.some((x) => d >= x.da && d <= x.a);
 
@@ -109,7 +113,8 @@
     if (azione === 'riconferma') return '<button type="button" class="link" data-rispondi="confermato" data-id="' + c.id + '">Posso, confermo</button>';
     // telefona: numero di reperibilità impostato dai supervisori
     const numero = String(operativo.telefono || '').replace(/[^\d+]/g, '');
-    return numero ? '<a class="bottone telefona" href="tel:' + numero + '">📞 Contatta il supervisore</a>'
+    // il numero scritto accanto serve da computer, dove il tasto non telefona
+    return numero ? '<a class="bottone telefona" href="tel:' + numero + '">📞 Contatta il supervisore</a><span class="conv-numero">' + DO.esc(operativo.telefono) + '</span>'
       : '<span class="conv-senza-numero">Chiedi ai supervisori il numero di reperibilità</span>';
   }
 
@@ -162,7 +167,7 @@
       + '<div class="conv-info"><b>' + DO.esc(sup ? DO.nomeTurno(c.tipo) : c.titolo) + '</b>'
       + (sup ? '' : '<span>' + DO.esc([c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · ')) + '</span>')
       + '<span>' + orari + '</span>'
-      + (spiegazione ? '<small class="conv-spiegazione">Mancano ' + operativo.giorniBlocco + ' giorni o meno: per rinunciare chiama il supervisore.</small>' : '') + '</div>'
+      + (spiegazione ? '<small class="conv-spiegazione">' + DO.esc(DO.testoBlocco(operativo.giorniBlocco)) + '</small>' : '') + '</div>'
       + '<div class="conv-azioni">' + azioni + '</div></div>';
   }
 
@@ -251,6 +256,7 @@
     }
     try { onsite = await DO.dati.mieiOnsite(); } catch (err) { /* resta la lista di prima */ }
     aggiornaOnsite();
+    pulisciBozza();
     salvaCopia();
     disegna();
   });
@@ -481,14 +487,15 @@
     try {
       const [r, conv, op, ons, rev] = await Promise.all([
         DO.dati.mieDisponibilita(), DO.dati.mieConvocazioni().catch(() => null),
-        DO.dati.leggiOperativo().catch(() => Object.assign({}, DO.OPERATIVO_PREDEFINITO)),
+        // lettura non riuscita: resta il valore già noto (copia sul dispositivo), non quello predefinito
+        DO.dati.leggiOperativo().catch(() => null),
         DO.dati.mieiOnsite().catch(() => null),
         DO.dati.mieRichiesteEvento().catch(() => null),
       ]);
       if (conv) r.convocazioni = conv;
       if (ons) r.onsite = ons;
       if (rev) r.richiesteEvento = rev;
-      r.operativo = op;
+      if (op) r.operativo = op;
       const settimana = lun;
       applica(r);
       lun = giaVisibile ? settimana : settimanaIniziale();

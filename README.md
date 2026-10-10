@@ -29,7 +29,7 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 | Disponibilità per evento | dal menu ⋯ di una partita o di un turno Remote TL / Remote Support ancora scoperto: gli operatori scelti rispondono Sì o No per quell'evento (anche dentro la finestra di blocco, fino al giorno stesso); il Sì è solo una segnalazione, l'assegnazione resta del supervisore; la richiesta si chiude da sola quando l'evento ha un operatore e si riapre se viene rifiutato o segnato da sostituire |
 | Promemoria | ogni mattina tra le 8 e le 9 (nuovo tentativo alle 11 se il primo non riesce), per gli eventi remoti da oggi a X giorni dopo (generale: 3): agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto (da sostituire, senza operatore, da inviare, in attesa) |
 
-Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco), **Competizioni e sport** (ore prima/dopo, colore e menu *Compenso* per competizione) , **Notifiche email** (promemoria automatici e giorni) e **Tariffe e regole → Tariffa on-site**; l'abilitazione on-site di ciascuno si imposta nella scheda dell'operatore.
+Tutti i valori si cambiano da **Impostazioni → Tariffe e regole**, **Regole per gli operatori** (telefono di reperibilità, giorni di blocco), **Competizioni e sport** (ore prima/dopo, colore e menu *Compenso* per competizione) e **Notifiche email** (promemoria automatici, giorni e backup settimanale); la tariffa on-site è in **Tariffe e regole**; l'abilitazione on-site di ciascuno si imposta nella scheda dell'operatore.
 
 **Esporta mese** (scheda Convocazioni) scarica un Excel con le convocazioni del mese e le presenze per operatore, senza compensi.
 
@@ -136,6 +136,8 @@ Ordine **sito → script**, nessuna regola di Firestore da cambiare e nessuna nu
 3. **Attivazione** (una volta): nell'editor scegli **attivaPromemoria** e premi **Esegui**. Nel registro compare anche `Backup ogni venerdì tra le 18 e le 19 · backup acceso`.
 4. **Prova**: in dashboard premi **Invia un backup adesso** e controlla che l'email arrivi con il file Excel allegato.
 
+Dalla versione 27 del sito lo script (nuova versione da pubblicare come sopra, senza rieseguire *attivaPromemoria*) aggiunge al backup telefono di reperibilità, giorni di blocco e gli ID degli operatori, non rispedisce un backup chiesto due volte entro 2 minuti, fa un solo giro di promemoria alla volta e manda al massimo un'email on-site al minuto per operatore.
+
 ### Accessi in sola visualizzazione
 
 Ordine **sito → regole**, lo script delle email non cambia:
@@ -190,8 +192,8 @@ Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(
 Ogni venerdì tra le 18 e le 19 i supervisori ricevono `Backup_TGI_Sport_<data>.xlsx` (fogli **Convocazioni**, **On-site**, **Operatori**, **Impostazioni**), con tutti gli eventi della stagione, anche annullati e da assegnare. Per ripristinare: **Impostazioni → Importa dal file Excel** → scegli il file. L'importazione riconosce il backup (colonna *ID evento*):
 
 - gli eventi tornano con il loro ID, stato, tipo (partita, Remote TL, Remote Support), gettone maggiorato, «da sostituire», motivo del rifiuto e orari scritti a mano; le convocazioni già inviate tengono gli orari dati all'operatore; quelli già presenti tornano come nel backup (**le modifiche fatte dopo quella data si perdono**: lo storico resta, con *Ripristinato dal backup del …*), quelli che mancano si ricreano; quelli che non sono nel file non si toccano;
-- gli operatori si riconoscono per nome: dei presenti cambia solo ciò che è diverso nel backup (mai con un campo vuoto), e l'anteprima elenca ogni cambiamento, compreso un accesso riattivato; i nuovi arrivano senza codice;
-- tariffe, notturno, sport, competizioni e mansioni tornano come nel file; i deployment on-site no (il foglio è da consultare).
+- gli operatori si riconoscono per ID (colonna *ID* del foglio Operatori e *ID operatore* di Convocazioni, anche se nel frattempo hanno cambiato nome), poi per nome: dei presenti cambia solo ciò che è diverso nel backup (mai con un campo vuoto), e l'anteprima elenca ogni cambiamento, compreso un accesso riattivato; i nuovi tornano con il loro ID e arrivano senza codice;
+- tariffe, notturno, sport, competizioni e mansioni, telefono di reperibilità e giorni di blocco tornano come nel file; i deployment on-site no (il foglio è da consultare).
 
 ## Importare il file Excel della stagione
 
