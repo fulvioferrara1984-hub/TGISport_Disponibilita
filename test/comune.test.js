@@ -167,3 +167,14 @@ test('martedì della settimana col cambio d\'ora di marzo', () => {
   assert.equal(DO.martedi('2026-03-31'), '2026-03-31');
 });
 
+
+test('script delle email non aggiornato: messaggio chiaro', async () => {
+  const prima = global.fetch;
+  DO.CONFIG.EMAIL_URL = 'https://script.example/exec';
+  global.fetch = async () => ({ text: async () => JSON.stringify({ ok: false, errore: 'Operazione non consentita.' }) });
+  try {
+    await assert.rejects(DO.inviaEmail('azioneNuova', {}), /Script delle email da aggiornare \(vedi README\)\./);
+    global.fetch = async () => ({ text: async () => JSON.stringify({ ok: false, errore: 'Accesso non consentito.' }) });
+    await assert.rejects(DO.inviaEmail('emailRichiesta', {}), /^Error: Accesso non consentito\.$/);
+  } finally { global.fetch = prima; delete DO.CONFIG.EMAIL_URL; }
+});

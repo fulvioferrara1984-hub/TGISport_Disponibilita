@@ -185,7 +185,8 @@
         motivo = 'Connessione non riuscita.';
       }
       if (risposta) {
-        if (!risposta.ok) throw new Error(risposta.errore || 'Email non inviate.');
+        // «Operazione non consentita.» = azione che lo script pubblicato non conosce ancora
+        if (!risposta.ok) throw new Error(risposta.errore === 'Operazione non consentita.' ? 'Script delle email da aggiornare (vedi README).' : risposta.errore || 'Email non inviate.');
         return risposta.dati;
       }
       if (tentativo === 3) throw new Error(motivo);

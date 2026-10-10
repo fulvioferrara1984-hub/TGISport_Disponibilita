@@ -60,6 +60,8 @@
     if (!e || e.code !== 'permission-denied') throw traduci(e);
     await F.signOut(auth).catch(() => {});
     operatoreCorrente = null;
+    // collega tolto dall'elenco: via anche la copia dei dati sul dispositivo (compensi compresi), come con «Esci»
+    if (messaggio === NO_ACCESSO) await cancellaCopiaLocale();
     if (avvisa && alloScadere) alloScadere(messaggio);
     throw new Error(messaggio);
   }
@@ -169,7 +171,7 @@
   // l'accesso si decide dopo l'ingresso (supervisori nel codice, colleghi nell'elenco): qui solo il formato
   function controllaEmail(email) {
     const e = normalizzaEmail(email);
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw new Error('Scrivi un\'email valida.');
+    if (!/^[^@\s/]+@[^@\s/]+\.[^@\s/]+$/.test(e)) throw new Error('Scrivi un\'email valida.');
     return e;
   }
 
@@ -238,10 +240,18 @@
     accessoSola = false;
     await F.signOut(auth).catch(() => {});
     // la copia dei dati sul computer se ne va con l'uscita
-    if (cachePersistente) {
-      await F.terminate(db).catch(() => {});
-      await F.clearIndexedDbPersistence(db).catch(() => {});
-    }
+    await cancellaCopiaLocale();
+  }
+
+  // Copia di Firestore salvata sul dispositivo: si chiude, si cancella e si riparte senza copia
+  async function cancellaCopiaLocale() {
+    accessoSola = false;
+    DO.dimentica();
+    if (!cachePersistente) return;
+    await F.terminate(db).catch(() => {});
+    await F.clearIndexedDbPersistence(db).catch(() => {});
+    cachePersistente = false;
+    db = F.getFirestore(app);
   }
 
   // Le email partono dallo script Google, che verifica chi le chiede con il gettone di Firebase.
@@ -661,17 +671,26 @@
     return Object.assign({ id }, d.data());
   }
 
+  // In una transazione: posti e destinatari si controllano sui dati di quel momento (un'accettazione
+  // appena arrivata o un altro supervisore che aggiunge destinatari non si perdono)
   async function modificaOnsite(id, campi, extra) {
-    const d = await leggiOnsite(id);
-    if (d.stato === 'annullata') throw new Error('Il deployment è annullato.');
-    const nuovi = DO.onsite.modifiche(d, campi || {});
     const compenso = extra && extra.compenso !== undefined ? DO.onsite.compensoValido(extra.compenso) : undefined;
-    await scrivi(async () => {
-      const batch = F.writeBatch(db);
-      if (Object.keys(nuovi).length) batch.update(F.doc(db, 'onsite', id), nuovi);
-      if (compenso !== undefined) batch.set(F.doc(db, 'onsiteRiservato', id), { compenso });
-      await batch.commit();
-    });
+    let d, nuovi;
+    const lavoro = async (t) => {
+      const doc = await t.get(F.doc(db, 'onsite', id));
+      if (!doc.exists()) throw new Error('Deployment non trovato.');
+      d = Object.assign({ id }, doc.data());
+      if (d.stato === 'annullata') throw new Error('Il deployment è annullato.');
+      nuovi = DO.onsite.modifiche(d, campi || {});
+      if (Object.keys(nuovi).length) t.update(F.doc(db, 'onsite', id), nuovi);
+      if (compenso !== undefined) t.set(F.doc(db, 'onsiteRiservato', id), { compenso });
+    };
+    try {
+      await F.runTransaction(db, lavoro);
+    } catch (e) {
+      if (!e || !e.code) throw e;   // errori di controllo (posti, annullato…): così come sono
+      return negato(e, 'Sessione scaduta: accedi di nuovo.');
+    }
     const { senzaEmail, conEmail } = contattiEmail(extra);
     return { senzaEmail, inviate: mandaRichiestaOnsite(Object.assign({}, d, nuovi), conEmail, extra && extra.urlSito) };
   }
