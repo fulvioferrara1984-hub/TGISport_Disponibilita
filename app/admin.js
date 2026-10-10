@@ -842,7 +842,7 @@
     // collega in sola visualizzazione: solo Convocazioni, Riepilogo e Operatori, nessun tasto di modifica
     solaLettura = !!(u && u.sola);
     document.body.classList.toggle('sola-lettura', solaLettura);
-    $('marchio-nome').textContent = 'Disponibilità · ' + (solaLettura ? 'Sola visualizzazione' : 'Supervisori');
+    $('marchio-ruolo').textContent = solaLettura ? 'Sola visualizzazione' : 'Supervisori';
     document.querySelectorAll('#schede [data-vista]').forEach((b) => { b.hidden = solaLettura && !VISTE_SOLA.includes(b.dataset.vista); });
     $('pagina').hidden = false;
     $('schede').hidden = false;

@@ -136,7 +136,17 @@ Ordine **sito → script**, nessuna regola di Firestore da cambiare e nessuna nu
 3. **Attivazione** (una volta): nell'editor scegli **attivaPromemoria** e premi **Esegui**. Nel registro compare anche `Backup ogni venerdì tra le 18 e le 19 · backup acceso`.
 4. **Prova**: in dashboard premi **Invia un backup adesso** e controlla che l'email arrivi con il file Excel allegato.
 
-Dalla versione 27 del sito lo script (nuova versione da pubblicare come sopra, senza rieseguire *attivaPromemoria*) aggiunge al backup telefono di reperibilità, giorni di blocco e gli ID degli operatori, non rispedisce un backup chiesto di nuovo entro 2 minuti agli stessi indirizzi (la dashboard dice *Backup già inviato alle …*), fa un solo giro di promemoria alla volta e manda al massimo un'email on-site al minuto per operatore.
+Dalla versione 27 del sito lo script (nuova versione da pubblicare come sopra, senza rieseguire *attivaPromemoria*) aggiunge al backup telefono di reperibilità, giorni di blocco e gli ID degli operatori, non rispedisce un backup chiesto di nuovo entro 2 minuti agli stessi indirizzi (la dashboard dice *Backup già inviato alle …*), fa un solo giro di promemoria alla volta e manda al massimo un'email on-site al minuto per operatore e deployment.
+
+Dalla versione 28 il backup contiene anche le **disponibilità** degli operatori e i dati per **ripristinare gli on-site**, e una copia di ogni file resta su **Google Drive**:
+
+1. **Sito**: pubblicazione normale.
+2. **Script**: incolla [`backend/Codice.gs`](backend/Codice.gs) **e** [`backend/appsscript.json`](backend/appsscript.json) (Impostazioni del progetto → *Mostra il file manifest «appsscript.json»* nell'editor), salva.
+3. **Autorizzazione Drive** (una volta): nell'editor scegli **autorizzaDrive** e premi **Esegui**; Google chiede il permesso di vedere e gestire **solo i file creati dallo script** (non il resto del Drive). Nel registro compare `Cartella «Backup Disponibilità Ops» pronta su Drive: …` con il link.
+4. **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione**.
+5. **Prova**: **Invia un backup adesso**; in Impostazioni la riga dice *… · copia su Drive* e il file compare nella cartella. Si tengono gli ultimi 52 backup, i più vecchi vanno nel cestino di Drive.
+
+Rieseguire *attivaPromemoria* non serve; se lo si fa, gli attivatori già presenti restano come sono (prima venivano ricreati e, dentro la fascia delle 8, quel giorno il giro saltava).
 
 ### Accessi in sola visualizzazione
 
@@ -189,11 +199,13 @@ Repository → **Settings → Pages** → *Deploy from a branch* → `main` / `(
 
 ## Ripristinare da un backup
 
-Ogni venerdì tra le 18 e le 19 i supervisori ricevono `Backup_TGI_Sport_<data>.xlsx` (fogli **Convocazioni**, **On-site**, **Operatori**, **Impostazioni**), con tutti gli eventi della stagione, anche annullati e da assegnare. Per ripristinare: **Impostazioni → Importa dal file Excel** → scegli il file. L'importazione riconosce il backup (colonna *ID evento*):
+Ogni venerdì tra le 18 e le 19 i supervisori ricevono `Backup_TGI_Sport_<data>.xlsx` (fogli **Convocazioni**, **On-site**, **Operatori**, **Impostazioni**, **Disponibilità**), con tutti gli eventi della stagione, anche annullati e da assegnare; una copia resta nella cartella *Backup Disponibilità Ops* di Google Drive (per ripristinare da lì, scarica il file e importalo come sotto). Per ripristinare: **Impostazioni → Importa dal file Excel** → scegli il file. L'importazione riconosce il backup (colonna *ID evento*):
 
 - gli eventi tornano con il loro ID, stato, tipo (partita, Remote TL, Remote Support), gettone maggiorato, «da sostituire», motivo del rifiuto e orari scritti a mano; le convocazioni già inviate tengono gli orari dati all'operatore; quelli già presenti tornano come nel backup (**le modifiche fatte dopo quella data si perdono**: lo storico resta, con *Ripristinato dal backup del …*), quelli che mancano si ricreano; quelli che non sono nel file non si toccano;
 - gli operatori si riconoscono per ID (colonna *ID* del foglio Operatori e *ID operatore* di Convocazioni, anche se nel frattempo hanno cambiato nome), poi per nome: dei presenti cambia solo ciò che è diverso nel backup (mai con un campo vuoto), e l'anteprima elenca ogni cambiamento, compreso un accesso riattivato; i nuovi tornano con il loro ID e arrivano senza codice;
-- tariffe, notturno, sport, competizioni e mansioni, telefono di reperibilità e giorni di blocco tornano come nel file; i deployment on-site no (il foglio è da consultare).
+- tariffe, notturno, sport, competizioni e mansioni, telefono di reperibilità e giorni di blocco tornano come nel file;
+- le **disponibilità** tornano giorno per giorno come nel file; i giorni che non sono nel file restano come sono; le righe con un operatore che non c'è più (né nella piattaforma né nel foglio Operatori) si saltano e l'anteprima le conta;
+- i **deployment on-site** presenti tornano come nel backup (giorni, posti, destinatari, chi ha accettato o rifiutato, stato, compenso), quelli che mancano si ricreano, gli altri non si toccano. Nei backup precedenti alla versione 28 il foglio On-site non ha gli ID: lì i deployment non si reimportano.
 
 ## Importare il file Excel della stagione
 
@@ -249,8 +261,8 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/onsite.js`, `app/onsite-admin.js` | deployment on-site: calcoli (giorni, posti, presenze, compensi) e richiesta/scheda nella dashboard |
 | `app/convocazioni.js`, `app/riepilogo.js`, `app/impostazioni.js` | schede Convocazioni, Riepilogo, regole e importazione |
 | `app/config.js` | collegamento a Firebase e allo script delle email |
-| `app/stile.css`, `Logo/`, favicon | identità TGI Sport: colori del logo, orari e date in Archivo stretto |
-| `app/font/` | carattere Archivo incluso nel sito (nessuna richiesta a Google Fonts), licenza in `OFL.txt` |
+| `app/stile.css`, `Logo/`, favicon | identità TGI Sport: colori del logo, Montserrat con cinque grandezze (12, 14, 16, 20, 28 px) uguali su computer e telefono |
+| `app/font/` | carattere Montserrat incluso nel sito (nessuna richiesta a Google Fonts), licenza in `OFL.txt` |
 | `firebase/` | regole di sicurezza di Firestore e configurazione dell'emulatore |
 | `backend/` | script Google Apps Script per le email e i promemoria |
 | `test/` | prove automatiche: `node --test test/*.test.js` |
