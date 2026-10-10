@@ -341,9 +341,15 @@
     const datiDi = (k, idOp) => (idOp && elencoOp.find((o) => o.id === idOp)) || elencoOp.find((o) => !o.id && chiave(o.nome) === k)
       || (!idOp && elencoOp.find((o) => chiave(o.nome) === k)) || {};
     const idNelFile = new Set(elencoOp.map((o) => o.id).filter(Boolean));
-    const operatori = [], esistenti = {}, idPerNome = {}, idVisti = new Set();
+    // mappaId: ID scritto nel file → operatore a cui è stato ricondotto (per ID o per nome), per disponibilità e on-site
+    const operatori = [], esistenti = {}, idPerNome = {}, idVisti = new Set(), mappaId = {};
     // per ID (anche se nel frattempo ha cambiato nome), poi per nome come nell'importazione della stagione
     const assicura = (nome, idOp) => {
+      const id = assicuraOperatore(nome, idOp);
+      if (idOp && id) mappaId[idOp] = id;
+      return id;
+    };
+    const assicuraOperatore = (nome, idOp) => {
       const k = chiave(nome);
       if (!k && !idOp) return '';
       if (idOp && idVisti.has(idOp)) return idOp;
@@ -403,7 +409,7 @@
     });
     // disponibilità (foglio dal blocco 9): giorno per giorno; l'operatore per ID, poi per nome, senza crearne di nuovi
     const trovaOperatore = (nome, idOp) => {
-      if (idOp) return A.operatori.some((o) => o.id === idOp) || operatori.some((o) => o.id === idOp) ? idOp : '';
+      if (idOp) return mappaId[idOp] || (A.operatori.some((o) => o.id === idOp) ? idOp : '');
       const k = chiave(nome);
       return k ? idPerNome[k] || (A.operatori.find((o) => chiave(o.nome) === k) || {}).id || '' : '';
     };
@@ -424,7 +430,7 @@
     const ons = wb.Sheets['On-site'] ? foglio('On-site') : [];
     const onsiteConId = testo((ons[0] || [])[14]) === 'ID deployment';
     const STATI_ONSITE = { aperta: 'aperta', chiusa: 'chiusa', annullata: 'annullata' };
-    const listaId = (v) => [...new Set(testo(v).split(',').map(idValido).filter(Boolean))];
+    const listaId = (v) => [...new Set(testo(v).split(',').map(idValido).filter(Boolean).map((id) => mappaId[id] || id))];
     const posto = (v) => (Number.isInteger(v) && v >= 0 && v <= 20 ? v : 0);
     const gruppi = {};
     let onsiteSaltati = 0;

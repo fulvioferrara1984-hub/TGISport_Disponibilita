@@ -316,3 +316,21 @@ test('andata e ritorno: disponibilità e on-site dal backup dello script', async
   assert.deepEqual(p.disponibilitaBackup, disponibilita);
   assert.deepEqual(p.onsite, [Object.assign({}, onsite[0], { compenso: 250 })]);
 });
+
+test('ripristino: operatore ricreato con un ID nuovo, riconosciuto per nome anche in disponibilità e on-site', async () => {
+  const operatoriPrima = DO.admin.operatori;
+  DO.admin.operatori = [{ id: 'nuovoid', nome: 'Luca Bianchi', ruolo: 'TL', attivo: true }];
+  try {
+    const convocazioni = convocazioniMinime().concat([['Serie A', '9', 'Calcio', giorno('2026-10-18'), 'Roma-Lazio', '20:45', '16:45', 'Luca Bianchi', '22:45', '', '', 'Da inviare', '', '', 'Partita', 'ev1', '', '', '', '', 'vecchioid']]);
+    const { p } = await importaFogli({
+      Convocazioni: convocazioni, Impostazioni: [['Voce', 'Valore']],
+      Operatori: [['Nome', 'Mansione', 'Ruolo', 'Contratto', 'Email', 'Telefono', 'On-site', 'Attivo', 'ID'], ['Luca Bianchi', '', 'Remote TL', 'P.IVA', '', '', '', 'SI', 'vecchioid']],
+      'Disponibilità': [['Operatore', 'Data', 'Stato', 'Nota', 'ID operatore'], ['Luca Bianchi', giorno('2026-10-18'), 'Disponibile', '', 'vecchioid']],
+      'On-site': [INTESTAZIONI_ONSITE, ['Roma', 'Rugby', '', giorno('2026-11-12'), giorno('2026-11-12'), giorno('2026-11-12'), 'MD', '', 1, 0, '', '', 'Aperta', 100,
+        'd1', '', 'vecchioid, altro', 'vecchioid', '', '', '', '2026-10-01T10:00:00.000Z']],
+    });
+    assert.deepEqual(p.eventi.map((e) => e.operatoreId), ['nuovoid']);
+    assert.deepEqual(p.disponibilitaBackup, [{ id: 'nuovoid', giorni: { '2026-10-18': { s: 'D', n: '' } } }]);
+    assert.deepEqual([p.onsite[0].destinatari, p.onsite[0].accettatiTL], [['nuovoid', 'altro'], ['nuovoid']]);
+  } finally { DO.admin.operatori = operatoriPrima; }
+});

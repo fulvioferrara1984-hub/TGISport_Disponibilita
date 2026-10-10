@@ -711,12 +711,24 @@ body:not(.sola-lettura) .solo-lettura { display: none !important; }
   .kpi { grid-template-columns: 1fr 1fr; }
   .impostazioni { grid-template-columns: minmax(0, 1fr); }
   .kpi b { font-size: var(--t-20); }
-  .elenco-competizioni li { grid-template-columns: minmax(0, 1fr) 52px 52px 66px 30px; }
-  .elenco-competizioni select[data-campo="sport"] { grid-column: 1; grid-row: 2; }
-  .elenco-competizioni li.mansione input[readonly] { grid-column: auto; }
-  .elenco-competizioni select[data-campo="compenso"] { grid-column: 2 / span 3; grid-row: 2; }
-  .intestazione-competizioni { grid-template-columns: minmax(0, 1fr) 52px 52px 66px 30px; }
-  .intestazione-competizioni span:nth-child(2), .intestazione-competizioni span:nth-child(6) { display: none; }
+  /* competizioni sul telefono: nome su tutta la riga; sport e compenso; poi ore prima/dopo, colore e ✕ */
+  .elenco-competizioni { gap: 0; }
+  .elenco-competizioni li { grid-template-columns: minmax(0, 1fr) 56px 56px 66px 30px; row-gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--linea); }
+  .elenco-competizioni li > input[type="text"], .elenco-competizioni li.mansione input[readonly] { grid-column: 1 / -1; grid-row: 1; }
+  .elenco-competizioni select[data-campo="sport"] { grid-column: 1 / span 2; grid-row: 2; }
+  .elenco-competizioni select[data-campo="compenso"] { grid-column: 3 / span 3; grid-row: 2; }
+  .elenco-competizioni li::before { content: "Ore prima / dopo, colore"; grid-column: 1; grid-row: 3; align-self: center; font-size: var(--t-12); color: var(--inchiostro-3); }
+  .elenco-competizioni input[data-campo="prima"] { grid-column: 2; grid-row: 3; }
+  .elenco-competizioni input[data-campo="dopo"] { grid-column: 3; grid-row: 3; }
+  /* turni: «ore prima» è sempre 0 (campo spento), sul telefono basta la durata */
+  .elenco-competizioni li.mansione input[type="number"]:disabled { display: none; }
+  .elenco-competizioni li.mansione input[data-campo="dopo"] { grid-column: 2; }
+  .elenco-competizioni li.mansione select[data-campo="compenso"] { grid-column: 1 / -1; }
+  .elenco-competizioni li.mansione .colore-comp { grid-column: 3; }
+  .elenco-competizioni .colore-comp { grid-column: 4; grid-row: 3; }
+  .elenco-competizioni li > [data-togli], .elenco-competizioni li > span:last-child { grid-column: 5; grid-row: 3; }
+  .elenco-competizioni li.mansione::before { content: "Ore di turno, colore"; }
+  .intestazione-competizioni { display: none; }
   .convocazione { grid-template-columns: 54px minmax(0, 1fr); padding: 12px 14px; }
   .conv-azioni { grid-column: 1 / -1; justify-content: stretch; }
   .conv-azioni button { flex: 1; }

@@ -281,12 +281,13 @@ test('invia un backup adesso ripetuto subito: non rispedisce', () => {
 
 // ---------------------------------------------------------------- copia su Google Drive
 // Drive simulato: cartelle e file in memoria, come le API v3 (q con parents, name =, name contains, trashed)
-function driveFinto({ cartelle = {}, file = [], errore = null } = {}) {
+function driveFinto({ cartelle = {}, file = [], errore = null, erroreCartella = null, erroreCaricamento = null, erroreElenco = null } = {}) {
   const stato = { cartelle: Object.assign({}, cartelle), file: file.map((f) => Object.assign({ trashed: false }, f)), createCartelle: 0, n: 0 };
   stato.risposte = (url, o = {}) => {
     if (errore) return { codice: errore.codice, dati: { error: { message: errore.messaggio } } };
     const metodo = String(o.method || 'get').toLowerCase();
     if (url.startsWith('https://www.googleapis.com/upload/drive/v3/files')) {
+      if (erroreCaricamento) return { codice: erroreCaricamento, dati: { error: { message: 'Backend Error' } } };
       const testo = Buffer.from(o.payload).toString('latin1');
       const meta = JSON.parse(/\r\n\r\n(\{.*?\})\r\n--/.exec(testo)[1]);
       const nuovo = { id: 'f' + (++stato.n), name: meta.name, parents: meta.parents, createdTime: '2026-10-16T16:04:' + String(stato.n).padStart(2, '0') + 'Z', trashed: false,
@@ -310,7 +311,9 @@ function driveFinto({ cartelle = {}, file = [], errore = null } = {}) {
       Object.assign(f, JSON.parse(o.payload));
       return { codice: 200, dati: { id } };
     }
+    if (id && erroreCartella) return { codice: erroreCartella, dati: { error: { message: 'Backend Error' } } };
     if (id) return stato.cartelle[id] ? { codice: 200, dati: { id, trashed: stato.cartelle[id].trashed } } : { codice: 404, dati: { error: { message: 'File not found' } } };
+    if (erroreElenco) return { codice: erroreElenco, dati: { error: { message: 'Backend Error' } } };
     const q = query.get('q');
     const genitore = /'([^']+)' in parents/.exec(q)[1], uguale = /name = '([^']+)'/.exec(q), contiene = /name contains '([^']+)'/.exec(q);
     const files = stato.file.filter((f) => f.parents.includes(genitore) && !f.trashed && (!uguale || f.name === uguale[1]) && (!contiene || f.name.includes(contiene[1])));
@@ -373,4 +376,39 @@ test('autorizzaDrive: crea la cartella e lo scrive nel registro; autorizzazione 
   const scope = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../backend/appsscript.json'), 'utf8')).oauthScopes;
   assert.ok(scope.includes('https://www.googleapis.com/auth/drive.file'));
   assert.ok(!scope.includes('https://www.googleapis.com/auth/drive'));
+});
+
+test('copia su Drive: un errore temporaneo sulla cartella non ne crea una seconda', () => {
+  const drive = driveFinto({ cartelle: { cart9: { name: 'Backup Disponibilità Ops', trashed: false } }, erroreCartella: 500 });
+  const t = carica({ proprieta: Object.assign({ BACKUP_CARTELLA: 'cart9' }, PROPRIETA), risposte: conDrive(drive) });
+  assert.equal(j(t.gs.giroBackup(ADESSO)).inviato, true);
+  assert.equal(drive.createCartelle, 0);
+  assert.equal(t.prop.get('BACKUP_CARTELLA'), 'cart9');
+  assert.equal(ultimoBackup(t).drive, 'errore: Drive 500: Backend Error');
+});
+
+test('copia su Drive: caricamento non riuscito, il file dello stesso giorno resta', () => {
+  const drive = driveFinto({ cartelle: { cart9: { name: 'Backup Disponibilità Ops', trashed: false } }, erroreCaricamento: 503,
+    file: [{ id: 'oggi', name: 'Backup_TGI_Sport_2026-10-16.xlsx', parents: ['cart9'], createdTime: '2026-10-16T08:41:00Z' }] });
+  const t = carica({ proprieta: Object.assign({ BACKUP_CARTELLA: 'cart9' }, PROPRIETA), risposte: conDrive(drive) });
+  t.gs.giroBackup(ADESSO);
+  assert.equal(drive.file[0].trashed, false);
+  assert.equal(ultimoBackup(t).drive, 'errore: Drive 503: Backend Error');
+});
+
+test('copia su Drive: pulizia non riuscita dopo il salvataggio, la copia risulta salvata', () => {
+  const drive = driveFinto({ cartelle: { cart9: { name: 'Backup Disponibilità Ops', trashed: false } }, erroreElenco: 500 });
+  const t = carica({ proprieta: Object.assign({ BACKUP_CARTELLA: 'cart9' }, PROPRIETA), risposte: conDrive(drive) });
+  t.gs.giroBackup(ADESSO);
+  assert.equal(drive.file.length, 1);
+  assert.equal(ultimoBackup(t).drive, 'salvato');
+  assert.ok(t.registro.some((r) => r.includes('Pulizia della cartella dei backup non riuscita')), t.registro.join('\n'));
+});
+
+test('copia su Drive: i file vecchi si riconoscono dal nome nel codice, non con la ricerca di Drive', () => {
+  const drive = driveFinto({ cartelle: { cart9: { name: 'Backup Disponibilità Ops', trashed: false } } });
+  const t = carica({ proprieta: Object.assign({ BACKUP_CARTELLA: 'cart9' }, PROPRIETA), risposte: conDrive(drive) });
+  t.gs.giroBackup(ADESSO);
+  const ricerche = t.chiamate.filter((c) => c.url.startsWith('https://www.googleapis.com/drive/v3/files?q=')).map((c) => decodeURIComponent(c.url));
+  assert.ok(ricerche.length && ricerche.every((u) => !u.includes('name contains') && !u.includes('name =')), ricerche.join('\n'));
 });

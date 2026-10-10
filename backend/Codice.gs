@@ -969,7 +969,10 @@ function cartellaBackup() {
   if (id) {
     try {
       if (!chiamaDrive('get', DRIVE + '/' + encodeURIComponent(id) + '?fields=id,trashed').trashed) return id;
-    } catch (e) { /* cartella sparita: se ne crea una nuova */ }
+    } catch (e) {
+      // si ricrea solo una cartella che non c'è più; un errore temporaneo ferma la copia (niente seconda cartella)
+      if (!/^Drive 404/.test(e.message)) throw e;
+    }
   }
   const nuova = chiamaDrive('post', DRIVE + '?fields=id', { contentType: 'application/json', payload: JSON.stringify({ name: CARTELLA_BACKUP, mimeType: 'application/vnd.google-apps.folder' }) });
   p.setProperty('BACKUP_CARTELLA', nuova.id);
@@ -978,17 +981,23 @@ function cartellaBackup() {
 
 function salvaSuDrive(file, nome) {
   const cartella = cartellaBackup();
-  // backup ripetuto nello stesso giorno: il file di prima nel cestino
-  cercaDrive("'" + cartella + "' in parents and trashed = false and name = '" + nome + "'").forEach(nelCestino);
   const confine = 'confine-backup-tgi-sport';
   const testa = '--' + confine + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify({ name: nome, parents: [cartella] })
     + '\r\n--' + confine + '\r\nContent-Type: ' + XLSX_MIME + '\r\n\r\n';
   const corpo = Utilities.newBlob(testa).getBytes().concat(file.getBytes(), Utilities.newBlob('\r\n--' + confine + '--').getBytes());
   const nuovo = chiamaDrive('post', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { contentType: 'multipart/related; boundary=' + confine, payload: corpo });
-  // si tengono i 52 più recenti; i più vecchi nel cestino di Drive
-  const tutti = cercaDrive("'" + cartella + "' in parents and trashed = false and name contains 'Backup_TGI_Sport_'");
-  tutti.sort((a, b) => String(b.createdTime).localeCompare(String(a.createdTime)) || String(b.name).localeCompare(String(a.name)));
-  tutti.slice(BACKUP_SU_DRIVE).forEach(nelCestino);
+  // solo dopo il salvataggio: nel cestino il file di prima dello stesso giorno e quelli oltre i 52 più recenti.
+  // I backup si riconoscono dal nome qui (la ricerca per nome di Drive non è affidabile con «_»);
+  // se la pulizia non riesce la copia resta salvata e si riprova al backup successivo
+  try {
+    const backup = cercaDrive("'" + cartella + "' in parents and trashed = false").filter((f) => /^Backup_TGI_Sport_.*\.xlsx$/.test(f.name));
+    backup.filter((f) => f.name === nome && f.id !== nuovo.id).forEach(nelCestino);
+    const restanti = backup.filter((f) => f.name !== nome || f.id === nuovo.id)
+      .sort((a, b) => String(b.createdTime).localeCompare(String(a.createdTime)) || String(b.name).localeCompare(String(a.name)));
+    restanti.slice(BACKUP_SU_DRIVE).forEach(nelCestino);
+  } catch (e) {
+    console.error('Pulizia della cartella dei backup non riuscita: ' + e.message);
+  }
   return { id: nuovo.id };
 }
 
