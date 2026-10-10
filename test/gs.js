@@ -112,8 +112,8 @@ function carica(stub = {}) {
     },
     // cacheVera: la cache ricorda (per le prove sui limiti di frequenza); altrimenti è sempre vuota
     CacheService: { getScriptCache: () => (stub.cacheVera ? { get: (k) => (cache.has(k) ? cache.get(k) : null), put: (k, v) => cache.set(k, v) } : { get: () => null, put: () => {} }) },
-    // bloccato: un altro giro tiene già il blocco dello script
-    LockService: { getScriptLock: () => ({ tryLock: () => !stub.bloccato, releaseLock: () => {} }) },
+    // bloccato: un altro giro tiene già il blocco dello script; inAttesa(prop): ciò che l'altro giro fa mentre si aspetta il blocco
+    LockService: { getScriptLock: () => ({ tryLock: () => { if (stub.inAttesa) stub.inAttesa(prop); return !stub.bloccato; }, releaseLock: () => {} }) },
     ContentService: { createTextOutput: (t) => ({ setMimeType: () => t }), MimeType: { JSON: 'json' } },
   };
   vm.createContext(gs);

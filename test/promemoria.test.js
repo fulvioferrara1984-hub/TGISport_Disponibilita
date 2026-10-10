@@ -425,6 +425,13 @@ test('giro già in corso: niente doppio invio', () => {
   assert.equal(t.email.length, 0);
 });
 
+test('giro finito da un altro mentre si aspettava il blocco: niente doppio invio', () => {
+  const t = carica({ proprieta: ATTIVI, risposte: firestoreFinto({ eventi: [ev({})] }),
+    inAttesa: (prop) => prop.set('ULTIMO_PROMEMORIA', JSON.stringify({ giorno: '2026-10-09', operatori: 1, supervisori: 1 })) });
+  assert.deepEqual(j(t.gs.giroPromemoria(ADESSO)), { saltato: 'già fatto', oggi: '2026-10-09' });
+  assert.equal(t.email.length, 0);
+});
+
 test('pagina d\'errore di Google (502) invece della risposta', () => {
   const finto = firestoreFinto();
   const t = carica({ risposte: (url, o) => (url.endsWith(':runQuery') ? { codice: 502, testo: '<html>Bad Gateway</html>' } : finto(url, o)) });

@@ -41,6 +41,9 @@
     const [a, m] = mese.split('-').map(Number), oggi = DO.oggi();
     $('cal-titolo').textContent = DO.nomeMese(m - 1) + ' ' + a;
     const settimane = DO.grigliaMese(mese);
+    // voce col focus da tastiera prima di ridisegnare (innerHTML la sostituisce)
+    const fuoco = $('cal-griglia').contains(document.activeElement) ? document.activeElement : null;
+    const comeFuoco = fuoco && { voce: fuoco.classList.contains('cal-voce'), tipo: fuoco.dataset.tipo, id: fuoco.dataset.id, giorno: fuoco.dataset.giorno };
     // righe mai più basse delle celle (--cella): con poco spazio la griglia scorre invece di sovrapporsi
     $('cal-griglia').style.gridTemplateRows = 'repeat(' + settimane.length + ', minmax(var(--cella), 1fr))';
     $('cal-griglia').innerHTML = settimane.map((s) => s.map(({ data, delMese }) => {
@@ -55,9 +58,13 @@
     }).join('')).join('');
     // dopo un aggiornamento in tempo reale il riquadro dei dettagli resta sulla stessa voce, se c'è ancora
     const prima = voceAperta && !$('cal-dettagli').hidden ? voceAperta.dataset : null;
-    const stessa = prima && Array.from($('cal-griglia').querySelectorAll('.cal-voce'))
-      .find((b) => b.dataset.tipo === prima.tipo && b.dataset.id === prima.id && b.dataset.giorno === prima.giorno);
+    const trova = (x) => x && Array.from($('cal-griglia').querySelectorAll(x.voce === false ? '.cal-altri' : '.cal-voce'))
+      .find((b) => b.dataset.giorno === x.giorno && (x.voce === false || (b.dataset.tipo === x.tipo && b.dataset.id === x.id)));
+    const stessa = trova(prima);
     if (stessa) mostraDettagli(stessa); else nascondiDettagli();
+    // il focus torna sulla stessa voce (altrimenti finirebbe fuori dal calendario)
+    const daFuoco = trova(comeFuoco);
+    if (daFuoco) daFuoco.focus(); else if (comeFuoco) $('cal-chiudi').focus();
   }
 
   // ---------- dettagli al passaggio del mouse (al tocco sul telefono) ----------
@@ -118,6 +125,9 @@
     $('calendario').hidden = true;
     document.body.classList.remove('con-calendario');
     nascondiDettagli();
+    // avvisi spostati dentro lo schermo intero: tornano nella pagina
+    const avvisi = document.querySelector('.avvisi');
+    if (avvisi && avvisi.parentNode !== document.body) document.body.appendChild(avvisi);
     if (daRiattivare && daRiattivare.isConnected) daRiattivare.focus();
     daRiattivare = null;
   }

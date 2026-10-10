@@ -32,7 +32,10 @@ function doPost(e) {
     const azioni = {
       notificaInvio, emailRichiesta, emailConvocazioni, notificaRisposta, emailOnsite, notificaOnsite,
       emailRichiestaEvento, notificaRispostaEvento,
-      inviaBackupOra: soloSupervisori(() => { const r = giroBackup(new Date(), { forza: true }); return { destinatari: r.destinatari, eventi: r.eventi }; }),
+      inviaBackupOra: soloSupervisori(() => {
+        const r = giroBackup(new Date(), { forza: true });
+        return Object.assign({ destinatari: r.destinatari, eventi: r.eventi }, r.ripetuto ? { ripetuto: true, quando: r.quando } : {});
+      }),
       leggiImpostazioni: soloSupervisori(impostazioniDashboard), salvaImpostazioni: soloSupervisori(salvaImpostazioni),
     };
     if (!azioni[r.azione]) throw new Error('Operazione non consentita.');
@@ -448,15 +451,19 @@ function leggiDatiPromemoria(oggi, fine) {
 // Il giro del mattino. In anteprima non controlla interruttore e giro già fatto, non spedisce e non salva.
 function giroPromemoria(adesso, opzioni) {
   const anteprima = !!(opzioni && opzioni.anteprima);
-  const imp = leggiImpostazioni();
+  let imp = leggiImpostazioni();
   const oggi = Utilities.formatDate(adesso, 'Europe/Rome', 'yyyy-MM-dd');
-  if (!anteprima && !imp.promemoriaAttivi) return { saltato: 'spenti', oggi };
   // un giro in cui non è partita nessuna email non conta: il successivo riprova
-  if (!anteprima && imp.ultimoPromemoria && imp.ultimoPromemoria.giorno === oggi && !imp.ultimoPromemoria.fallito) return { saltato: 'già fatto', oggi };
+  const giaFatto = (i) => !anteprima && i.ultimoPromemoria && i.ultimoPromemoria.giorno === oggi && !i.ultimoPromemoria.fallito;
+  if (!anteprima && !imp.promemoriaAttivi) return { saltato: 'spenti', oggi };
+  if (giaFatto(imp)) return { saltato: 'già fatto', oggi };
   // un solo giro alla volta (l'attivatore e un inviaPromemoria lanciato a mano insieme): il secondo non spedisce
   const blocco = anteprima ? null : LockService.getScriptLock();
   if (blocco && !blocco.tryLock(1000)) return { saltato: 'in corso', oggi };
   try {
+    // riletto col blocco in mano: l'altro giro può aver finito mentre si aspettava
+    if (blocco) imp = leggiImpostazioni();
+    if (giaFatto(imp)) return { saltato: 'già fatto', oggi };
     return eseguiGiroPromemoria(adesso, anteprima, imp, oggi);
   } finally {
     if (blocco) blocco.releaseLock();
@@ -618,10 +625,10 @@ function notificaOnsite(r) {
   if (d.stato === 'annullata') return { inviata: false };
   const imp = leggiImpostazioni();
   if (!imp.emailAttive || !imp.emailSupervisori) return { inviata: false };
-  // come per le disponibilità: al massimo un'email al minuto per operatore
-  const cache = CacheService.getScriptCache();
-  if (cache.get('onsite-' + op.uid)) return { inviata: false };
-  cache.put('onsite-' + op.uid, '1', CONFIG.PAUSA_NOTIFICHE_SECONDI);
+  // al massimo un'email al minuto per operatore e deployment (un altro deployment accettato subito dopo ha la sua)
+  const cache = CacheService.getScriptCache(), chiave = 'onsite-' + op.uid + '-' + String(r.id || '');
+  if (cache.get(chiave)) return { inviata: false };
+  cache.put(chiave, '1', CONFIG.PAUSA_NOTIFICHE_SECONDI);
   const testo = testoNotificaOnsite(op.nome, ruolo, d, indirizzi(imp.urlAdmin).convocazioni);
   MailApp.sendEmail({ to: imp.emailSupervisori, name: CONFIG.MITTENTE, subject: testo.subject, htmlBody: testo.htmlBody });
   return { inviata: true };
@@ -868,14 +875,15 @@ function leggiDatiBackup(oggi) {
 function giroBackup(adesso, opzioni) {
   const imp = leggiImpostazioni();
   if (!(opzioni && opzioni.forza) && !imp.backupAttivo) return { saltato: 'spento' };
-  // «Invia un backup adesso» ripetuto subito (doppio clic o nuovo tentativo della pagina): non si rispedisce
+  const destinatari = String(imp.emailSupervisori || '').split(',').filter(Boolean);
+  // «Invia un backup adesso» ripetuto subito agli stessi indirizzi (nuovo tentativo della pagina dopo una risposta persa):
+  // non si rispedisce, e la dashboard lo dice
   const u = imp.ultimoBackup;
-  if (opzioni && opzioni.forza && u && !u.errore && adesso.getTime() - new Date(u.quando).getTime() < 2 * 60000) {
-    return { inviato: true, eventi: u.eventi, deployment: u.deployment, destinatari: u.destinatari, ripetuto: true };
+  if (opzioni && opzioni.forza && u && !u.errore && u.indirizzi === destinatari.join(',') && adesso.getTime() - new Date(u.quando).getTime() < 2 * 60000) {
+    return { inviato: true, eventi: u.eventi, deployment: u.deployment, destinatari: u.destinatari, ripetuto: true, quando: u.quando };
   }
   const registra = (dati) => PropertiesService.getScriptProperties().setProperty('ULTIMO_BACKUP', JSON.stringify(Object.assign({ quando: adesso.toISOString() }, dati)));
   try {
-    const destinatari = String(imp.emailSupervisori || '').split(',').filter(Boolean);
     if (!destinatari.length) throw new Error('Nessun indirizzo dei supervisori in Impostazioni → Notifiche email.');
     const oggi = Utilities.formatDate(adesso, 'Europe/Rome', 'yyyy-MM-dd');
     const r = righeBackup(leggiDatiBackup(oggi), adesso);
@@ -895,7 +903,7 @@ function giroBackup(adesso, opzioni) {
         + (dashboard ? tasto(dashboard, 'Apri la dashboard') : '') + '</div>',
       attachments: [file],
     });
-    registra({ eventi: c.eventi, annullati: c.annullati, deployment: c.deployment, destinatari: destinatari.length, errore: '' });
+    registra({ eventi: c.eventi, annullati: c.annullati, deployment: c.deployment, destinatari: destinatari.length, indirizzi: destinatari.join(','), errore: '' });
     return { inviato: true, eventi: c.eventi, deployment: c.deployment, destinatari: destinatari.length };
   } catch (e) {
     registra({ errore: e.message });

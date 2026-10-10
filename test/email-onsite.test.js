@@ -21,7 +21,7 @@ const firestoreFinto = (d) => (url) => {
   if (url.endsWith('invii?pageSize=1')) return { codice: 200, dati: {} };
   if (url.endsWith('/utenti/u1')) return { codice: 200, dati: docREST('utenti', { id: 'u1', operatoreId: 'm' }) };
   if (url.endsWith('/operatori/m')) return { codice: 200, dati: docREST('operatori', { id: 'm', nome: 'Marco Rossi', mansione: '' }) };
-  if (url.endsWith('/onsite/d1')) return { codice: 200, dati: docREST('onsite', d) };
+  if (/\/onsite\/d[12]$/.test(url)) return { codice: 200, dati: docREST('onsite', d) };
   return { codice: 403, dati: {} };
 };
 const NOTIFICHE = { EMAIL_SUPERVISORI: 's@x.it', EMAIL_ATTIVE: 'SI', URL_ADMIN: 'https://x.github.io/sito/admin.html#aggiornamenti' };
@@ -97,5 +97,8 @@ test('notifica on-site: niente per un deployment annullato, al massimo una al mi
   assert.deepEqual(j(t.gs.notificaOnsite({ idToken: gettone, id: 'd1' })), { inviata: true });
   assert.deepEqual(j(t.gs.notificaOnsite({ idToken: gettone, id: 'd1' })), { inviata: false });
   assert.equal(t.email.length, 1);
+  // un altro deployment accettato subito dopo ha la sua email
+  assert.deepEqual(j(t.gs.notificaOnsite({ idToken: gettone, id: 'd2' })), { inviata: true });
+  assert.equal(t.email.length, 2);
 });
 

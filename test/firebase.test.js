@@ -113,3 +113,15 @@ test('importazione: gli operatori nuovi arrivano con i loro dati', async () => {
   assert.deepEqual([z.email, z.telefono, z.onsite, z.attivo, z.ruolo], ['z@x.it', '+39 1', 'TL', false, 'SUP']);
 });
 
+
+test('regole per gli operatori: lettura non riuscita → errore (la pagina tiene il valore già noto), documento assente → predefinite', async () => {
+  const { FB } = archivioNuovo({ email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' }, {
+    getDoc: async (rif) => { if (rif.path === 'impostazioni/operativo') throw Object.assign(new Error('offline'), { code: 'unavailable' }); return { exists: () => false, data: () => ({}) }; },
+  });
+  DO.avviaPagina('admin', () => {});
+  await assert.rejects(FB.leggiOperativo());
+  const { FB: FB2 } = archivioNuovo({ email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' }, {
+    getDoc: async () => ({ exists: () => false, data: () => ({}) }),
+  });
+  assert.deepEqual(await FB2.leggiOperativo(), { telefono: '', giorniBlocco: 3 });
+});

@@ -199,8 +199,9 @@
   function avviso(testo, tipo, durata) {
     let box = document.querySelector('.avvisi');
     if (!box) { box = document.createElement('div'); box.className = 'avvisi'; box.setAttribute('role', 'status'); }
-    // a schermo intero si vede solo quell'elemento: gli avvisi vanno lì dentro
-    const dove = document.fullscreenElement || document.body;
+    // a schermo intero si vede solo quell'elemento: gli avvisi vanno lì dentro (se è stato appena nascosto, nella pagina)
+    const fs = document.fullscreenElement;
+    const dove = fs && !fs.hidden ? fs : document.body;
     if (box.parentNode !== dove) dove.appendChild(box);
     const el = document.createElement('div');
     el.className = 'avviso' + (tipo ? ' ' + tipo : '');

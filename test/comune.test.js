@@ -183,3 +183,17 @@ test('nome del mese con la maiuscola (un solo elenco dei mesi)', () => {
   assert.equal(DO.nomeMese(0), 'Gennaio');
   assert.equal(DO.nomeMese(11), 'Dicembre');
 });
+
+test('avvisi: dentro lo schermo intero solo se è ancora visibile (uscita forzata col calendario a schermo intero)', () => {
+  const nodo = () => ({ figli: [], parentNode: null, hidden: false, setAttribute() {}, appendChild(x) { x.parentNode = this; this.figli.push(x); return x; }, remove() {} });
+  const body = nodo(), cal = nodo();
+  let box = null;
+  global.document = { body, fullscreenElement: cal, querySelector: (s) => (s === '.avvisi' ? box : null), createElement: () => { const n = nodo(); if (!box) box = n; return n; } };
+  try {
+    DO.avviso('a schermo intero', 'ok', 1);
+    assert.equal(box.parentNode, cal);
+    cal.hidden = true;   // calendario chiuso, il browser non è ancora uscito dallo schermo intero
+    DO.avviso('Questa email non ha accesso.', 'errore', 1);
+    assert.equal(box.parentNode, body);
+  } finally { delete global.document; }
+});

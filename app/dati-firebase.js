@@ -551,14 +551,10 @@
     const giorni = Number(x.giorniBlocco);
     return { telefono: String(x.telefono || ''), giorniBlocco: Number.isInteger(giorni) && giorni >= 0 ? giorni : DO.OPERATIVO_PREDEFINITO.giorniBlocco };
   }
+  // documento assente: valori predefiniti; lettura non riuscita: errore, e la pagina tiene il valore che conosce già
   async function leggiOperativo() {
     await avvia();
-    try {
-      return operativoDa(await F.getDoc(F.doc(db, 'impostazioni', 'operativo')));
-    } catch (e) {
-      // regole non ancora pubblicate o rete assente: valori predefiniti, la pagina funziona lo stesso
-      return Object.assign({}, DO.OPERATIVO_PREDEFINITO);
-    }
+    return operativoDa(await F.getDoc(F.doc(db, 'impostazioni', 'operativo')));
   }
   const salvaOperativo = (o) => scrivi(() => F.setDoc(F.doc(db, 'impostazioni', 'operativo'), { telefono: String(o.telefono || ''), giorniBlocco: o.giorniBlocco }));
 

@@ -793,7 +793,9 @@
     b.textContent = 'Invio in corso…';
     try {
       const r = await DO.dati.inviaBackupOra();
-      DO.avviso('Backup inviato a ' + r.destinatari + (r.destinatari === 1 ? ' indirizzo.' : ' indirizzi.'), 'ok', 6000);
+      const a = r.destinatari + (r.destinatari === 1 ? ' indirizzo' : ' indirizzi');
+      const ora = r.ripetuto ? new Date(r.quando).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }) : '';
+      DO.avviso(r.ripetuto ? 'Backup già inviato alle ' + ora + ' a ' + a + ': non rispedito.' : 'Backup inviato a ' + a + '.', 'ok', 6000);
     } catch (err) {
       DO.avviso('Backup non inviato: ' + err.message, 'errore', 8000);
     } finally {

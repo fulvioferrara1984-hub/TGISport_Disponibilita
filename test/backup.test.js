@@ -224,10 +224,23 @@ test('impostazioni del backup', () => {
 });
 
 test('invia un backup adesso ripetuto subito: non rispedisce', () => {
-  const recente = JSON.stringify({ quando: new Date(ADESSO.getTime() - 60000).toISOString(), eventi: 5, annullati: 1, deployment: 1, destinatari: 2, errore: '' });
+  const quando = new Date(ADESSO.getTime() - 60000).toISOString();
+  const recente = JSON.stringify({ quando, eventi: 5, annullati: 1, deployment: 1, destinatari: 2, indirizzi: 's1@x.it,s2@x.it', errore: '' });
   const t = carica({ proprieta: Object.assign({}, PROPRIETA, { ULTIMO_BACKUP: recente }), risposte: firestoreBackup() });
-  assert.deepEqual(j(t.gs.giroBackup(ADESSO, { forza: true })), { inviato: true, eventi: 5, deployment: 1, destinatari: 2, ripetuto: true });
+  assert.deepEqual(j(t.gs.giroBackup(ADESSO, { forza: true })), { inviato: true, eventi: 5, deployment: 1, destinatari: 2, ripetuto: true, quando });
   assert.equal(t.email.length, 0);
+  // la dashboard sa che non è ripartito
+  const p = carica({ proprieta: Object.assign({}, PROPRIETA, { ULTIMO_BACKUP: recente }), risposte: firestoreBackup() });
+  assert.deepEqual(JSON.parse(p.gs.doPost({ postData: { contents: JSON.stringify({ azione: 'inviaBackupOra', idToken: 'gettone' }) } })),
+    { ok: true, dati: { destinatari: 2, eventi: 5, ripetuto: true, quando } });
+  // indirizzi cambiati nel frattempo (o ultimo backup registrato da uno script vecchio): si rispedisce
+  const n = carica({ proprieta: Object.assign({}, PROPRIETA, { EMAIL_SUPERVISORI: 's1@x.it,s2@x.it,s3@x.it', ULTIMO_BACKUP: recente }), risposte: firestoreBackup() });
+  assert.equal(j(n.gs.giroBackup(ADESSO, { forza: true })).destinatari, 3);
+  assert.equal(n.email.length, 1);
+  const vecchioScript = JSON.stringify({ quando, eventi: 5, destinatari: 2, errore: '' });
+  const o = carica({ proprieta: Object.assign({}, PROPRIETA, { ULTIMO_BACKUP: vecchioScript }), risposte: firestoreBackup() });
+  o.gs.giroBackup(ADESSO, { forza: true });
+  assert.equal(o.email.length, 1);
   const vecchio = JSON.stringify({ quando: new Date(ADESSO.getTime() - 5 * 60000).toISOString(), eventi: 5, errore: '' });
   const s = carica({ proprieta: Object.assign({}, PROPRIETA, { ULTIMO_BACKUP: vecchio }), risposte: firestoreBackup() });
   assert.equal(j(s.gs.giroBackup(ADESSO, { forza: true })).inviato, true);
