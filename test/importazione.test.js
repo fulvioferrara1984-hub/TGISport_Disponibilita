@@ -199,8 +199,40 @@ test('ripristino: operatori riconosciuti per ID, reperibilità e giorni di blocc
   assert.deepEqual(p.eventi.map((e) => [e.id, e.operatoreId]), [['ev1', 'op7'], ['ev2', 'op9']]);
   assert.deepEqual(p.operatori.map((o) => [o.id, o.nome]), [['op9', 'Ex Operatore']]);
   assert.deepEqual(p.operativo, { telefono: '+39 333 111', giorniBlocco: 2 });
-  assert.ok(anteprima.includes('Telefono di reperibilità e giorni di blocco come nel backup'));
+  assert.ok(anteprima.includes('Regole per gli operatori: telefono di reperibilità +39 333 111, giorni di blocco 2'), anteprima);
   assert.deepEqual(operativoSalvato, { telefono: '+39 333 111', giorniBlocco: 2 });
   DO.admin.operatori = operatoriPrima;
 });
 
+
+test('ripristino: un telefono di reperibilità vuoto nel backup non cancella quello attuale', async () => {
+  DO.admin.operativo = { telefono: '+39 02 999', giorniBlocco: 3 };
+  try {
+    const { p, anteprima } = await importaFogli({
+      Convocazioni: [[TITOLO], INTESTAZIONI.concat(['ID operatore']), ['Serie A', '9', 'Calcio', giorno('2026-10-18'), 'Roma-Lazio', '20:45', '16:45', '', '22:45', '', '', 'Da assegnare', '', '', 'Partita', 'ev1']],
+      Impostazioni: [['Voce', 'Valore'], ['Telefono di reperibilità', null], ['Giorni di blocco', 2]],
+    });
+    assert.deepEqual(p.operativo, { telefono: '+39 02 999', giorniBlocco: 2 });
+    assert.ok(anteprima.includes('Regole per gli operatori: telefono di reperibilità +39 02 999, giorni di blocco 2'), anteprima);
+  } finally { delete DO.admin.operativo; }
+});
+
+test('ripristino: due operatori con lo stesso nome tengono ciascuno i suoi dati', async () => {
+  const operatoriPrima = DO.admin.operatori;
+  DO.admin.operatori = [{ id: 'op1', nome: 'Mario Rossi', ruolo: 'OP', contratto: 'P.IVA', email: 'vecchia1@x.it', attivo: true },
+    { id: 'op2', nome: 'Mario Rossi', ruolo: 'OP', contratto: 'P.IVA', email: 'vecchia2@x.it', attivo: true }];
+  try {
+    const riga = (idOp, id) => ['Serie A', '9', 'Calcio', giorno('2026-10-18'), 'Partita ' + id, '20:45', '16:45', 'Mario Rossi', '22:45', '', '', 'Da inviare', '', '', 'Partita', id, '', '', '', '', idOp];
+    const { p } = await importaFogli({
+      Convocazioni: [[TITOLO], INTESTAZIONI.concat(['ID operatore']), riga('op1', 'ev1'), riga('op2', 'ev2'), riga('op3', 'ev3')],
+      Operatori: [['Nome', 'Mansione', 'Ruolo', 'Contratto', 'Email', 'Telefono', 'On-site', 'Attivo', 'ID'],
+        ['Mario Rossi', '', 'Remote OP', 'P.IVA', 'nuova1@x.it', '', '', 'SI', 'op1'], ['Mario Rossi', '', 'Remote OP', 'P.IVA', 'nuova2@x.it', '', '', 'SI', 'op2'],
+        ['Mario Rossi', '', 'Remote OP', 'Coop', 'terzo@x.it', '', '', 'SI', 'op3']],
+      Impostazioni: [['Voce', 'Valore']],
+    });
+    assert.deepEqual(p.esistenti, { op1: { email: 'nuova1@x.it' }, op2: { email: 'nuova2@x.it' } });
+    // il terzo (tolto dalla piattaforma) non finisce su uno degli altri due: torna con il suo ID
+    assert.deepEqual(p.operatori.map((o) => [o.id, o.email]), [['op3', 'terzo@x.it']]);
+    assert.deepEqual(p.eventi.map((e) => [e.id, e.operatoreId]), [['ev1', 'op1'], ['ev2', 'op2'], ['ev3', 'op3']]);
+  } finally { DO.admin.operatori = operatoriPrima; }
+});

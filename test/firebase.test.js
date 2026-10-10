@@ -125,3 +125,20 @@ test('regole per gli operatori: lettura non riuscita → errore (la pagina tiene
   });
   assert.deepEqual(await FB2.leggiOperativo(), { telefono: '', giorniBlocco: 3 });
 });
+
+test('collega tolto con gli emulatori: il Firestore riaperto resta sull\'emulatore', async () => {
+  DO.CONFIG.EMULATORI = true;
+  try {
+    const { FB, chiamate, ascolti } = archivioNuovo({ email: 'collega@x.it', emailVerified: true, getIdToken: async () => 'g' }, {
+      connectAuthEmulator: () => chiamate.push('connectAuthEmulator'),
+      connectFirestoreEmulator: () => chiamate.push('connectFirestoreEmulator'),
+    });
+    DO.avviaPagina('admin', () => {});
+    DO.ricorda(true);
+    await FB.utente();
+    FB.ascolta(() => {});
+    ascolti[0].errore({ code: 'permission-denied' });
+    await new Promise((fatto) => setTimeout(fatto, 30));
+    assert.equal(chiamate.filter((c) => c === 'connectFirestoreEmulator').length, 2, chiamate.join());
+  } finally { DO.CONFIG.EMULATORI = false; DO.ricorda(false); }
+});

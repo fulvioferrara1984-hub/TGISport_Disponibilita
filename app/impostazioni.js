@@ -314,7 +314,8 @@
       if (voce.startsWith('tariffa on-site') && typeof r[1] === 'number') regole.tariffaOnsite = r[1];
       if (voce === 'notturno dalle' && oraExcel(r[1])) regole.notteDa = oraExcel(r[1]);
       if (voce === 'notturno alle' && oraExcel(r[1])) regole.notteA = oraExcel(r[1]);
-      if (voce === 'telefono di reperibilità') operativo.telefono = testo(r[1]);
+      // vuoto nel backup: resta il numero attuale (il ripristino non cancella dati più recenti)
+      if (voce === 'telefono di reperibilità' && testo(r[1])) operativo.telefono = testo(r[1]);
       if (voce === 'giorni di blocco' && Number.isInteger(r[1]) && r[1] >= 0 && r[1] <= 14) operativo.giorniBlocco = r[1];
       if (testo(r[6]) && !regole.sport.includes(testo(r[6]))) regole.sport.push(testo(r[6]));
       const nome = testo(r[8]);
@@ -328,15 +329,18 @@
     });
     const r = R.complete(regole);
 
-    // operatori: per nome; dati completi dal foglio Operatori
+    // operatori: dati completi dal foglio Operatori, per ID (due omonimi restano distinti) o, nei backup vecchi, per nome
     const RUOLI = { 'Remote TL': 'TL', 'Remote Support': 'SUP' };
-    const datiOp = {};
+    const elencoOp = [];
     (wb.Sheets.Operatori ? foglio('Operatori') : []).slice(1).forEach((x) => {
       const nome = testo(x[0]);
       if (!nome) return;
-      datiOp[chiave(nome)] = { mansione: testo(x[1]), ruolo: RUOLI[testo(x[2])] || 'OP', contratto: ['P.IVA', 'Coop'].includes(testo(x[3])) ? testo(x[3]) : '',
-        email: testo(x[4]), telefono: testo(x[5]), onsite: ['TL', 'OP'].includes(testo(x[6])) ? testo(x[6]) : '', attivo: testo(x[7]).toUpperCase() !== 'NO', nome, id: idValido(x[8]) };
+      elencoOp.push({ mansione: testo(x[1]), ruolo: RUOLI[testo(x[2])] || 'OP', contratto: ['P.IVA', 'Coop'].includes(testo(x[3])) ? testo(x[3]) : '',
+        email: testo(x[4]), telefono: testo(x[5]), onsite: ['TL', 'OP'].includes(testo(x[6])) ? testo(x[6]) : '', attivo: testo(x[7]).toUpperCase() !== 'NO', nome, id: idValido(x[8]) });
     });
+    const datiDi = (k, idOp) => (idOp && elencoOp.find((o) => o.id === idOp)) || elencoOp.find((o) => !o.id && chiave(o.nome) === k)
+      || (!idOp && elencoOp.find((o) => chiave(o.nome) === k)) || {};
+    const idNelFile = new Set(elencoOp.map((o) => o.id).filter(Boolean));
     const operatori = [], esistenti = {}, idPerNome = {}, idVisti = new Set();
     // per ID (anche se nel frattempo ha cambiato nome), poi per nome come nell'importazione della stagione
     const assicura = (nome, idOp) => {
@@ -344,8 +348,10 @@
       if (!k && !idOp) return '';
       if (idOp && idVisti.has(idOp)) return idOp;
       if (!idOp && idPerNome[k]) return idPerNome[k];
-      const { nome: _, id: __, ...campi } = datiOp[k] || {};
-      const e = (idOp && A.operatori.find((o) => o.id === idOp)) || A.operatori.find((o) => chiave(o.nome) === k);
+      const { nome: _, id: __, ...campi } = datiDi(k, idOp);
+      // per nome solo chi non ha già una sua riga con ID nel file (un omonimo tolto non finisce su un altro)
+      const e = (idOp && A.operatori.find((o) => o.id === idOp))
+        || A.operatori.find((o) => chiave(o.nome) === k && (!idNelFile.has(o.id) || o.id === idOp));
       if (!e && !k) return '';
       if (e) {
         // degli operatori presenti cambia solo ciò che è diverso, e mai con un campo vuoto (il backup non cancella dati più recenti)
@@ -362,7 +368,7 @@
       idVisti.add(nuovo.id);
       return (idPerNome[k] = nuovo.id);
     };
-    Object.values(datiOp).forEach((o) => assicura(o.nome, o.id));
+    elencoOp.forEach((o) => assicura(o.nome, o.id));
 
     // eventi
     const STATI = { 'Da assegnare': 'da-assegnare', 'Da inviare': 'assegnato', 'In attesa di risposta': 'convocato', Confermato: 'confermato', Rifiutato: 'rifiutato', Annullato: 'annullato' };
@@ -433,7 +439,8 @@
           return DO.esc(o.nome) + ' (' + [m.ruolo && 'ruolo ' + R.nomeRuolo(m.ruolo), m.contratto && 'contratto ' + m.contratto].filter(Boolean).join(', ') + ')';
         }).join(', ') + '</li>' : '')
         + (pacchetto.backup ? '<li>Tariffe, sport, competizioni e mansioni come nel backup (i deployment on-site non si reimportano)</li>'
-          + (pacchetto.operativo ? '<li>Telefono di reperibilità e giorni di blocco come nel backup</li>' : '') + '</ul>'
+          + (pacchetto.operativo ? '<li>Regole per gli operatori: telefono di reperibilità ' + DO.esc(pacchetto.operativo.telefono || '—')
+            + ', giorni di blocco ' + pacchetto.operativo.giorniBlocco + '</li>' : '') + '</ul>'
           : '<li><b>' + pacchetto.assenze + '</b> giorni di assenza da segnare come "Non disponibile"</li>'
           + '<li>Tariffe, sport e competizioni (Europa League e Conference League con compenso dimezzato)</li></ul>')
         + (pacchetto.avvisi.length ? '<p class="nota"><b>Da controllare:</b> ' + pacchetto.avvisi.map(DO.esc).join(' ') + '</p>' : '')

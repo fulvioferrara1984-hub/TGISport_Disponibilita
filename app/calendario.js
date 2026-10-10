@@ -134,7 +134,6 @@
   function etichettaSchermo() { $('cal-schermo').textContent = document.fullscreenElement ? 'Esci dallo schermo intero' : 'Schermo intero'; }
   function vaiAlGiorno(data) {
     chiudi();
-    daRiattivare = null;
     A.mostra('convocazioni');
     A.vaiA(data);
   }

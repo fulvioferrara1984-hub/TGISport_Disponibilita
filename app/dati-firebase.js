@@ -252,6 +252,7 @@
     await F.clearIndexedDbPersistence(db).catch(() => {});
     cachePersistente = false;
     db = F.getFirestore(app);
+    if (DO.CONFIG.EMULATORI) F.connectFirestoreEmulator(db, '127.0.0.1', 8080);
   }
 
   // Le email partono dallo script Google, che verifica chi le chiede con il gettone di Firebase.
