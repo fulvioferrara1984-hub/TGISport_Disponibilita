@@ -376,6 +376,9 @@ test('autorizzaDrive: crea la cartella e lo scrive nel registro; autorizzazione 
   const scope = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../backend/appsscript.json'), 'utf8')).oauthScopes;
   assert.ok(scope.includes('https://www.googleapis.com/auth/drive.file'));
   assert.ok(!scope.includes('https://www.googleapis.com/auth/drive'));
+  // servizio Drive acceso nel progetto automatico dello script (la console di Google non lo apre)
+  const manifesto = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../backend/appsscript.json'), 'utf8'));
+  assert.deepEqual(manifesto.dependencies.enabledAdvancedServices, [{ userSymbol: 'Drive', serviceId: 'drive', version: 'v3' }]);
 });
 
 test('copia su Drive: un errore temporaneo sulla cartella non ne crea una seconda', () => {

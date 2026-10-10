@@ -142,9 +142,10 @@ Dalla versione 28 il backup contiene anche le **disponibilità** degli operatori
 
 1. **Sito**: pubblicazione normale.
 2. **Script**: incolla [`backend/Codice.gs`](backend/Codice.gs) **e** [`backend/appsscript.json`](backend/appsscript.json) (Impostazioni del progetto → *Mostra il file manifest «appsscript.json»* nell'editor), salva.
-3. **Autorizzazione Drive** (una volta): nell'editor scegli **autorizzaDrive** e premi **Esegui**; Google chiede il permesso di vedere e gestire **solo i file creati dallo script** (non il resto del Drive). Nel registro compare `Cartella «Backup Disponibilità Ops» pronta su Drive: …` con il link. Fallo **subito dopo aver salvato il manifest**: finché il permesso non è dato, anche le esecuzioni automatiche dello script (promemoria compresi) possono fermarsi. Se il registro dice *Drive API has not been used in project … or it is disabled*, nell'editor apri **Servizi → +**, aggiungi **Drive API** e riesegui *autorizzaDrive*.
-4. **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione**.
-5. **Prova**: **Invia un backup adesso**; in Impostazioni la riga dice *… · copia su Drive* e il file compare nella cartella. Si tengono gli ultimi 52 backup, i più vecchi vanno nel cestino di Drive.
+3. **Servizio Drive** (una volta): nell'editor, accanto a **Servizi** premi **+**, scegli **Drive API** (versione v3) e **Aggiungi**: il progetto automatico dello script non si apre dalla console di Google, ma così il servizio si accende da solo (il manifest del repository lo tiene già acceso).
+4. **Autorizzazione Drive** (una volta): nell'editor scegli **autorizzaDrive** e premi **Esegui**; Google chiede il permesso di vedere e gestire **solo i file creati dallo script** (non il resto del Drive). Nel registro compare `Cartella «Backup Disponibilità Ops» pronta su Drive: …` con il link. Fallo **subito dopo aver salvato il manifest**: finché il permesso non è dato, anche le esecuzioni automatiche dello script (promemoria compresi) possono fermarsi. Se il registro dice *Drive API has not been used in project … or it is disabled*, manca il passo 3: aggiungi **Drive API** dai Servizi e riesegui *autorizzaDrive* dopo un paio di minuti.
+5. **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione**.
+6. **Prova**: **Invia un backup adesso**; in Impostazioni la riga dice *… · copia su Drive* e il file compare nella cartella. Si tengono gli ultimi 52 backup, i più vecchi vanno nel cestino di Drive.
 
 Rieseguire *attivaPromemoria* non serve; se lo si fa, gli attivatori già presenti restano come sono (prima venivano ricreati e, dentro la fascia delle 8, quel giorno il giro saltava).
 
