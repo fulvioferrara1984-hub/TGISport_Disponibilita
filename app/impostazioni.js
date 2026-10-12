@@ -27,11 +27,12 @@
 
   $('form-regole').addEventListener('submit', (e) => {
     e.preventDefault();
-    const tariffe = JSON.parse(JSON.stringify(A.regole.tariffe));
-    document.querySelectorAll('[data-tariffa]').forEach((i) => {
-      const k = i.dataset.tariffa, punto = k.lastIndexOf('.');
-      tariffe[k.slice(0, punto)][k.slice(punto + 1)] = Math.max(0, Number(i.value) || 0);
-    });
+    // un campo vuoto o non valido ferma il salvataggio (prima diventava 0 €)
+    const valori = {};
+    document.querySelectorAll('[data-tariffa]').forEach((i) => { valori[i.dataset.tariffa] = i.value; });
+    const letto = R.tariffeDa(valori);
+    if (letto.errore) { DO.avviso(letto.errore, 'errore', 8000); return; }
+    const tariffe = Object.assign(JSON.parse(JSON.stringify(A.regole.tariffe)), letto.tariffe);
     const tariffaOnsite = R.numero($('reg-tariffa-onsite').value, { min: 0, max: 2000 });
     if (tariffaOnsite === null) { DO.avviso('La tariffa on-site va da 0 a 2000 € al giorno.', 'errore'); return; }
     salva({

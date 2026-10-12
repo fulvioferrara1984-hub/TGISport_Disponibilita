@@ -1,6 +1,6 @@
 /* Disponibilità Ops — scheda Riepilogo: eventi coperti e compensi netti per operatore, competizione e mese.
  * Prende il posto dei fogli "Riepilogo" e "Consultivo mensile" del file Excel (senza la parte fatture).
- * Contano solo gli eventi con un operatore e non annullati. */
+ * Contano solo gli eventi confermati; quelli assegnati e non ancora confermati sono a parte («in attesa»). */
 (function (DO) {
   'use strict';
 
@@ -75,6 +75,10 @@
     const p = periodo(), lista = righe(p), tot = somma(lista);
     const ons = righeOnsite(p), totOn = sommaOnsite(ons);
     const futuri = A.eventi.filter((e) => e.data >= DO.oggi() && e.data <= p.a && e.stato === 'da-assegnare').length;
+    // assegnati e non ancora confermati: costo previsto e quanti sono già passati (da sistemare)
+    const attesa = A.eventi.filter((e) => R.inAttesa(e) && e.data >= p.da && e.data <= p.a);
+    const attesaEuro = attesa.reduce((t, e) => { const o = A.operatori.find((x) => x.id === e.operatoreId); return t + (o ? R.gettone(e, o, A.regole).importo : 0); }, 0);
+    const attesaPassati = attesa.filter((e) => e.data < DO.oggi()).length;
     const senzaContratto = [...new Set(lista.filter((r) => r.g.senzaContratto).map((r) => r.op.nome))];
     const onsiteSenzaContratto = [...new Set(ons.filter((r) => !r.op.contratto).map((r) => r.op.nome))];
 
@@ -135,7 +139,11 @@
       + '<div><span>di cui Remote TL / Remote Support</span><b>' + tot.tl + ' / ' + tot.support + '</b></div>'
       + '<div><span>Giorni on-site</span><b>' + totOn.giorni + '</b></div>'
       + '<div><span>Netto totale</span><b>' + R.euro(tot.euro + totOn.euro) + '</b></div>'
+      + '<div><span>In attesa di conferma</span><b>' + attesa.length + '</b><small>' + R.euro(attesaEuro) + ' previsti'
+        + (attesaPassati ? ' · ' + attesaPassati + ' già ' + (attesaPassati === 1 ? 'passato' : 'passati') : '') + '</small></div>'
       + '<div><span>Ancora da assegnare</span><b>' + futuri + '</b></div></div>'
+      + (attesaPassati ? '<p class="nota">' + attesaPassati + (attesaPassati === 1 ? ' evento già passato non è confermato e non conta' : ' eventi già passati non sono confermati e non contano')
+        + ': aprili da Convocazioni e, se si sono svolti, usa «Segna come confermata».</p>' : '')
       + (senzaContratto.length ? '<p class="errore">Contratto non indicato per ' + senzaContratto.map(DO.esc).join(', ') + ': i loro eventi non hanno compenso. Indicalo nella scheda Operatori.</p>' : '')
       + (onsiteSenzaContratto.length ? '<p class="errore">Contratto non indicato per ' + onsiteSenzaContratto.map(DO.esc).join(', ')
         + ': il loro compenso on-site è nel totale ma non nelle colonne P.IVA e Coop. Indicalo nella scheda Operatori.</p>' : '')

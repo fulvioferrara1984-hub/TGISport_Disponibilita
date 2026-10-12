@@ -463,7 +463,7 @@
     $('dlg-esito').showModal();
     if (!email) return;
     r.inviate.then((x) => {
-      const testo = x.email ? 'Email inviata a ' + x.email + (x.email === 1 ? ' operatore.' : ' operatori.') : 'Nessuna email inviata.';
+      const testo = x.email ? (x.email === 1 ? 'Email inviata a 1 operatore.' : 'Email inviate a ' + x.email + ' operatori.') : 'Nessuna email inviata.';
       const avvisi = (x.nonInviate && x.nonInviate.length ? ' Non partita per: ' + x.nonInviate.join(', ') + '.' : '')
         + (x.quotaRestante !== undefined && x.quotaRestante < 20 ? ' Oggi Google permette ancora ' + x.quotaRestante + ' email.' : '');
       const p = $('esito-testo').querySelector('p:nth-child(2)');
@@ -524,7 +524,7 @@
   // ---------- aggiornamenti ----------
   function impostaNonLetti(n) {
     $('badge').textContent = n ? String(n) : '';
-    document.title = (n ? '(' + n + ') ' : '') + 'Supervisori · Disponibilità TGI Sport';
+    document.title = (n ? '(' + n + ') ' : '') + (solaLettura ? 'Sola visualizzazione' : 'Supervisori') + ' · Disponibilità TGI Sport';
   }
 
   function disegnaFeed() {
@@ -676,6 +676,16 @@
   $('form-operatore').addEventListener('submit', async (e) => {
     e.preventDefault();
     const bottone = $('op-salva');
+    const nome = $('op-nome').value.trim(), chiave = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!DO.telefonoValido($('op-telefono').value)) {
+      $('op-errore').textContent = 'Scrivi un numero di telefono valido (cifre, spazi e + - / . ( ), almeno 6 cifre).';
+      $('op-errore').hidden = false;
+      return;
+    }
+    // due operatori con lo stesso nome si confondono nei menu e nell'importazione del file della stagione
+    const omonimo = operatori.find((o) => chiave(o.nome) === chiave(nome) && (!inModifica || o.id !== inModifica.id));
+    if (omonimo && !confirm('Esiste già un operatore di nome ' + omonimo.nome + (omonimo.mansione ? ' (' + omonimo.mansione + ')' : '') + '.\n'
+      + 'Due nomi uguali si confondono nei menu e nell\'importazione: meglio aggiungere un\'iniziale. Salvare comunque?')) return;
     bottone.disabled = true;
     try {
       const r = await DO.dati.salvaOperatore({
@@ -841,6 +851,7 @@
     }
     // collega in sola visualizzazione: solo Convocazioni, Riepilogo e Operatori, nessun tasto di modifica
     solaLettura = !!(u && u.sola);
+    document.title = (solaLettura ? 'Sola visualizzazione' : 'Supervisori') + ' · Disponibilità TGI Sport';
     document.body.classList.toggle('sola-lettura', solaLettura);
     $('marchio-ruolo').textContent = solaLettura ? 'Sola visualizzazione' : 'Supervisori';
     document.querySelectorAll('#schede [data-vista]').forEach((b) => { b.hidden = solaLettura && !VISTE_SOLA.includes(b.dataset.vista); });

@@ -174,7 +174,8 @@
       '<button type="button" class="conteggio-conv conv-' + k + ($('ev-filtro-stato').value === k ? ' attivo' : '') + '" data-filtra="' + k + '"><b>' + n[k] + '</b> ' + etichette[k] + '</button>').join('');
     $('ev-invia').textContent = n.assegnato ? 'Invia convocazioni (' + n.assegnato + ')' : 'Invia convocazioni';
     $('ev-invia').disabled = !n.assegnato;
-    $('badge-conv').textContent = n.rifiutato + n.sostituire ? String(n.rifiutato + n.sostituire) : '';
+    // il numero rosso chiede di intervenire: non per il collega in sola visualizzazione
+    $('badge-conv').textContent = !A.solaLettura && n.rifiutato + n.sostituire ? String(n.rifiutato + n.sostituire) : '';
   }
 
   function aggiornaCompetizioni() {
@@ -282,6 +283,8 @@
     $('evd-maggiorato').checked = e.gettone === 'maggiorato';
     $('evd-sostituire').checked = !!e.daSostituire;
     $('evd-annulla-evento').textContent = e.stato === 'annullato' ? 'Ripristina evento' : 'Annulla evento';
+    // confermata a voce o su WhatsApp: il supervisore la segna (resta nello storico)
+    $('evd-conferma-sup').hidden = e.stato !== 'convocato' || A.solaLettura;
     $('evd-errore').hidden = true;
     ritrovoAuto();
     $('evd-storico').innerHTML = (e.storico || []).length ? '<b>Storico</b>' + e.storico.slice().reverse().map((s) =>
@@ -430,6 +433,17 @@
     } catch (err) { mostraErrore('evd-errore', err.message); }
   });
 
+  $('evd-conferma-sup').addEventListener('click', async () => {
+    const e = inModifica;
+    const o = operatore(e.operatoreId) || {};
+    if (!confirm('Segnare come confermata la convocazione di ' + (o.nome || 'questo operatore') + ' per "' + titolo(e) + '"?\nUsalo quando ha confermato a voce o per messaggio: conterà nel Riepilogo.')) return;
+    try {
+      await DO.dati.aggiornaEvento(e.id, { stato: 'confermato', risposta: '' }, 'Confermata dal supervisore');
+      $('dlg-evento').close();
+      DO.avviso('Convocazione segnata come confermata.', 'ok');
+    } catch (err) { mostraErrore('evd-errore', err.message); }
+  });
+
   $('evd-elimina').addEventListener('click', async () => {
     const e = inModifica;
     const msg = e.inviata ? 'L\'evento è già stato inviato all\'operatore: se non si svolge è meglio "Annulla evento". Eliminarlo comunque?' : 'Eliminare definitivamente "' + titolo(e) + '"?';
@@ -455,31 +469,22 @@
   $('ev-nuove').addEventListener('click', () => apriPartite(''));
   $('evp-competizione').addEventListener('change', () => { $('evp-sport').value = sportDi($('evp-competizione').value); });
 
-  // "17/10 15:00 Venezia-Napoli": l'anno si ricava dalla stagione (agosto–luglio)
-  function leggiRighe() {
-    const ok = [], errori = [], st = R.stagione(DO.oggi());
-    $('evp-righe').value.split('\n').map((r) => r.trim()).filter(Boolean).forEach((r, i) => {
-      const m = /^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?\s+(\d{1,2})[:.](\d{2})\s+(.+)$/.exec(r);
-      if (!m) { errori.push('Riga ' + (i + 1) + ': "' + r + '"'); return; }
-      const g = Number(m[1]), me = Number(m[2]);
-      let anno = m[3] ? Number(m[3].length === 2 ? '20' + m[3] : m[3]) : Number(me >= 8 ? st.da.slice(0, 4) : st.a.slice(0, 4));
-      const data = anno + '-' + String(me).padStart(2, '0') + '-' + String(g).padStart(2, '0');
-      if (isNaN(DO.daIso(data)) || me > 12 || g > 31) { errori.push('Riga ' + (i + 1) + ': data non valida'); return; }
-      ok.push({ data, orario: String(m[4]).padStart(2, '0') + ':' + m[5], titolo: m[6].trim() });
-    });
-    return { ok, errori };
-  }
+  // "17/10 15:00 Venezia-Napoli" (anche "17/10 15", "17/10 ore 18"): doppioni e partite già presenti non si creano
+  const leggiRighe = () => R.leggiPartite($('evp-righe').value, DO.oggi(), A.eventi);
   function anteprimaPartite() {
-    const { ok, errori } = leggiRighe();
-    $('evp-anteprima').textContent = ok.length ? ok.length + (ok.length === 1 ? ' partita riconosciuta' : ' partite riconosciute') + (errori.length ? ' · da correggere: ' + errori.join('; ') : '') : 'Scrivi una partita per riga, es. 17/10 15:00 Venezia-Napoli.';
+    const { ok, errori, doppie } = leggiRighe();
+    $('evp-anteprima').textContent = !ok.length && !errori.length && !doppie.length ? 'Scrivi una partita per riga, es. 17/10 15:00 Venezia-Napoli.'
+      : (ok.length ? ok.length + (ok.length === 1 ? ' partita riconosciuta' : ' partite riconosciute') : 'Nessuna partita nuova')
+        + (doppie.length ? ' · non si creano (doppie): ' + doppie.join('; ') : '')
+        + (errori.length ? ' · da correggere: ' + errori.join('; ') : '');
     $('evp-crea').textContent = ok.length ? 'Crea ' + ok.length + (ok.length === 1 ? ' partita' : ' partite') : 'Crea partite';
   }
   $('evp-righe').addEventListener('input', anteprimaPartite);
   $('form-partite').addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    const { ok, errori } = leggiRighe();
+    const { ok, errori, doppie } = leggiRighe();
     if (errori.length) { mostraErrore('evp-errore', 'Correggi le righe: ' + errori.join('; ')); return; }
-    if (!ok.length) { mostraErrore('evp-errore', 'Nessuna partita da creare.'); return; }
+    if (!ok.length) { mostraErrore('evp-errore', doppie.length ? 'Queste partite ci sono già: ' + doppie.join('; ') : 'Nessuna partita da creare.'); return; }
     const comune = { tipo: 'partita', competizione: $('evp-competizione').value, round: $('evp-round').value.trim(), sport: $('evp-sport').value };
     try {
       await DO.dati.creaEventi(ok.map((p) => {
@@ -519,6 +524,15 @@
     for (let d = da; d <= a; d = DO.aggiungi(d, 1)) giorni.push(d);
     if (giorni.length > 31) { mostraErrore('evs-errore', 'Al massimo 31 giorni alla volta.'); return; }
     const nome = DO.mansione(tipoTurno);
+    // giorni che hanno già un turno dello stesso tipo: un secondo turno solo se il supervisore lo vuole
+    const occupati = giorni.filter((d) => A.eventi.some((x) => x.tipo === tipoTurno && x.data === d && x.stato !== 'annullato'));
+    if (occupati.length) {
+      const elenco = occupati.map((d) => { const g = DO.giorno(d); return g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve; }).join(', ');
+      const ancheLi = confirm((occupati.length === 1 ? 'Questo giorno ha' : 'Questi giorni hanno') + ' già un turno ' + nome + ': ' + elenco + '.\n\n'
+        + 'OK: crea un altro turno anche lì.\nAnnulla: salta ' + (occupati.length === 1 ? 'quel giorno' : 'quei giorni') + '.');
+      if (!ancheLi) giorni.splice(0, giorni.length, ...giorni.filter((d) => !occupati.includes(d)));
+      if (!giorni.length) { $('dlg-supervisione').close(); DO.avviso('Nessun turno creato: tutti i giorni avevano già un turno ' + nome + '.'); return; }
+    }
     try {
       await DO.dati.creaEventi(giorni.map((d) => ({ tipo: tipoTurno, competizione: nome, sport: '', data: d, titolo: nome,
         orario: '', convocazione: ritrovo, convocazioneCalcolata: ritrovo, fineCalcolata: R.fine({ tipo: tipoTurno, convocazione: ritrovo }, A.regole),
@@ -576,8 +590,12 @@
         const o = operatore(id) || {};
         return '<div class="invio-gruppo"><label class="spunta invio-op"><input type="checkbox" data-gruppo="' + id + '" checked><span><b>' + DO.esc(o.nome || '?') + '</b>'
           + (o.email ? '' : ' <span class="testo-errore">(senza email)</span>') + (o.uid === '' ? ' <span class="testo-errore">(senza codice: non può ancora vederle)</span>' : '') + '</span></label>'
-          + '<ul class="elenco-invio">' + perOp[id].map((e) => '<li><label class="spunta"><input type="checkbox" data-evento="' + e.id + '" data-op="' + id + '" checked><span>'
-            + DO.esc(rigaInvio(e)) + '</span></label></li>').join('') + '</ul></div>';
+          // un evento di oggi già iniziato (ritrovo passato) resta senza spunta
+          + '<ul class="elenco-invio">' + perOp[id].map((e) => {
+            const iniziato = R.giaIniziato(e, A.regole, DO.oggi(), new Date().toTimeString().slice(0, 5));
+            return '<li><label class="spunta"><input type="checkbox" data-evento="' + e.id + '" data-op="' + id + '"' + (iniziato ? '' : ' checked') + '><span>'
+              + DO.esc(rigaInvio(e)) + (iniziato ? ' <span class="testo-errore">· già iniziato</span>' : '') + '</span></label></li>';
+          }).join('') + '</ul></div>';
       }).join('');
     contaScelte();
     $('dlg-invia').showModal();

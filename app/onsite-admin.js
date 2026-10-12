@@ -116,7 +116,7 @@
   // email in sottofondo: l'esito arriva dopo, nell'avviso e nella finestra se è ancora aperta
   function seguiEmail(inviate, prima) {
     inviate.then((x) => {
-      const testo = x.email ? 'Email inviata a ' + x.email + (x.email === 1 ? ' operatore.' : ' operatori.') : 'Nessuna email inviata.';
+      const testo = x.email ? (x.email === 1 ? 'Email inviata a 1 operatore.' : 'Email inviate a ' + x.email + ' operatori.') : 'Nessuna email inviata.';
       const avvisi = x.nonInviate && x.nonInviate.length ? ' Non partita per: ' + x.nonInviate.join(', ') + '.' : '';
       const p = $('esito-testo').querySelector('p:nth-child(2)');
       if (p && $('dlg-esito').open) p.textContent = testo + avvisi;
