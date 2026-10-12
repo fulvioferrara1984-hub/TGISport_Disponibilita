@@ -20,7 +20,7 @@
     competizioni: [
       ['Serie A', 'Calcio'], ['Coppa Italia', 'Calcio'], ['Supercoppa Italiana', 'Calcio'], ['Ligue 1', 'Calcio'],
       ['Champions League', 'Calcio', true], ['Europa League', 'Calcio', true], ['Conference League', 'Calcio', true],
-      ['Nations League', 'Calcio'], ['Nations League W', 'Calcio'], ['Wcq', 'Calcio'], ['European Qualfiers Women', 'Calcio'],
+      ['Nations League', 'Calcio'], ['Nations League W', 'Calcio'], ['Wcq', 'Calcio'], ['European Qualifiers Women', 'Calcio'],
       ['Amichevoli', 'Calcio'], ['Nazionali', 'Calcio'], ['Dentsu', ''], ['Cev Women', 'Volley'], ['Cev Men', 'Volley'],
       ['Ebu Boxing', 'Boxing'], ['Bjkc', 'Tennis'], ['Ase', ''],
     ].map(([nome, sport, dimezzato]) => ({ nome, sport, compenso: dimezzato ? 'dimezzato' : 'diurno', prima: null, dopo: null })),
@@ -163,8 +163,56 @@
     return DO.bloccato(e.data, oggi, giorniBlocco) ? 'rosso' : 'arancione';
   }
 
-  // Un evento conta se ha un operatore e non è annullato.
-  const conta = (e) => !!e.operatoreId && e.stato !== 'annullato';
+  // Nel Riepilogo contano solo gli eventi confermati; quelli assegnati e non ancora confermati sono «in attesa»
+  const conta = (e) => !!e.operatoreId && e.stato === 'confermato';
+  const inAttesa = (e) => !!e.operatoreId && (e.stato === 'assegnato' || e.stato === 'convocato');
+  // Evento già iniziato: giorno passato, oppure oggi con il ritrovo (o l'orario) già arrivato
+  const giaIniziato = (e, regole, oggi, ora) => e.data < oggi || (e.data === oggi && (convocazione(e, regole) || e.orario || '99:99') <= ora);
+
+  // Tariffe dai campi di Impostazioni ({ 'P.IVA.diurno': '140', … }): un campo vuoto o non valido non diventa 0
+  const NOMI_TARIFFA = { diurno: 'diurno', notturno: 'notturno', maggiorato: 'maggiorato' };
+  function tariffeDa(valori) {
+    const tariffe = {};
+    for (const k of Object.keys(valori)) {
+      const punto = k.lastIndexOf('.'), contratto = k.slice(0, punto), tipo = k.slice(punto + 1);
+      const n = numero(valori[k], { min: 0, max: 10000 });
+      if (n === null) return { errore: 'Tariffa ' + contratto + ' ' + (NOMI_TARIFFA[tipo] || tipo) + ': scrivi un importo da 0 a 10.000 €.' };
+      (tariffe[contratto] = tariffe[contratto] || {})[tipo] = n;
+    }
+    return { tariffe };
+  }
+
+  // Righe delle nuove partite: «17/10 15:00 Venezia-Napoli», anche «17/10 15», «17/10 ore 18», «17/10 h20.45»;
+  // l'anno dalla stagione (agosto–luglio). Le doppie (nell'elenco o già presenti e non annullate) non si creano.
+  const chiavePartita = (data, orario, titolo) => data + ' ' + orario + ' ' + String(titolo || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');
+  function leggiPartite(testo, oggi, esistenti) {
+    const ok = [], errori = [], doppie = [], st = stagione(oggi), viste = {};
+    const presenti = new Set((esistenti || []).filter((e) => e.stato !== 'annullato').map((e) => chiavePartita(e.data, e.orario, e.titolo)));
+    String(testo || '').split('\n').forEach((grezza, i) => {
+      const r = grezza.trim(), riga = i + 1;
+      if (!r) return;
+      const d = /^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?(?:\s+(.*))?$/.exec(r);
+      if (!d) { errori.push('Riga ' + riga + ': manca la data (es. 17/10)'); return; }
+      const g = Number(d[1]), me = Number(d[2]);
+      const anno = d[3] ? Number(d[3].length === 2 ? '20' + d[3] : d[3]) : Number(me >= 8 ? st.da.slice(0, 4) : st.a.slice(0, 4));
+      const data = anno + '-' + String(me).padStart(2, '0') + '-' + String(g).padStart(2, '0');
+      const dt = new Date(anno, me - 1, g);
+      if (me < 1 || me > 12 || g < 1 || dt.getMonth() !== me - 1) { errori.push('Riga ' + riga + ': data non valida (' + d[1] + '/' + d[2] + ')'); return; }
+      const resto = d[4] || '';
+      const o = /^(?:ore\s*|h\s*)?(\d{1,2})(?:[:.](\d{2}))?(?:\s+(.+))?$/i.exec(resto);
+      if (!o) { errori.push('Riga ' + riga + ': manca l\'orario (es. 15:00)'); return; }
+      const ore = Number(o[1]), minuti = o[2] === undefined ? 0 : Number(o[2]);
+      if (ore > 23 || minuti > 59) { errori.push('Riga ' + riga + ': orario non valido (' + o[1] + (o[2] !== undefined ? ':' + o[2] : '') + ')'); return; }
+      if (!o[3] || !o[3].trim()) { errori.push('Riga ' + riga + ': manca la partita'); return; }
+      const p = { data, orario: String(ore).padStart(2, '0') + ':' + String(minuti).padStart(2, '0'), titolo: o[3].trim(), riga };
+      const k = chiavePartita(p.data, p.orario, p.titolo);
+      if (viste[k]) { doppie.push('Riga ' + riga + ': uguale alla riga ' + viste[k]); return; }
+      viste[k] = riga;
+      if (presenti.has(k)) { doppie.push('Riga ' + riga + ': già presente'); return; }
+      ok.push(p);
+    });
+    return { ok, errori, doppie };
+  }
 
   // Gettone di un evento: il maggiorato deciso dal supervisore vale su tutto;
   // poi il tipo della competizione (o della mansione per i turni remoti).
@@ -283,6 +331,6 @@
       + (u.drive === 'salvato' ? ' · copia su Drive' : u.drive ? ' · copia su Drive non riuscita: ' + String(u.drive).replace(/^errore: /, '') : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
+  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});

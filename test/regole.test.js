@@ -359,3 +359,59 @@ test('calendario: assegnato e da sostituire', () => {
   assert.equal(R.statoCalendario({ operatoreId: 'a', stato: 'assegnato', daSostituire: true, data: '2026-10-30' }, '2026-10-09', 3), 'arancione');
   assert.equal(R.statoCalendario({ operatoreId: 'a', stato: 'assegnato', daSostituire: true, data: '2026-10-10' }, '2026-10-09', 3), 'rosso');
 });
+
+// ---------------------------------------------------------------- correzioni dalla simulazione d'uso
+test('tariffe: vuota o non valida → errore che nomina la voce; 0 è ammesso', () => {
+  const valori = { 'P.IVA.diurno': '150', 'P.IVA.notturno': '210', 'P.IVA.maggiorato': '0', 'Coop.diurno': '175', 'Coop.notturno': '262.5', 'Coop.maggiorato': '262.5' };
+  assert.deepEqual(R.tariffeDa(valori).tariffe, { 'P.IVA': { diurno: 150, notturno: 210, maggiorato: 0 }, Coop: { diurno: 175, notturno: 262.5, maggiorato: 262.5 } });
+  assert.deepEqual(R.tariffeDa(Object.assign({}, valori, { 'P.IVA.diurno': '' })), { errore: 'Tariffa P.IVA diurno: scrivi un importo da 0 a 10.000 €.' });
+  assert.deepEqual(R.tariffeDa(Object.assign({}, valori, { 'Coop.notturno': '-5' })), { errore: 'Tariffa Coop notturno: scrivi un importo da 0 a 10.000 €.' });
+  assert.deepEqual(R.tariffeDa(Object.assign({}, valori, { 'Coop.maggiorato': 'abc' })), { errore: 'Tariffa Coop maggiorato: scrivi un importo da 0 a 10.000 €.' });
+});
+
+test('righe delle partite: formati accettati e messaggi che dicono cosa manca', () => {
+  const r = R.leggiPartite('17/10 15:00 Venezia-Napoli\n17/10 15 Bologna-Inter\n18/10 ore 18 Milan-Torino\n18/10 h20.45 Roma-Genoa\n19/10 18.30 Lecce-Como 2\n'
+    + '32/10 15:00 Partita\nLazio-Roma\n17/10 Atalanta-Parma\n17/10 21:00\n17/10 25:00 Notte', '2026-10-11', []);
+  assert.deepEqual(r.ok, [
+    { data: '2026-10-17', orario: '15:00', titolo: 'Venezia-Napoli', riga: 1 },
+    { data: '2026-10-17', orario: '15:00', titolo: 'Bologna-Inter', riga: 2 },
+    { data: '2026-10-18', orario: '18:00', titolo: 'Milan-Torino', riga: 3 },
+    { data: '2026-10-18', orario: '20:45', titolo: 'Roma-Genoa', riga: 4 },
+    { data: '2026-10-19', orario: '18:30', titolo: 'Lecce-Como 2', riga: 5 },
+  ]);
+  assert.deepEqual(r.errori, ['Riga 6: data non valida (32/10)', 'Riga 7: manca la data (es. 17/10)', 'Riga 8: manca l\'orario (es. 15:00)', 'Riga 9: manca la partita', 'Riga 10: orario non valido (25:00)']);
+  assert.deepEqual(r.doppie, []);
+  // gennaio: anno della seconda metà della stagione
+  assert.equal(R.leggiPartite('10/01 20:45 Inter-Milan', '2026-10-11', []).ok[0].data, '2027-01-10');
+});
+
+test('righe delle partite: doppioni nell\'elenco e con gli eventi già presenti (annullati esclusi)', () => {
+  const esistenti = [{ data: '2026-10-18', orario: '20:45', titolo: 'Juventus–Lazio', stato: 'confermato' }, { data: '2026-10-17', orario: '15:00', titolo: 'Venezia-Napoli', stato: 'annullato' }];
+  const r = R.leggiPartite('17/10 15:00 Venezia-Napoli\n17/10 15:00 venezia - napoli\n18/10 20:45 Juventus-Lazio', '2026-10-11', esistenti);
+  assert.deepEqual(r.ok.map((p) => p.titolo), ['Venezia-Napoli']);
+  assert.deepEqual(r.doppie, ['Riga 2: uguale alla riga 1', 'Riga 3: già presente']);
+  assert.deepEqual(r.errori, []);
+});
+
+test('riepilogo: contano solo i confermati, gli assegnati non confermati sono in attesa', () => {
+  const stati = ['confermato', 'convocato', 'assegnato', 'rifiutato', 'annullato', 'da-assegnare'];
+  assert.deepEqual(stati.map((s) => R.conta({ stato: s, operatoreId: 'a' })), [true, false, false, false, false, false]);
+  assert.deepEqual(stati.map((s) => R.inAttesa({ stato: s, operatoreId: 'a' })), [false, true, true, false, false, false]);
+  assert.equal(R.conta({ stato: 'confermato', operatoreId: '' }), false);
+  assert.equal(R.inAttesa({ stato: 'convocato', operatoreId: '' }), false);
+});
+
+test('evento già iniziato (ritrovo passato)', () => {
+  const reg = R.complete({ competizioni: [{ nome: 'Serie A', prima: 4, dopo: 2 }] });
+  const ev = { tipo: 'partita', competizione: 'Serie A', data: '2026-10-11', orario: '12:30' };   // ritrovo 08:30
+  assert.equal(R.giaIniziato(ev, reg, '2026-10-11', '08:29'), false);
+  assert.equal(R.giaIniziato(ev, reg, '2026-10-11', '08:30'), true);
+  assert.equal(R.giaIniziato(Object.assign({}, ev, { data: '2026-10-10' }), reg, '2026-10-11', '00:00'), true);
+  assert.equal(R.giaIniziato(Object.assign({}, ev, { data: '2026-10-12' }), reg, '2026-10-11', '23:59'), false);
+});
+
+test('competizione predefinita scritta giusta', () => {
+  const nomi = R.complete(null).competizioni.map((c) => c.nome);
+  assert.ok(nomi.includes('European Qualifiers Women'));
+  assert.ok(!nomi.includes('European Qualfiers Women'));
+});

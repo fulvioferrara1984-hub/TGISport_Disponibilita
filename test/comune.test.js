@@ -197,3 +197,14 @@ test('avvisi: dentro lo schermo intero solo se è ancora visibile (uscita forzat
     assert.equal(box.parentNode, body);
   } finally { delete global.document; }
 });
+
+test('turni sovrapposti dello stesso giorno, anche oltre la mezzanotte', () => {
+  const t = (data, inizio, fine) => ({ data, inizio, fine });
+  assert.equal(DO.orariSovrapposti(t('2026-10-17', '11:00', '17:00'), t('2026-10-17', '14:00', '20:00')), true);
+  assert.equal(DO.orariSovrapposti(t('2026-10-17', '11:00', '14:00'), t('2026-10-17', '14:00', '20:00')), false);
+  assert.equal(DO.orariSovrapposti(t('2026-10-17', '11:00', '17:00'), t('2026-10-18', '11:00', '17:00')), false);
+  assert.equal(DO.orariSovrapposti(t('2026-10-17', '20:00', '00:30'), t('2026-10-17', '23:00', '23:30')), true);
+  // senza fine conta il solo inizio
+  assert.equal(DO.orariSovrapposti(t('2026-10-17', '10:00', ''), t('2026-10-17', '09:00', '12:00')), true);
+  assert.equal(DO.orariSovrapposti(t('2026-10-17', '13:00', ''), t('2026-10-17', '09:00', '12:00')), false);
+});

@@ -17,6 +17,8 @@ const ev = (campi) => Object.assign({
   data: '2026-10-10', orario: '20:45', operatoreId: 'a', stato: 'convocato',
 }, campi);
 const { gs } = carica();
+// le prove dell'attivazione usano l'ora vera (attivaPromemoria guarda new Date()): eventi di oggi, ora italiana
+const OGGI_VERO = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date());
 const sel = (eventi, ops = OPS) => j(gs.selezionaPromemoria(eventi, ops, OGGI, 3));
 const titoli = (righe) => righe.map((r) => r.evento.titolo);
 
@@ -418,7 +420,7 @@ test('email in parte non partite: giro fatto, conteggio salvato', () => {
 });
 
 test('anteprima con eventi da sistemare ma nessun destinatario lo dice', () => {
-  const t = carica({ risposte: firestoreFinto({ eventi: [ev({ operatoreId: '', stato: 'da-assegnare' })] }) });
+  const t = carica({ risposte: firestoreFinto({ eventi: [ev({ operatoreId: '', stato: 'da-assegnare', data: OGGI_VERO })] }) });
   t.gs.attivaPromemoria();
   assert.ok(t.registro.some((r) => r.includes('1 evento da sistemare ma nessun destinatario')), t.registro.join('\n'));
 });
@@ -451,7 +453,7 @@ test('pagina d\'errore di Google (502) invece della risposta', () => {
 });
 
 test('anteprima dell\'attivazione con il numero di eventi da sistemare', () => {
-  const t = carica({ proprieta: { EMAIL_SUPERVISORI: 's@x.it' }, risposte: firestoreFinto({ eventi: [ev({ stato: 'da-assegnare', operatoreId: '' })] }) });
+  const t = carica({ proprieta: { EMAIL_SUPERVISORI: 's@x.it' }, risposte: firestoreFinto({ eventi: [ev({ stato: 'da-assegnare', operatoreId: '', data: OGGI_VERO })] }) });
   t.gs.attivaPromemoria();
   assert.ok(t.registro.some((r) => /Anteprima di oggi.*s@x\.it · 1 evento da sistemare/.test(r)), t.registro.join('\n'));
 });

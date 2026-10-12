@@ -76,6 +76,25 @@
   const GIORNI_BREVI = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   const nomeMese = (i) => MESI[i][0].toUpperCase() + MESI[i].slice(1);
+  // Due turni { data, inizio, fine } dello stesso giorno si sovrappongono? Una fine prima dell'inizio passa la mezzanotte;
+  // senza fine conta il solo inizio
+  function orariSovrapposti(a, b) {
+    if (!a || !b || a.data !== b.data) return false;
+    const min = (t) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+    const intervallo = (x) => {
+      const i = min(x.inizio);
+      if (i === null) return null;
+      let f = min(x.fine);
+      if (f === null) return [i, i];
+      if (f <= i) f += 1440;
+      return [i, f];
+    };
+    const p = intervallo(a), q = intervallo(b);
+    if (!p || !q) return false;
+    const dentro = (t, [x, y]) => t >= x && t < y;
+    if (p[0] === p[1] || q[0] === q[1]) return p[0] === q[0] || dentro(p[0], q) || dentro(q[0], p);
+    return p[0] < q[1] && q[0] < p[1];
+  }
   const indiceGiorno = (s) => (daIso(s).getDay() + 6) % 7;
   // giorni di calendario fra oggi e la data (negativo se passata); arrotondato per il cambio dell'ora
   const giorniA = (data, oggiIso) => Math.round((daIso(data) - daIso(oggiIso)) / 864e5);
@@ -300,6 +319,6 @@
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
     versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno, tipoEvento, normalizzaEmail, tipoAccesso, controllaVisualizzatore, invitoVisualizzatore,
-    testoBlocco, telefonoValido, giorniDaCompilare, nomeMese,
+    testoBlocco, telefonoValido, giorniDaCompilare, nomeMese, orariSovrapposti,
   });
 })(window.DO = window.DO || {});
