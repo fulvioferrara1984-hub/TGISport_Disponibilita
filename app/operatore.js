@@ -1,4 +1,4 @@
-/* Disponibilità Ops — pagina degli operatori: compilazione settimanale e invio ai supervisori. */
+/* Disponibilità Ops — pagina degli operatori: compilazione per settimana o per mese e invio ai supervisori. */
 (function (DO) {
   'use strict';
 
@@ -18,6 +18,13 @@
   let giorniOn = {};              // giorni in cui è on-site: data → { luogo, … }
   let richiesteEvento = [];       // richieste di disponibilità per una singola partita o turno
   const noteAperte = new Set();   // giorni in cui l'operatore ha chiesto di scrivere una nota
+  // vista: settimana (con i giorni in riga) o mese (griglia, un giorno si apre in un pannello); il telefono ricorda la scelta
+  let vista = DO.leggi('do-vista-operatore') === 'mese' ? 'mese' : 'settimana';
+  let mese = oggi.slice(0, 7);
+  const spostaMese = (m, n) => { const [a, x] = m.split('-').map(Number); const d = new Date(a, x - 1 + n, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+  const giorniDelMese = (m) => DO.grigliaMese(m).flat().filter((x) => x.delMese).map((x) => x.data);
+  const giorniVisibili = () => (vista === 'mese' ? giorniDelMese(mese) : DO.settimana(lun));
+  const convocatoIl = (d) => convocazioni.filter((c) => c.data === d && c.stato !== 'annullato' && c.stato !== 'rifiutato');
 
   const chiaveBozza = () => 'do-bozza-' + operatore.id;
   const vuoto = { s: '', n: '' };
@@ -63,19 +70,30 @@
 
   // ---------- disegno ----------
   function disegna() {
-    const giorni = DO.settimana(lun);
-    $('sett-etichetta').textContent = DO.etichettaSettimana(lun);
+    const giorni = giorniVisibili(), mensile = vista === 'mese';
+    document.querySelectorAll('[data-vista-op]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.vistaOp === vista)));
+    $('giorni').hidden = mensile;
+    $('mese-op').hidden = !mensile;
+    $('copia-prec').hidden = mensile;
+    $('tutti-etichetta').textContent = mensile ? 'Tutto il mese:' : 'Tutta la settimana:';
+    $('sett-prec').setAttribute('aria-label', mensile ? 'Mese precedente' : 'Settimana precedente');
+    $('sett-succ').setAttribute('aria-label', mensile ? 'Mese successivo' : 'Settimana successiva');
+    $('sett-oggi').title = mensile ? 'Torna al mese corrente' : 'Torna alla settimana corrente';
     const conti = { D: 0, P: 0, A: 0, vuoti: 0 };
     giorni.forEach((d) => { const s = valore(d).s; if (s) conti[s]++; else if (modificabile(d)) conti.vuoti++; });
-    $('sett-riepilogo').textContent = lun === DO.lunedi(oggi) ? 'Questa settimana' + (conti.vuoti ? ' · ' + conti.vuoti + ' da compilare' : '')
+    const corrente = mensile ? mese === oggi.slice(0, 7) : lun === DO.lunedi(oggi);
+    $('sett-etichetta').textContent = mensile ? DO.nomeMese(Number(mese.slice(5)) - 1) + ' ' + mese.slice(0, 4) : DO.etichettaSettimana(lun);
+    $('sett-riepilogo').textContent = corrente ? (mensile ? 'Questo mese' : 'Questa settimana') + (conti.vuoti ? ' · ' + conti.vuoti + ' da compilare' : '')
       : conti.vuoti ? conti.vuoti + ' giorni da compilare' : conti.D + ' disponibili · ' + conti.A + ' non disponibili';
-    $('sett-prec').disabled = lun <= DO.aggiungi(DO.lunedi(oggi), -7 * SETTIMANE_INDIETRO);
-    $('sett-succ').disabled = DO.aggiungi(lun, 7) > limite;
-    $('sett-oggi').disabled = lun === DO.lunedi(oggi);
+    const primoConsultabile = DO.aggiungi(DO.lunedi(oggi), -7 * SETTIMANE_INDIETRO);
+    $('sett-prec').disabled = mensile ? mese <= primoConsultabile.slice(0, 7) : lun <= primoConsultabile;
+    $('sett-succ').disabled = mensile ? spostaMese(mese, 1) + '-01' > limite : DO.aggiungi(lun, 7) > limite;
+    $('sett-oggi').disabled = corrente;
     const qualcosa = giorni.some(modificabile);
     document.querySelectorAll('[data-tutti], #copia-prec').forEach((b) => { b.disabled = !qualcosa; });
 
-    $('giorni').innerHTML = giorni.map((d) => {
+    if (mensile) disegnaMese();
+    else $('giorni').innerHTML = giorni.map((d) => {
       const g = DO.giorno(d), v = valore(d), attivo = modificabile(d);
       const stati = Object.keys(DO.STATI).map((s) =>
         '<button type="button" role="radio" class="st-' + s + '" data-stato="' + s + '" aria-checked="' + (v.s === s) + '"' + (attivo ? '' : ' disabled') + '>'
@@ -103,6 +121,96 @@
     disegnaConvocazioni();
     disegnaBarra();
   }
+
+  // ---------- vista mensile ----------
+  function disegnaMese() {
+    const celle = DO.celleMese(mese, { oggi, valore, modificabile, bloccato: bloccatoOra, richiesto,
+      convocato: (d) => convocatoIl(d).length > 0, onsite: (d) => giorniOn[d], modificato: (d) => !!bozza[d] });
+    $('mese-griglia').innerHTML = celle.map((c) => {
+      if (!c.delMese) return '<span class="mc mc-fuori" aria-hidden="true"></span>';
+      const g = DO.giorno(c.data);
+      const stato = c.onsite ? 'on-site a ' + c.onsite.luogo : c.s ? DO.STATI[c.s].nome : 'non indicato';
+      const etichetta = g.nome + ' ' + g.num + ' ' + g.mese + ', ' + stato + (c.nota && !c.onsite ? ', ' + c.nota : '') + (c.convocato ? ', convocato' : '')
+        + (c.richiesto && !c.s ? ', richiesto dai supervisori' : '') + (c.modificato ? ', da inviare' : '')
+        + (c.modificabile ? '' : c.bloccato ? ', bloccato' : c.onsite ? '' : ', non modificabile');
+      const cls = ['mc', c.onsite ? 'mc-onsite' : c.s ? 'st-' + c.s : '', c.oggi ? 'mc-oggi' : '', c.modificabile ? '' : 'mc-spento',
+        c.richiesto && !c.s ? 'mc-richiesto' : '', c.modificato ? 'mc-modificato' : ''].filter(Boolean).join(' ');
+      return '<button type="button" class="' + cls + '" data-giorno="' + c.data + '" aria-label="' + DO.esc(etichetta) + '">'
+        + '<span class="mc-num">' + c.num + '</span><span class="mc-segni">'
+        + (c.nota && !c.onsite ? '<i class="segno segno-nota"></i>' : '') + (c.convocato ? '<i class="segno segno-conv"></i>' : '') + '</span></button>';
+    }).join('');
+  }
+
+  // Pannello di un giorno della vista mensile: stati, orari o nota, «Cancella»; un giorno bloccato mostra solo le informazioni
+  function apriGiorno(d) {
+    const dlg = $('dlg-giorno'), g = DO.giorno(d), v = valore(d), attivo = modificabile(d);
+    const segni = (d === oggi ? '<span class="oggi">Oggi</span>' : '') + (richiesto(d) ? '<span class="richiesto">Richiesto</span>' : '')
+      + (giorniOn[d] ? '<span class="onsite-tag">On-site · ' + DO.esc(giorniOn[d].luogo) + '</span>' : bloccatoOra(d) ? '<span class="bloccato-tag">Bloccato: contatta il supervisore</span>' : '')
+      + convocatoIl(d).map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + DO.esc(ritrovo(c) || '—') + '</span>').join('');
+    const stati = Object.keys(DO.STATI).map((s) => '<button type="button" role="radio" class="st-' + s + '" data-stato="' + s + '" aria-checked="' + (v.s === s) + '">'
+      + '<span class="pallino"></span><span>' + DO.STATI[s].nome + '</span></button>').join('');
+    dlg.innerHTML = '<form method="dialog"><h2 id="dlg-giorno-titolo">' + g.nome + ' ' + g.num + ' ' + g.mese + '</h2>'
+      + (segni ? '<div class="giorno-data dlg-giorno-segni">' + segni + '</div>' : '')
+      + (attivo
+        ? '<div class="stati" role="radiogroup" aria-label="Disponibilità di ' + g.nome + ' ' + g.num + '">' + stati + '</div>'
+          + '<input type="text" class="nota-giorno" maxlength="200" placeholder="' + (v.s === 'P' ? 'Orari (es. solo dalle 18:00)' : 'Nota facoltativa') + '" value="' + DO.esc(v.n) + '" aria-label="Orari o nota">'
+        : '<p class="dlg-giorno-info">' + (giorniOn[d] ? 'Sei on-site: il giorno non si cambia da qui.' : v.s ? 'Hai indicato: <b>' + DO.STATI[v.s].nome + '</b>' + (v.n ? ' · ' + DO.esc(v.n) : '') : 'Nessuna disponibilità indicata.')
+          + (d < oggi ? '' : bloccatoOra(d) ? ' Per cambiarlo chiama il supervisore.' : '') + '</p>'
+          + (bloccatoOra(d) ? '<div class="conv-azioni dlg-giorno-telefono">' + tasto('telefona', {}) + '</div>' : ''))
+      + '<div class="dialog-azioni">' + (attivo && v.s ? '<button type="button" class="link cancella-giorno" data-cancella>Cancella</button>' : '')
+      + '<span class="spazio"></span><button type="submit" class="primario">Fatto</button></div></form>';
+    dlg.dataset.giorno = d;
+    if (!dlg.open) dlg.showModal();
+  }
+  function chiudiGiorno() {
+    if ($('dlg-giorno').open) $('dlg-giorno').close();
+    disegna();
+  }
+
+  $('mese-griglia').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-giorno]');
+    if (!b) return;
+    if (riallineaOggi()) disegna();
+    apriGiorno(b.dataset.giorno);
+    const scelto = $('dlg-giorno').querySelector('[aria-checked="true"]') || $('dlg-giorno').querySelector('[data-stato], [type="submit"]');
+    if (scelto) scelto.focus();
+  });
+  $('dlg-giorno').addEventListener('click', (e) => {
+    const dlg = $('dlg-giorno'), d = dlg.dataset.giorno;
+    if (e.target === dlg) { chiudiGiorno(); return; }   // tocco fuori dal pannello
+    if (e.target.closest('[data-cancella]')) { imposta(d, { s: '', n: '' }); chiudiGiorno(); return; }
+    const b = e.target.closest('[data-stato]');
+    if (!b) return;
+    const campo = dlg.querySelector('.nota-giorno');
+    imposta(d, { s: b.dataset.stato, n: campo ? campo.value : valore(d).n });
+    $('conferma').hidden = true;
+    // Disponibile e Non disponibile chiudono il pannello; con Parziale si scrivono gli orari
+    if (b.dataset.stato !== 'P') { chiudiGiorno(); return; }
+    apriGiorno(d);
+    disegnaMese();
+    disegnaBarra();
+    dlg.querySelector('.nota-giorno').focus();
+  });
+  $('dlg-giorno').addEventListener('input', (e) => {
+    if (!e.target.classList.contains('nota-giorno')) return;
+    const d = $('dlg-giorno').dataset.giorno;
+    imposta(d, { s: valore(d).s, n: e.target.value });
+    disegnaMese();
+    disegnaBarra();
+  });
+  $('dlg-giorno').addEventListener('submit', (e) => { e.preventDefault(); chiudiGiorno(); });
+  $('dlg-giorno').addEventListener('cancel', (e) => { e.preventDefault(); chiudiGiorno(); });
+
+  document.querySelectorAll('[data-vista-op]').forEach((b) => b.addEventListener('click', () => {
+    const nuova = b.dataset.vistaOp;
+    if (nuova === vista) return;
+    // dalla settimana al mese che la contiene (il giovedì decide), dal mese alla sua settimana di oggi o alla prima
+    if (nuova === 'mese') mese = DO.aggiungi(lun, 3).slice(0, 7);
+    else lun = DO.lunedi(mese === oggi.slice(0, 7) ? oggi : mese + '-01');
+    vista = nuova;
+    DO.scrivi('do-vista-operatore', vista, true);
+    disegna();
+  }));
 
   // ---------- convocazioni ----------
   const ritrovo = (c) => c.convocazione || c.convocazioneCalcolata || '';
@@ -330,12 +438,13 @@
       const daInviare = !mancanti && giorni.some((d) => bozza[d]);
       const stato = mancanti ? '<b>' + mancanti + (mancanti === 1 ? ' giorno da compilare' : ' giorni da compilare') + '</b>'
         : daInviare ? '<b>Compilata</b>: ricordati di premere Invia' : '<b>Completata</b>, grazie!';
-      const vai = DO.lunedi(giorni.find((d) => !valore(d).s) || giorni[0] || x.da);
+      const giornoVai = giorni.find((d) => !valore(d).s) || giorni[0] || x.da, vai = DO.lunedi(giornoVai);
+      const giaQui = vista === 'mese' ? giornoVai.slice(0, 7) === mese : vai === lun;
       return '<div class="richiesta' + (mancanti || daInviare ? '' : ' fatta') + '">'
         + '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 10h17M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'
         + '<div class="richiesta-testo"><span>I supervisori chiedono le tue disponibilità <b>' + DO.periodo(x.da, x.a) + '</b></span>'
         + (x.messaggio ? '<q>' + DO.esc(x.messaggio) + '</q>' : '') + '<small>' + stato + '</small></div>'
-        + (mancanti && vai !== lun ? '<button type="button" class="bottone" data-vai="' + vai + '">Vai al periodo</button>' : '') + '</div>';
+        + (mancanti && !giaQui ? '<button type="button" class="bottone" data-vai="' + vai + '" data-giorno="' + giornoVai + '">Vai al periodo</button>' : '') + '</div>';
     }).join('');
   }
 
@@ -391,12 +500,13 @@
     const b = e.target.closest('[data-vai]');
     if (!b) return;
     lun = b.dataset.vai;
+    mese = b.dataset.giorno.slice(0, 7);
     disegna();
     $('settimana-scheda').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   document.querySelectorAll('[data-tutti]').forEach((b) => b.addEventListener('click', () => {
-    DO.settimana(lun).forEach((d) => imposta(d, { s: b.dataset.tutti, n: '' }));
+    giorniVisibili().forEach((d) => imposta(d, { s: b.dataset.tutti, n: '' }));
     disegna();
   }));
 
@@ -408,9 +518,9 @@
     DO.avviso('Copiata la settimana precedente: controlla e invia.');
   });
 
-  $('sett-prec').addEventListener('click', () => { lun = DO.aggiungi(lun, -7); disegna(); });
-  $('sett-succ').addEventListener('click', () => { lun = DO.aggiungi(lun, 7); disegna(); });
-  $('sett-oggi').addEventListener('click', () => { lun = DO.lunedi(oggi); disegna(); });
+  $('sett-prec').addEventListener('click', () => { if (vista === 'mese') mese = spostaMese(mese, -1); else lun = DO.aggiungi(lun, -7); disegna(); });
+  $('sett-succ').addEventListener('click', () => { if (vista === 'mese') mese = spostaMese(mese, 1); else lun = DO.aggiungi(lun, 7); disegna(); });
+  $('sett-oggi').addEventListener('click', () => { mese = oggi.slice(0, 7); lun = DO.lunedi(oggi); disegna(); });
 
   $('annulla-bozza').addEventListener('click', async () => {
     if (!(await DO.chiedi({ titolo: 'Annullare le modifiche?', testo: 'Le modifiche non ancora inviate andranno perse.', ok: 'Annulla le modifiche', annulla: 'Tienile', pericolo: true }))) return;
@@ -424,7 +534,7 @@
   $('btn-invia').addEventListener('click', async () => {
     if (riallineaOggi()) { disegna(); DO.avviso('È cambiato il giorno: le modifiche sui giorni ormai bloccati sono state tolte.', 'errore', 8000); }
     const giorni = {};
-    DO.settimana(lun).filter(modificabile).forEach((d) => { giorni[d] = valore(d); });
+    giorniVisibili().filter(modificabile).forEach((d) => { giorni[d] = valore(d); });
     Object.keys(bozza).forEach((d) => { if (modificabile(d)) giorni[d] = bozza[d]; });
     // «Parziale» senza orari: i supervisori non saprebbero quando l'operatore è libero
     const senzaOrari = Object.keys(giorni).filter((d) => giorni[d].s === 'P' && !String(giorni[d].n || '').trim()).sort();
@@ -434,8 +544,10 @@
         testo: (senzaOrari.length === 1 ? 'Per ' + nomi[0] : 'Per ' + nomi.join(', ')) + ' hai scelto Parziale senza scrivere gli orari: i supervisori non sapranno quando sei libero.' });
       if (!avanti) {
         lun = DO.lunedi(senzaOrari[0]);
+        mese = senzaOrari[0].slice(0, 7);
         noteAperte.add(senzaOrari[0]);
         disegna();
+        if (vista === 'mese') { apriGiorno(senzaOrari[0]); $('dlg-giorno').querySelector('.nota-giorno').focus(); return; }
         const campo = $('giorni').querySelector('[data-data="' + senzaOrari[0] + '"] .nota-giorno');
         if (campo) campo.focus();
         return;
@@ -504,13 +616,18 @@
 
   // Con una richiesta da compilare si apre il periodo richiesto; altrimenti la settimana in corso, se ha ancora giorni
   // modificabili. Se è tutta passata o bloccata (di domenica, per esempio) la prima settimana dopo con giorni da compilare.
-  function settimanaIniziale() {
+  function giornoIniziale() {
     const daFare = richieste.map(giorniDi).flat().find((d) => !valore(d).s);
-    if (daFare) return DO.lunedi(daFare);
-    if (DO.settimana(DO.lunedi(oggi)).some(modificabile)) return DO.lunedi(oggi);
+    if (daFare) return daFare;
+    if (DO.settimana(DO.lunedi(oggi)).some(modificabile)) return oggi;
     const compilabili = [];
     for (let d = oggi; d <= limite; d = DO.aggiungi(d, 1)) if (modificabile(d)) compilabili.push(d);
-    return DO.lunedi(compilabili.find((d) => !valore(d).s) || compilabili[0] || oggi);
+    return compilabili.find((d) => !valore(d).s) || compilabili[0] || oggi;
+  }
+  function vaiAlGiornoIniziale() {
+    const g = giornoIniziale();
+    lun = DO.lunedi(g);
+    mese = g.slice(0, 7);
   }
 
   // Si mostra subito l'ultima versione salvata sul dispositivo, poi si aggiorna con quella del server.
@@ -522,7 +639,7 @@
       // la copia può essere di ieri: i giorni ormai passati non devono risultare modificabili
       const adesso = DO.iso(new Date());
       applica(Object.assign({}, copia, { oggi: adesso > copia.oggi ? adesso : copia.oggi }));
-      lun = settimanaIniziale();
+      vaiAlGiornoIniziale();
       disegna();
       $('aggiornamento').hidden = false;
     } else {
@@ -540,9 +657,9 @@
       if (ons) r.onsite = ons;
       if (rev) r.richiesteEvento = rev;
       if (op) r.operativo = op;
-      const settimana = lun;
+      const settimana = lun, meseMostrato = mese;
       applica(r);
-      lun = giaVisibile ? settimana : settimanaIniziale();
+      if (giaVisibile) { lun = settimana; mese = meseMostrato; } else vaiAlGiornoIniziale();
       disegna();
       salvaCopia();
     } catch (e) {

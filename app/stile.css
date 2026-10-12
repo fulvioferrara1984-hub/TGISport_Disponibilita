@@ -617,6 +617,51 @@ body:not(.sola-lettura) .solo-lettura { display: none !important; }
 .importazione .elenco-semplice { line-height: 1.55; margin-bottom: 8px; }
 .importazione .elenco-semplice li { margin-bottom: 4px; }
 
+/* ---------- vista mensile (operatore) ---------- */
+.testa-disponibilita { flex-direction: column; align-items: stretch; gap: 12px; }
+.vista-scelta { align-self: center; display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--vuoto); }
+.vista-scelta button { border: 0; background: none; padding: 6px 18px; border-radius: 8px; font-weight: 600; color: var(--inchiostro-2); cursor: pointer; }
+.vista-scelta button[aria-pressed="true"] { background: var(--pannello); color: var(--inchiostro); box-shadow: 0 1px 2px rgba(15, 24, 48, .14); }
+.testa-disponibilita .navigatore { justify-content: center; }
+.mese-op { padding: 14px 18px 18px; }
+.mese-intestazione, .mese-griglia { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.mese-intestazione { margin-bottom: 6px; text-align: center; font-size: var(--t-12); font-weight: 600; color: var(--inchiostro-3); }
+.mc {
+  position: relative; min-width: 0; aspect-ratio: 1 / 1; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start;
+  padding: 6px 7px; border: 1px solid var(--linea); border-radius: 10px; background: var(--pannello); color: var(--inchiostro); font: inherit; cursor: pointer;
+}
+.mc:hover { border-color: var(--inchiostro-3); }
+.mc-num { font-size: var(--t-14); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.mc.st-D { background: var(--ok-tenue); border-color: #b9e0c9; }
+.mc.st-P { background: var(--attenzione-tenue); border-color: #f0d6a6; }
+.mc.st-A { background: var(--errore-tenue); border-color: #f3c5c1; }
+.mc.st-D .mc-num, .mc.st-P .mc-num, .mc.st-A .mc-num { color: var(--st); }
+.mc-onsite, .mc-campione.mc-onsite { background: #efe7ff; border-color: #d9c9ff; }
+.mc-onsite .mc-num { color: #5b34c9; }
+.mc-oggi { box-shadow: inset 0 0 0 2px var(--segnale); }
+.mc-richiesto { border: 2px dashed var(--accento); }
+.mc-spento { opacity: .5; }
+.mc-modificato::after { content: ""; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--accento); }
+.mc-fuori { visibility: hidden; }
+.mc-segni { display: flex; gap: 3px; }
+.segno { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.segno-nota { background: var(--inchiostro-2); }
+.segno-conv { background: var(--accento); border-radius: 2px; }
+.segno-modifica { background: var(--accento); }
+.mese-legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: var(--t-12); color: var(--inchiostro-2); }
+.mese-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.mc-campione { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--linea); }
+.mc-campione.mc-richiesto { border: 2px dashed var(--accento); }
+dialog.dlg-giorno { width: min(440px, calc(100vw - 32px)); }
+.dlg-giorno form { display: flex; flex-direction: column; gap: 12px; }
+.dlg-giorno h2 { margin: 0; }
+.dlg-giorno-segni { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+.dlg-giorno-segni > span { margin-top: 0; }
+.dlg-giorno-info { margin: 0; color: var(--inchiostro-2); line-height: 1.5; }
+.dlg-giorno .dialog-azioni { margin-top: 4px; align-items: center; }
+.dlg-giorno .dialog-azioni .spazio { flex: 1; }
+.dlg-giorno-telefono { justify-content: flex-start; }
+
 /* ---------- convocazioni (operatore) ---------- */
 .mie-convocazioni { margin-bottom: 16px; }
 .mie-convocazioni:empty { display: none; }
@@ -756,6 +801,11 @@ body:not(.sola-lettura) .solo-lettura { display: none !important; }
   /* sul telefono "Non disponibile" va a capo invece di essere troncato */
   .stati button { height: 46px; font-size: var(--t-14); line-height: 1.15; white-space: normal; text-align: center; padding: 0 4px; }
   .stati button .pallino { display: none; }
+  /* vista mensile: celle più compatte; il pannello del giorno sale dal basso */
+  .mese-op { padding: 12px 10px 14px; }
+  .mese-intestazione, .mese-griglia { gap: 4px; }
+  .mc { padding: 5px; border-radius: 8px; }
+  dialog.dlg-giorno { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom); }
   .stati button span:last-child { white-space: normal; overflow: visible; }
   /* stato sopra, tasto a tutta larghezza sotto (a 14 px accanto al tasto andrebbe su tre righe) */
   .barra-invio-dentro { flex-wrap: wrap; gap: 8px; }

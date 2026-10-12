@@ -208,3 +208,25 @@ test('turni sovrapposti dello stesso giorno, anche oltre la mezzanotte', () => {
   assert.equal(DO.orariSovrapposti(t('2026-10-17', '10:00', ''), t('2026-10-17', '09:00', '12:00')), true);
   assert.equal(DO.orariSovrapposti(t('2026-10-17', '13:00', ''), t('2026-10-17', '09:00', '12:00')), false);
 });
+
+test('celle del mese per la vista mensile degli operatori', () => {
+  const stati = { '2026-10-16': { s: 'P', n: 'dalle 18' }, '2026-10-20': { s: 'D', n: '' } };
+  const celle = DO.celleMese('2026-10', {
+    oggi: '2026-10-12',
+    valore: (d) => stati[d] || { s: '', n: '' },
+    modificabile: (d) => d >= '2026-10-16' && d <= '2026-10-31',
+    bloccato: (d) => d >= '2026-10-12' && d < '2026-10-16',
+    richiesto: (d) => d === '2026-10-21',
+    convocato: (d) => d === '2026-10-17',
+    onsite: (d) => (d === '2026-10-24' ? { luogo: 'Roma' } : null),
+    modificato: (d) => d === '2026-10-20',
+  });
+  // ottobre 2026 inizia di giovedì: la griglia parte da lunedì 28 settembre, 5 settimane
+  assert.equal(celle.length, 35);
+  assert.deepEqual([celle[0].data, celle[0].delMese, celle[3].data, celle[3].num], ['2026-09-28', false, '2026-10-01', 1]);
+  const c = (d) => celle.find((x) => x.data === d);
+  assert.deepEqual(c('2026-10-16'), { data: '2026-10-16', num: 16, delMese: true, s: 'P', nota: 'dalle 18', oggi: false, modificabile: true, bloccato: false,
+    richiesto: false, convocato: false, onsite: null, modificato: false });
+  assert.deepEqual([c('2026-10-12').oggi, c('2026-10-12').bloccato, c('2026-10-12').modificabile], [true, true, false]);
+  assert.deepEqual([c('2026-10-20').modificato, c('2026-10-21').richiesto, c('2026-10-17').convocato, c('2026-10-24').onsite], [true, true, true, { luogo: 'Roma' }]);
+});

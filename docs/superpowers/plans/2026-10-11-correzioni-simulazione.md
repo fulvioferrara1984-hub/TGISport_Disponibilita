@@ -55,3 +55,13 @@
 ### Task 4: Pubblicazione
 
 - `?v=30`; prova nel browser in demo (computer e telefono) dei punti dei Task 2 e 3; `node --test test/*.test.js` verde.
+
+### Task 5: Vista mensile della pagina operatori (approvata dall'utente il 2026-10-12)
+
+- Selettore «Settimana | Mese» nel riquadro delle disponibilità; si apre la settimana; scelta ricordata sul dispositivo (`do-vista-operatore`).
+- Mese: navigatore «Ottobre 2026» (‹ › Oggi) fino al mese del limite; griglia lun–dom con numero, colore dello stato, segni per nota, convocazione, on-site, giorno richiesto, modifica non inviata; oggi cerchiato; passati e bloccati grigi.
+- Tocco su un giorno → pannello (dal basso sul telefono, al centro sul computer): data, tre stati, orari/nota, «Cancella», «Fatto»; Disponibile e Non disponibile chiudono il pannello, Parziale lo lascia aperto; giorno bloccato → solo informazioni e «Contatta il supervisore».
+- «Tutto il mese: Disponibile / Non disponibile» sui giorni modificabili; «Copia settimana precedente» solo nella settimana.
+- Invio: modifiche + giorni modificabili del mese mostrato, con gli stessi controlli (Parziale senza orari).
+- «Vai al periodo» delle richieste porta al mese nella vista mensile.
+- Parti pure con prove in Node: celle del mese (`DO.celleMese`); il resto provato nel browser (computer e telefono).

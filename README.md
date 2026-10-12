@@ -7,7 +7,7 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
   - **Convocazioni**: partite e turni Remote TL e Remote Support della settimana; per ogni evento si sceglie l'operatore da un menu che mostra chi è disponibile, parziale, non disponibile o già impegnato; avviso di **doppio turno**; stati *da assegnare → da inviare → in attesa → confermato / rifiutato*, più *da sostituire* e *annullato*; **Invia convocazioni** le rende visibili agli operatori e manda le email.
   - **Disponibilità**: griglia settimanale del team in tempo reale (passando su una casella si leggono nota e impegni del giorno), pannello per ogni giorno, **Richiedi disponibilità** per un periodo.
   - **Aggiornamenti**: invii delle disponibilità, conferme e rifiuti delle convocazioni, stato delle richieste.
-  - **Riepilogo**: eventi coperti e compensi netti per operatore, competizione e mese; esportazione in Excel.
+  - **Riepilogo**: eventi coperti (solo i **confermati**) e compensi netti per operatore, competizione e mese; a parte *In attesa di conferma* con il costo previsto (e quanti sono già passati); esportazione in Excel. Una convocazione confermata a voce o per messaggio si segna dalla finestra dell'evento con **Segna come confermata**.
   - **Operatori** (ruolo Remote OP / Remote Support / Remote TL, on-site TL/OP, contratto P.IVA/Coop, codici) e **Impostazioni** (tariffe, competizioni, importazione dal file Excel, email, password).
 
 ## Regole
@@ -220,7 +220,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 
 ## Uso quotidiano
 
-- **Operatori**: aprono il link, scelgono lo stato per ogni giorno (scorciatoie *Tutta la settimana* e *Copia settimana precedente*), premono **Invia ai supervisori**. Possono compilare fino a 12 settimane in avanti; i giorni passati non si modificano. Le modifiche non inviate restano salvate sul telefono.
+- **Operatori**: aprono il link, scelgono lo stato per ogni giorno (scorciatoie *Tutta la settimana* e *Copia settimana precedente*), premono **Invia ai supervisori**. Con **Settimana | Mese** passano alla vista mensile: un tocco su un giorno apre il pannello con i tre stati, gli orari e *Cancella*; *Tutto il mese* vale per i giorni ancora modificabili; il telefono ricorda la vista scelta. Toccare di nuovo lo stato già scelto non lo toglie (per svuotare un giorno c'è *Cancella*); un *Parziale* senza orari chiede conferma prima dell'invio. Possono compilare fino a 12 settimane in avanti; i giorni passati non si modificano. Le modifiche non inviate restano salvate sul telefono.
 - **Supervisori**: la dashboard si aggiorna da sola appena un operatore invia (badge su *Aggiornamenti*, avviso a schermo e, se attivate, notifiche del computer). Clic sull'intestazione di un giorno → pannello **Convocazione**; *Scrivi email ai selezionati* apre il programma di posta con tutti in Ccn.
 - **Richiedi disponibilità**: periodo (scorciatoie per questa settimana, la prossima, le prossime 2 o 4), messaggio facoltativo e operatori (già selezionati quelli a cui mancano giorni). Ogni operatore vede la richiesta in cima alla sua pagina, con i giorni richiesti evidenziati, e riceve un'email con il link. In **Aggiornamenti** c'è l'avanzamento, *Sollecita chi manca*, il messaggio per WhatsApp e *Chiudi*.
 - **Esporta CSV** scarica la settimana in vista (si apre con Excel).

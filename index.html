@@ -8,7 +8,7 @@
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
   <link rel="preload" href="app/font/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="app/stile.css?v=29">
+  <link rel="stylesheet" href="app/stile.css?v=30">
 </head>
 <body>
   <header class="testata">
@@ -57,7 +57,11 @@
     </div>
 
     <section class="scheda" id="settimana-scheda">
-      <div class="scheda-testa">
+      <div class="scheda-testa testa-disponibilita">
+        <div class="vista-scelta" role="group" aria-label="Vista">
+          <button type="button" data-vista-op="settimana" aria-pressed="true">Settimana</button>
+          <button type="button" data-vista-op="mese" aria-pressed="false">Mese</button>
+        </div>
         <div class="navigatore">
           <button type="button" class="icona" id="sett-prec" aria-label="Settimana precedente">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -71,13 +75,22 @@
       </div>
       <div class="scheda-corpo azioni-box">
         <div class="azioni-rapide">
-          <span>Tutta la settimana:</span>
+          <span id="tutti-etichetta">Tutta la settimana:</span>
           <button type="button" class="bottone st-D" data-tutti="D"><span class="pallino"></span>Disponibile</button>
           <button type="button" class="bottone st-A" data-tutti="A"><span class="pallino"></span>Non disponibile</button>
           <button type="button" class="bottone" id="copia-prec">Copia settimana precedente</button>
         </div>
       </div>
       <ul class="giorni" id="giorni"></ul>
+      <div class="mese-op" id="mese-op" hidden>
+        <div class="mese-intestazione" aria-hidden="true"><span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span></div>
+        <div class="mese-griglia" id="mese-griglia"></div>
+        <div class="mese-legenda">
+          <span><i class="segno segno-nota"></i>con nota</span><span><i class="segno segno-conv"></i>convocato</span>
+          <span><i class="mc-campione mc-onsite"></i>on-site</span><span><i class="mc-campione mc-richiesto"></i>richiesto</span>
+          <span><i class="segno segno-modifica"></i>da inviare</span>
+        </div>
+      </div>
     </section>
 
     <div class="legenda" style="margin-top: 14px;">
@@ -88,6 +101,8 @@
     <p class="nota" style="margin-top: 10px;">Le modifiche non inviate restano salvate su questo dispositivo. <button type="button" class="link" id="annulla-bozza" hidden>Annulla le modifiche non inviate</button></p>
   </main>
 
+  <dialog class="dlg-giorno" id="dlg-giorno" aria-labelledby="dlg-giorno-titolo"></dialog>
+
   <div class="barra-invio" id="barra-invio" hidden>
     <div class="barra-invio-dentro">
       <div class="stato-invio" id="stato-invio"></div>
@@ -95,12 +110,12 @@
     </div>
   </div>
 
-  <script src="app/config.js?v=29"></script>
-  <script src="app/comune.js?v=29"></script>
-  <script src="app/onsite.js?v=29"></script>
-  <script src="app/richieste-evento.js?v=29"></script>
-  <script src="app/demo.js?v=29"></script>
-  <script src="app/dati-firebase.js?v=29"></script>
-  <script src="app/operatore.js?v=29"></script>
+  <script src="app/config.js?v=30"></script>
+  <script src="app/comune.js?v=30"></script>
+  <script src="app/onsite.js?v=30"></script>
+  <script src="app/richieste-evento.js?v=30"></script>
+  <script src="app/demo.js?v=30"></script>
+  <script src="app/dati-firebase.js?v=30"></script>
+  <script src="app/operatore.js?v=30"></script>
 </body>
 </html>

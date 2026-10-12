@@ -70,6 +70,16 @@
     for (let g = lunedi(primo); g <= fine; g = aggiungi(g, 7)) settimane.push(settimana(g).map((x) => ({ data: x, delMese: x.slice(0, 7) === mese })));
     return settimane;
   }
+  // Celle della vista mensile degli operatori: la griglia lun–dom del mese con lo stato e i segni di ogni giorno
+  // (f: funzioni della pagina per stato, giorni modificabili, bloccati, richiesti, convocati, on-site, modifiche)
+  function celleMese(mese, f) {
+    return grigliaMese(mese).flat().map(({ data, delMese }) => {
+      const v = f.valore(data) || { s: '', n: '' };
+      return { data, num: Number(data.slice(8)), delMese, s: v.s || '', nota: v.n || '', oggi: data === f.oggi,
+        modificabile: !!f.modificabile(data), bloccato: !!f.bloccato(data), richiesto: !!f.richiesto(data), convocato: !!f.convocato(data),
+        onsite: f.onsite(data) || null, modificato: !!f.modificato(data) };
+    });
+  }
   const oggi = () => iso(new Date());
   const limite = () => aggiungi(lunedi(oggi()), SETTIMANE_AVANTI * 7 - 1);
   const GIORNI = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
@@ -340,6 +350,6 @@
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
     versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno, tipoEvento, normalizzaEmail, tipoAccesso, controllaVisualizzatore, invitoVisualizzatore,
-    testoBlocco, telefonoValido, giorniDaCompilare, nomeMese, orariSovrapposti, chiedi,
+    testoBlocco, telefonoValido, giorniDaCompilare, nomeMese, orariSovrapposti, chiedi, celleMese,
   });
 })(window.DO = window.DO || {});
