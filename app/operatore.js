@@ -86,6 +86,7 @@
         ? '<input type="text" class="nota-giorno" maxlength="200" placeholder="' + (v.s === 'P' ? 'Orari (es. solo dalle 18:00)' : 'Nota facoltativa') + '" value="' + DO.esc(v.n) + '"'
           + (attivo ? '' : ' disabled') + ' aria-label="Nota per ' + g.nome + ' ' + g.num + '">'
         : attivo ? '<button type="button" class="link aggiungi-nota" data-nota>+ Aggiungi una nota</button>' : '';
+      const cancella = attivo && v.s ? '<button type="button" class="link cancella-giorno" data-cancella aria-label="Cancella la disponibilità di ' + g.nome + ' ' + g.num + '">Cancella</button>' : '';
       return '<li class="giorno' + (bozza[d] ? ' modificato' : '') + (attivo ? '' : ' passato') + (richiesto(d) && !v.s ? ' da-fare' : '') + '" data-data="' + d + '">'
         + '<div class="giorno-data"><b>' + g.nome + '</b><small>' + g.num + ' ' + g.mese + '</small>'
         + (d === oggi ? '<span class="oggi">Oggi</span>' : '') + (richiesto(d) ? '<span class="richiesto">Richiesto</span>' : '')
@@ -94,7 +95,7 @@
         + convocazioni.filter((c) => c.data === d && c.stato !== 'annullato' && c.stato !== 'rifiutato')
           .map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + DO.esc(ritrovo(c) || '—') + '</span>').join('') + '</div>'
         + '<div class="giorno-scelte"><div class="stati" role="radiogroup" aria-label="Disponibilità di ' + g.nome + ' ' + g.num + '">' + stati + '</div>'
-        + nota + '</div></li>';
+        + (nota || cancella ? '<div class="giorno-extra">' + nota + cancella + '</div>' : '') + '</div></li>';
     }).join('');
     disegnaRichieste();
     disegnaRichiesteEvento();
@@ -181,10 +182,25 @@
       disegna();
       return;
     }
+    const g = DO.giorno(c.data), quando = g.nome + ' ' + g.num + ' ' + g.mese, nome = DO.turnoRemoto(c.tipo) ? DO.nomeTurno(c.tipo) : c.titolo;
     let motivo = '';
     if (stato === 'rifiutato') {
-      motivo = prompt('Perché non puoi? (facoltativo, lo leggono i supervisori)', '');
+      motivo = await DO.chiedi({ titolo: 'Non puoi partecipare?', testo: nome + ' · ' + quando,
+        campo: { etichetta: 'Perché (facoltativo, lo leggono i supervisori)' }, ok: 'Invia ai supervisori', annulla: 'Annulla' });
       if (motivo === null) return;
+    }
+    // prima di confermare: un altro turno suo (confermato o in attesa) negli stessi orari
+    if (stato === 'confermato') {
+      const turno = (x) => ({ data: x.data, inizio: ritrovo(x), fine: fineTurno(x) });
+      const altro = convocazioni.find((x) => x.id !== c.id && ['confermato', 'convocato'].includes(x.stato) && DO.orariSovrapposti(turno(c), turno(x)));
+      if (altro) {
+        const nomeAltro = DO.turnoRemoto(altro.tipo) ? DO.nomeTurno(altro.tipo) : altro.titolo;
+        const orari = (x) => ritrovo(x) + (fineTurno(x) ? '–' + fineTurno(x) : '');
+        const si = await DO.chiedi({ titolo: 'Turni negli stessi orari', ok: 'Confermo anche questo', annulla: 'Annulla',
+          testo: 'Hai già ' + nomeAltro + ' ' + quando + ', ' + orari(altro) + (altro.stato === 'confermato' ? ' (confermato)' : ' (da confermare)') + '.\n'
+            + nome + ' è ' + orari(c) + ': confermi anche questo? Se non riesci a fare entrambi, avvisa il supervisore.' });
+        if (!si) return;
+      }
     }
     b.disabled = true;
     try {
@@ -245,8 +261,8 @@
     if (!b) return;
     const d = onsite.find((x) => x.id === b.dataset.id), accetto = b.dataset.onsite === 'accetta';
     if (riallineaOggi()) disegna();
-    if (accetto && !confirm('Accetti il deployment on-site a ' + d.luogo + ' (' + DO.onsite.periodoBreve(d.da, d.a) + ')?\n'
-      + 'Dopo non potrai ritirarti dal sito: per qualunque cambio dovrai chiamare il supervisore.')) return;
+    if (accetto && !(await DO.chiedi({ titolo: 'Accetti il deployment on-site?', ok: 'Accetto', annulla: 'Non ancora',
+      testo: d.luogo + ' · ' + DO.onsite.periodoBreve(d.da, d.a) + '.\nDopo non potrai ritirarti dal sito: per qualunque cambio dovrai chiamare il supervisore.' }))) return;
     b.disabled = true;
     try {
       await DO.dati.rispondiOnsite(d.id, accetto);
@@ -344,9 +360,17 @@
       $('giorni').querySelector('[data-data="' + d + '"] .nota-giorno').focus();
       return;
     }
+    if (e.target.closest('[data-cancella]')) {
+      imposta(d, { s: '', n: '' });
+      noteAperte.delete(d);
+      $('conferma').hidden = true;
+      disegna();
+      return;
+    }
     const b = e.target.closest('[data-stato]');
     if (!b) return;
-    const v = valore(d), nuovo = v.s === b.dataset.stato ? '' : b.dataset.stato;
+    // toccare di nuovo lo stato già scelto non lo toglie (per svuotare il giorno c'è «Cancella»)
+    const v = valore(d), nuovo = b.dataset.stato;
     imposta(d, { s: nuovo, n: v.n });
     $('conferma').hidden = true;
     disegna();
@@ -388,8 +412,8 @@
   $('sett-succ').addEventListener('click', () => { lun = DO.aggiungi(lun, 7); disegna(); });
   $('sett-oggi').addEventListener('click', () => { lun = DO.lunedi(oggi); disegna(); });
 
-  $('annulla-bozza').addEventListener('click', () => {
-    if (!confirm('Annullare le modifiche non inviate?')) return;
+  $('annulla-bozza').addEventListener('click', async () => {
+    if (!(await DO.chiedi({ titolo: 'Annullare le modifiche?', testo: 'Le modifiche non ancora inviate andranno perse.', ok: 'Annulla le modifiche', annulla: 'Tienile', pericolo: true }))) return;
     bozza = {};
     salvaBozza();
     disegna();
@@ -402,6 +426,21 @@
     const giorni = {};
     DO.settimana(lun).filter(modificabile).forEach((d) => { giorni[d] = valore(d); });
     Object.keys(bozza).forEach((d) => { if (modificabile(d)) giorni[d] = bozza[d]; });
+    // «Parziale» senza orari: i supervisori non saprebbero quando l'operatore è libero
+    const senzaOrari = Object.keys(giorni).filter((d) => giorni[d].s === 'P' && !String(giorni[d].n || '').trim()).sort();
+    if (senzaOrari.length) {
+      const nomi = senzaOrari.map((d) => { const g = DO.giorno(d); return g.nome.toLowerCase() + ' ' + g.num; });
+      const avanti = await DO.chiedi({ titolo: 'Parziale senza orari', ok: 'Invia lo stesso', annulla: 'Aggiungi gli orari',
+        testo: (senzaOrari.length === 1 ? 'Per ' + nomi[0] : 'Per ' + nomi.join(', ')) + ' hai scelto Parziale senza scrivere gli orari: i supervisori non sapranno quando sei libero.' });
+      if (!avanti) {
+        lun = DO.lunedi(senzaOrari[0]);
+        noteAperte.add(senzaOrari[0]);
+        disegna();
+        const campo = $('giorni').querySelector('[data-data="' + senzaOrari[0] + '"] .nota-giorno');
+        if (campo) campo.focus();
+        return;
+      }
+    }
     // contate qui: se Google perde la prima risposta e l'invio viene ripetuto, il server vede zero differenze
     const cambiati = Object.keys(bozza).filter(modificabile).length;
     invio = true;
@@ -463,10 +502,15 @@
     disegna();
   }
 
-  // Con una richiesta da compilare si apre direttamente il periodo richiesto, altrimenti la settimana corrente.
+  // Con una richiesta da compilare si apre il periodo richiesto; altrimenti la settimana in corso, se ha ancora giorni
+  // modificabili. Se è tutta passata o bloccata (di domenica, per esempio) la prima settimana dopo con giorni da compilare.
   function settimanaIniziale() {
     const daFare = richieste.map(giorniDi).flat().find((d) => !valore(d).s);
-    return DO.lunedi(daFare || oggi);
+    if (daFare) return DO.lunedi(daFare);
+    if (DO.settimana(DO.lunedi(oggi)).some(modificabile)) return DO.lunedi(oggi);
+    const compilabili = [];
+    for (let d = oggi; d <= limite; d = DO.aggiungi(d, 1)) if (modificabile(d)) compilabili.push(d);
+    return DO.lunedi(compilabili.find((d) => !valore(d).s) || compilabili[0] || oggi);
   }
 
   // Si mostra subito l'ultima versione salvata sul dispositivo, poi si aggiorna con quella del server.
@@ -535,7 +579,7 @@
   }
 
   async function esci() {
-    if (nModifiche() && !confirm('Hai modifiche non inviate: restano salvate su questo dispositivo. Uscire comunque?')) return;
+    if (nModifiche() && !(await DO.chiedi({ titolo: 'Uscire?', testo: 'Hai modifiche non inviate: restano salvate su questo dispositivo.', ok: 'Esci', annulla: 'Resta' }))) return;
     await DO.dati.esci();
     DO.dimentica();
     operatore = null;

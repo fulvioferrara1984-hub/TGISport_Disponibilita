@@ -229,6 +229,27 @@
     setTimeout(() => el.remove(), durata || (tipo === 'errore' ? 6000 : 3500));
   }
 
+  // Finestra nello stile del sito al posto di confirm/prompt del sistema. Risponde con il testo scritto (campo),
+  // true (conferma) oppure null (annulla, Esc). Una sola risposta anche con tocchi ripetuti.
+  function chiedi({ titolo, testo, campo, ok = 'OK', annulla = 'Annulla', pericolo = false }) {
+    return new Promise((risolvi) => {
+      let d = document.getElementById('dlg-sito');
+      if (!d) { d = document.createElement('dialog'); d.id = 'dlg-sito'; d.className = 'dlg-sito'; document.body.appendChild(d); }
+      d.innerHTML = '<form method="dialog"><h2>' + esc(titolo) + '</h2>'
+        + (testo ? '<p>' + esc(testo).replace(/\n/g, '<br>') + '</p>' : '')
+        + (campo ? '<label class="campo"><span>' + esc(campo.etichetta) + '</span><textarea rows="3" maxlength="200">' + esc(campo.valore || '') + '</textarea></label>' : '')
+        + '<div class="dialog-azioni"><button type="button" class="bottone" data-no>' + esc(annulla) + '</button>'
+        + '<button type="submit" class="primario' + (pericolo ? ' pericolo' : '') + '">' + esc(ok) + '</button></div></form>';
+      let fatto = false;
+      const fine = (v) => { if (fatto) return; fatto = true; if (d.open) d.close(); risolvi(v); };
+      d.querySelector('[data-no]').onclick = () => fine(null);
+      d.querySelector('form').onsubmit = (e) => { e.preventDefault(); fine(campo ? d.querySelector('textarea').value.trim() : true); };
+      d.oncancel = (e) => { e.preventDefault(); fine(null); };
+      d.showModal();
+      (d.querySelector('textarea') || d.querySelector('[type="submit"]')).focus();
+    });
+  }
+
   async function copia(testo, messaggio) {
     try {
       await navigator.clipboard.writeText(testo);
@@ -319,6 +340,6 @@
     STATI, nomeStato, leggi, scrivi, avviaPagina, ricordato, ricorda, leggiCopia, salvaCopia, dimentica,
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
     versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno, tipoEvento, normalizzaEmail, tipoAccesso, controllaVisualizzatore, invitoVisualizzatore,
-    testoBlocco, telefonoValido, giorniDaCompilare, nomeMese, orariSovrapposti,
+    testoBlocco, telefonoValido, giorniDaCompilare, nomeMese, orariSovrapposti, chiedi,
   });
 })(window.DO = window.DO || {});

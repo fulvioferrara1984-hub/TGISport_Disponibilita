@@ -278,6 +278,11 @@ button.primario:disabled { background: #b4c0ef; box-shadow: none; cursor: not-al
 .convocazione.richiesta-evento.coperta { opacity: .7; }
 .aggiungi-nota:hover { color: var(--accento); }
 .giorno-scelte { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* sotto i tre stati: la nota (o «+ Aggiungi una nota») e «Cancella» per svuotare il giorno */
+.giorno-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.giorno-extra .nota-giorno { flex: 1 1 100%; }
+.cancella-giorno { margin-left: auto; font-size: var(--t-12); color: var(--inchiostro-3); }
+.cancella-giorno:hover { color: var(--errore); }
 .giorno.modificato { background: #f5f7ff; box-shadow: inset 3px 0 0 var(--accento); }
 .giorno.passato { opacity: .55; }
 .giorno.passato .giorno-scelte { pointer-events: none; }
@@ -459,6 +464,11 @@ dialog form { padding: 24px; }
 dialog h2 { margin: 0 0 16px; font-size: var(--t-20); font-weight: 700; line-height: 1.1; }
 .dialog-azioni { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .dialog-azioni .primario { width: auto; }
+/* finestra del sito (al posto di quelle del sistema) */
+.dlg-sito p { margin: -6px 0 16px; color: var(--inchiostro-2); line-height: 1.5; }
+.dlg-sito .campo textarea { min-height: 76px; }
+button.primario.pericolo { background: var(--errore); }
+button.primario.pericolo:hover { background: #a32520; }
 .codice-grande {
   display: block; margin: 4px 0 14px; padding: 14px; border-radius: 10px; background: var(--vuoto); text-align: center;
   font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--t-28); font-weight: 700; letter-spacing: .14em;
