@@ -627,7 +627,10 @@
   function vaiAlGiornoIniziale() {
     const g = giornoIniziale();
     lun = DO.lunedi(g);
-    mese = g.slice(0, 7);
+    // nel mese: se il mese di quel giorno non ha più nulla da compilare (fine mese), quello del primo giorno modificabile
+    let primo = '';
+    for (let d = oggi; d <= limite && !primo; d = DO.aggiungi(d, 1)) if (modificabile(d)) primo = d;
+    mese = (giorniDelMese(g.slice(0, 7)).some(modificabile) || !primo ? g : primo).slice(0, 7);
   }
 
   // Si mostra subito l'ultima versione salvata sul dispositivo, poi si aggiorna con quella del server.

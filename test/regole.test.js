@@ -415,3 +415,19 @@ test('competizione predefinita scritta giusta', () => {
   assert.ok(nomi.includes('European Qualifiers Women'));
   assert.ok(!nomi.includes('European Qualfiers Women'));
 });
+
+test('righe delle partite: niente letture sbagliate con l\'ora senza minuti', () => {
+  const r = R.leggiPartite('17/10 20 45 Roma-Lazio\n17/10 2 Bundesliga Bayern-Dortmund\n17/10 ore 1 NFL Giants-Jets\n17/10 h2 NBA Lakers-Bulls\n17/10 9 Lecce-Como', '2026-10-11', []);
+  // con «ore» o «h» qualunque ora; senza, solo dalle 8 alle 23 e con il nome della partita che non inizia con una cifra
+  assert.deepEqual(r.ok.map((p) => p.orario + ' ' + p.titolo), ['01:00 NFL Giants-Jets', '02:00 NBA Lakers-Bulls', '09:00 Lecce-Como']);
+  assert.deepEqual(r.errori, ['Riga 1: orario non chiaro (scrivi 20:45)', 'Riga 2: orario non chiaro (scrivi 02:00, o «ore 2»)']);
+});
+
+test('evento già iniziato: partita notturna con il ritrovo la sera prima', () => {
+  const reg = R.complete({ competizioni: [{ nome: 'NBA', prima: 4, dopo: 2 }] });
+  const ev = { tipo: 'partita', competizione: 'NBA', data: '2026-10-12', orario: '01:00' };   // ritrovo 21:00 dell'11
+  assert.equal(R.giaIniziato(ev, reg, '2026-10-11', '20:59'), false);
+  assert.equal(R.giaIniziato(ev, reg, '2026-10-11', '21:00'), true);
+  assert.equal(R.giaIniziato(ev, reg, '2026-10-12', '00:30'), true);
+  assert.equal(R.giaIniziato(ev, reg, '2026-10-10', '23:00'), false);
+});

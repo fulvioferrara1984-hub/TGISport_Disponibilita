@@ -167,7 +167,14 @@
   const conta = (e) => !!e.operatoreId && e.stato === 'confermato';
   const inAttesa = (e) => !!e.operatoreId && (e.stato === 'assegnato' || e.stato === 'convocato');
   // Evento già iniziato: giorno passato, oppure oggi con il ritrovo (o l'orario) già arrivato
-  const giaIniziato = (e, regole, oggi, ora) => e.data < oggi || (e.data === oggi && (convocazione(e, regole) || e.orario || '99:99') <= ora);
+  // (un ritrovo dopo l'orario della partita è della sera prima: partite notturne)
+  function giaIniziato(e, regole, oggi, ora) {
+    const ritrovo = convocazione(e, regole) || e.orario || '';
+    if (!ritrovo) return e.data < oggi;
+    let giorno = e.data;
+    if (e.orario && ritrovo > e.orario) { const [a, m, g] = e.data.split('-').map(Number); const d = new Date(a, m - 1, g - 1); giorno = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    return giorno < oggi || (giorno === oggi && ritrovo <= ora);
+  }
 
   // Tariffe dai campi di Impostazioni ({ 'P.IVA.diurno': '140', … }): un campo vuoto o non valido non diventa 0
   const NOMI_TARIFFA = { diurno: 'diurno', notturno: 'notturno', maggiorato: 'maggiorato' };
@@ -199,12 +206,19 @@
       const dt = new Date(anno, me - 1, g);
       if (me < 1 || me > 12 || g < 1 || dt.getMonth() !== me - 1) { errori.push('Riga ' + riga + ': data non valida (' + d[1] + '/' + d[2] + ')'); return; }
       const resto = d[4] || '';
-      const o = /^(?:ore\s*|h\s*)?(\d{1,2})(?:[:.](\d{2}))?(?:\s+(.+))?$/i.exec(resto);
+      const o = /^(ore\s*|h\s*)?(\d{1,2})(?:[:.](\d{2}))?(?:\s+(.+))?$/i.exec(resto);
       if (!o) { errori.push('Riga ' + riga + ': manca l\'orario (es. 15:00)'); return; }
-      const ore = Number(o[1]), minuti = o[2] === undefined ? 0 : Number(o[2]);
-      if (ore > 23 || minuti > 59) { errori.push('Riga ' + riga + ': orario non valido (' + o[1] + (o[2] !== undefined ? ':' + o[2] : '') + ')'); return; }
-      if (!o[3] || !o[3].trim()) { errori.push('Riga ' + riga + ': manca la partita'); return; }
-      const p = { data, orario: String(ore).padStart(2, '0') + ':' + String(minuti).padStart(2, '0'), titolo: o[3].trim(), riga };
+      const ore = Number(o[2]), minuti = o[3] === undefined ? 0 : Number(o[3]), titolo = (o[4] || '').trim();
+      if (ore > 23 || minuti > 59) { errori.push('Riga ' + riga + ': orario non valido (' + o[2] + (o[3] !== undefined ? ':' + o[3] : '') + ')'); return; }
+      if (!titolo) { errori.push('Riga ' + riga + ': manca la partita'); return; }
+      // ora senza minuti e senza «ore»/«h»: solo dalle 8 alle 23 e con la partita che non inizia con una cifra
+      // («17/10 20 45 Roma-Lazio» o «17/10 2 Bundesliga …» sarebbero letti male)
+      if (o[3] === undefined && !o[1] && (ore < 8 || /^\d/.test(titolo))) {
+        const hh = String(ore).padStart(2, '0'), mm = /^(\d{2})\b/.exec(titolo);
+        errori.push('Riga ' + riga + ': orario non chiaro (scrivi ' + hh + ':' + (mm ? mm[1] : '00') + (ore < 8 && !mm ? ', o «ore ' + ore + '»' : '') + ')');
+        return;
+      }
+      const p = { data, orario: String(ore).padStart(2, '0') + ':' + String(minuti).padStart(2, '0'), titolo, riga };
       const k = chiavePartita(p.data, p.orario, p.titolo);
       if (viste[k]) { doppie.push('Riga ' + riga + ': uguale alla riga ' + viste[k]); return; }
       viste[k] = riga;

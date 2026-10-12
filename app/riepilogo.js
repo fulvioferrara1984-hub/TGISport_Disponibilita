@@ -142,8 +142,10 @@
       + '<div><span>In attesa di conferma</span><b>' + attesa.length + '</b><small>' + R.euro(attesaEuro) + ' previsti'
         + (attesaPassati ? ' · ' + attesaPassati + ' già ' + (attesaPassati === 1 ? 'passato' : 'passati') : '') + '</small></div>'
       + '<div><span>Ancora da assegnare</span><b>' + futuri + '</b></div></div>'
-      + (attesaPassati ? '<p class="nota">' + attesaPassati + (attesaPassati === 1 ? ' evento già passato non è confermato e non conta' : ' eventi già passati non sono confermati e non contano')
-        + ': aprili da Convocazioni e, se si sono svolti, usa «Segna come confermata».</p>' : '')
+      + (attesaPassati && !A.solaLettura ? '<div class="nota rie-attesa">' + (attesaPassati === 1
+        ? '1 evento già passato non è confermato e non conta: se si è svolto, segnalo come confermato qui o dalla finestra dell\'evento.'
+        : attesaPassati + ' eventi già passati non sono confermati e non contano: se si sono svolti, segnali come confermati tutti insieme qui o uno per uno dalla finestra dell\'evento.')
+        + ' <button type="button" class="bottone" id="rie-conferma-passati">Segna come ' + (attesaPassati === 1 ? 'confermato' : 'confermati i ' + attesaPassati) + '</button></div>' : '')
       + (senzaContratto.length ? '<p class="errore">Contratto non indicato per ' + senzaContratto.map(DO.esc).join(', ') + ': i loro eventi non hanno compenso. Indicalo nella scheda Operatori.</p>' : '')
       + (onsiteSenzaContratto.length ? '<p class="errore">Contratto non indicato per ' + onsiteSenzaContratto.map(DO.esc).join(', ')
         + ': il loro compenso on-site è nel totale ma non nelle colonne P.IVA e Coop. Indicalo nella scheda Operatori.</p>' : '')
@@ -153,6 +155,29 @@
   }
 
   $('rie-periodo').addEventListener('change', disegna);
+
+  // Già passati e non confermati (per esempio importati dal file della stagione senza «SI»): tutti confermati insieme
+  $('rie-contenuto').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('#rie-conferma-passati');
+    if (!b || A.solaLettura) return;
+    const p = periodo();
+    const passati = A.eventi.filter((e) => R.inAttesa(e) && e.data >= p.da && e.data <= p.a && e.data < DO.oggi());
+    if (!passati.length || !confirm('Segnare come confermati ' + (passati.length === 1 ? 'l\'evento già passato' : 'i ' + passati.length + ' eventi già passati')
+      + ' ancora in attesa di conferma?\nUsalo se si sono svolti: conteranno nel Riepilogo e nei compensi.')) return;
+    b.disabled = true;
+    let fatti = 0;
+    try {
+      for (const e of passati) {
+        await DO.dati.aggiornaEvento(e.id, { stato: 'confermato', risposta: '', inviata: true }, 'Confermata dal supervisore (dal Riepilogo)');
+        fatti++;
+        b.textContent = 'Conferma in corso… ' + fatti + '/' + passati.length;
+      }
+      DO.avviso(fatti === 1 ? '1 evento segnato come confermato.' : fatti + ' eventi segnati come confermati.', 'ok');
+    } catch (err) {
+      DO.avviso('Confermati ' + fatti + ' eventi su ' + passati.length + ': ' + err.message, 'errore', 8000);
+    }
+    disegna();
+  });
 
   // ---------- esportazione in Excel ----------
   let libreria = null;

@@ -244,19 +244,28 @@
   function chiedi({ titolo, testo, campo, ok = 'OK', annulla = 'Annulla', pericolo = false }) {
     return new Promise((risolvi) => {
       let d = document.getElementById('dlg-sito');
-      if (!d) { d = document.createElement('dialog'); d.id = 'dlg-sito'; d.className = 'dlg-sito'; document.body.appendChild(d); }
-      d.innerHTML = '<form method="dialog"><h2>' + esc(titolo) + '</h2>'
+      if (!d) { d = document.createElement('dialog'); d.id = 'dlg-sito'; d.className = 'dlg-sito'; d.setAttribute('aria-labelledby', 'dlg-sito-titolo'); document.body.appendChild(d); }
+      // browser senza <dialog> (iPhone prima di iOS 15.4): le finestre del sistema
+      if (typeof d.showModal !== 'function') {
+        const testoSistema = [titolo, testo, campo && campo.etichetta].filter(Boolean).join('\n\n');
+        if (campo) { const r = prompt(testoSistema, campo.valore || ''); risolvi(r === null ? null : r.trim()); } else risolvi(confirm(testoSistema) ? true : null);
+        return;
+      }
+      if (d.open && d.fine) d.fine(null);   // una nuova domanda chiude la precedente
+      d.innerHTML = '<form method="dialog"><h2 id="dlg-sito-titolo">' + esc(titolo) + '</h2>'
         + (testo ? '<p>' + esc(testo).replace(/\n/g, '<br>') + '</p>' : '')
         + (campo ? '<label class="campo"><span>' + esc(campo.etichetta) + '</span><textarea rows="3" maxlength="200">' + esc(campo.valore || '') + '</textarea></label>' : '')
         + '<div class="dialog-azioni"><button type="button" class="bottone" data-no>' + esc(annulla) + '</button>'
         + '<button type="submit" class="primario' + (pericolo ? ' pericolo' : '') + '">' + esc(ok) + '</button></div></form>';
       let fatto = false;
-      const fine = (v) => { if (fatto) return; fatto = true; if (d.open) d.close(); risolvi(v); };
+      const fine = (v) => { if (fatto) return; fatto = true; d.fine = null; if (d.open) d.close(); risolvi(v); };
+      d.fine = fine;
       d.querySelector('[data-no]').onclick = () => fine(null);
       d.querySelector('form').onsubmit = (e) => { e.preventDefault(); fine(campo ? d.querySelector('textarea').value.trim() : true); };
       d.oncancel = (e) => { e.preventDefault(); fine(null); };
       d.showModal();
-      (d.querySelector('textarea') || d.querySelector('[type="submit"]')).focus();
+      // con un'azione che cancella il focus parte da «Annulla»: Invio non distrugge nulla per sbaglio
+      (d.querySelector('textarea') || d.querySelector(pericolo ? '[data-no]' : '[type="submit"]')).focus();
     });
   }
 

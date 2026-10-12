@@ -230,3 +230,16 @@ test('celle del mese per la vista mensile degli operatori', () => {
   assert.deepEqual([c('2026-10-12').oggi, c('2026-10-12').bloccato, c('2026-10-12').modificabile], [true, true, false]);
   assert.deepEqual([c('2026-10-20').modificato, c('2026-10-21').richiesto, c('2026-10-17').convocato, c('2026-10-24').onsite], [true, true, true, { luogo: 'Roma' }]);
 });
+
+test('finestra del sito: senza <dialog> si usano confirm e prompt del sistema', async () => {
+  const nodo = () => ({ id: '', className: '', innerHTML: '', appendChild() {}, setAttribute() {} });
+  const chiamate = [];
+  global.document = { body: nodo(), getElementById: () => null, createElement: () => nodo() };
+  global.confirm = (t) => { chiamate.push('confirm ' + t); return true; };
+  global.prompt = (t) => { chiamate.push('prompt ' + t); return ' ho un impegno '; };
+  try {
+    assert.equal(await DO.chiedi({ titolo: 'Uscire?', testo: 'Hai modifiche non inviate.' }), true);
+    assert.equal(await DO.chiedi({ titolo: 'Non puoi partecipare?', campo: { etichetta: 'Perché' } }), 'ho un impegno');
+    assert.deepEqual(chiamate, ['confirm Uscire?\n\nHai modifiche non inviate.', 'prompt Non puoi partecipare?\n\nPerché']);
+  } finally { delete global.document; delete global.confirm; delete global.prompt; }
+});

@@ -284,7 +284,7 @@
     $('evd-sostituire').checked = !!e.daSostituire;
     $('evd-annulla-evento').textContent = e.stato === 'annullato' ? 'Ripristina evento' : 'Annulla evento';
     // confermata a voce o su WhatsApp: il supervisore la segna (resta nello storico)
-    $('evd-conferma-sup').hidden = e.stato !== 'convocato' || A.solaLettura;
+    $('evd-conferma-sup').hidden = !confermabile(e) || A.solaLettura;
     $('evd-errore').hidden = true;
     ritrovoAuto();
     $('evd-storico').innerHTML = (e.storico || []).length ? '<b>Storico</b>' + e.storico.slice().reverse().map((s) =>
@@ -294,6 +294,11 @@
   }
 
   // ---------- richiesta di disponibilità per questo evento ----------
+  // Si può segnare confermata una convocazione in attesa di risposta, o una da inviare già iniziata o passata
+  // (operatore cambiato o orari corretti a cose fatte, accordi presi fuori dalla piattaforma)
+  const confermabile = (e) => !!e && !!e.operatoreId && (e.stato === 'convocato'
+    || (e.stato === 'assegnato' && R.giaIniziato(e, A.regole, DO.oggi(), new Date().toTimeString().slice(0, 5))));
+  DO.confermabile = confermabile;
   const eventoAttuale = () => (inModifica && A.eventi.find((x) => x.id === inModifica.id)) || inModifica;
 
   // «Sì: Marco Rossi (prima della modifica) · No: Luca Bianchi · In attesa: 2», e il tasto solo se l'evento è scoperto
@@ -434,11 +439,13 @@
   });
 
   $('evd-conferma-sup').addEventListener('click', async () => {
-    const e = inModifica;
+    // la versione attuale: se nel frattempo l'operatore ha risposto, la sua risposta non si sovrascrive
+    const e = eventoAttuale();
+    if (!confermabile(e)) { mostraErrore('evd-errore', 'Lo stato è cambiato nel frattempo: chiudi e riapri l\'evento.'); return; }
     const o = operatore(e.operatoreId) || {};
     if (!confirm('Segnare come confermata la convocazione di ' + (o.nome || 'questo operatore') + ' per "' + titolo(e) + '"?\nUsalo quando ha confermato a voce o per messaggio: conterà nel Riepilogo.')) return;
     try {
-      await DO.dati.aggiornaEvento(e.id, { stato: 'confermato', risposta: '' }, 'Confermata dal supervisore');
+      await DO.dati.aggiornaEvento(e.id, { stato: 'confermato', risposta: '', inviata: true }, 'Confermata dal supervisore');
       $('dlg-evento').close();
       DO.avviso('Convocazione segnata come confermata.', 'ok');
     } catch (err) { mostraErrore('evd-errore', err.message); }
@@ -474,7 +481,10 @@
   function anteprimaPartite() {
     const { ok, errori, doppie } = leggiRighe();
     $('evp-anteprima').textContent = !ok.length && !errori.length && !doppie.length ? 'Scrivi una partita per riga, es. 17/10 15:00 Venezia-Napoli.'
-      : (ok.length ? ok.length + (ok.length === 1 ? ' partita riconosciuta' : ' partite riconosciute') : 'Nessuna partita nuova')
+      : (ok.length ? ok.length + (ok.length === 1 ? ' partita riconosciuta' : ' partite riconosciute')
+        // come è stata letta ogni riga: un errore di battitura si vede prima di creare
+        + ': ' + ok.slice(0, 8).map((p) => p.data.slice(8) + '/' + p.data.slice(5, 7) + ' ' + p.orario + ' ' + p.titolo).join('; ') + (ok.length > 8 ? '; …' : '')
+        : 'Nessuna partita nuova')
         + (doppie.length ? ' · non si creano (doppie): ' + doppie.join('; ') : '')
         + (errori.length ? ' · da correggere: ' + errori.join('; ') : '');
     $('evp-crea').textContent = ok.length ? 'Crea ' + ok.length + (ok.length === 1 ? ' partita' : ' partite') : 'Crea partite';
@@ -634,7 +644,7 @@
       const r = await DO.dati.inviaConvocazioni(eventi, contatti, A.linkSito());
       $('dlg-invia').close();
       DO.avviso(eventi.length + (eventi.length === 1 ? ' convocazione inviata.' : ' convocazioni inviate.'), 'ok');
-      r.inviate.then((x) => { if (x.email) DO.avviso('Email inviate a ' + x.email + (x.email === 1 ? ' operatore.' : ' operatori.'), 'ok'); })
+      r.inviate.then((x) => { if (x.email) DO.avviso(x.email === 1 ? 'Email inviata a 1 operatore.' : 'Email inviate a ' + x.email + ' operatori.', 'ok'); })
         .catch((e) => DO.avviso('Convocazioni visibili sulla piattaforma, ma le email non sono partite: ' + e.message, 'errore', 8000));
     } catch (err) {
       DO.avviso(err.message, 'errore');
