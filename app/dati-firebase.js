@@ -657,7 +657,9 @@
     const compenso = DO.onsite.compensoValido(extra && extra.compenso);
     const rif = F.doc(F.collection(db, 'onsite'));
     const completa = Object.assign({ creato: new Date().toISOString() }, scheda,
-      { destinatari, accettatiTL: [], accettatiOP: [], rifiuti: [], esclusi: [], stato: 'aperta' });
+      { destinatari, accettatiTL: [], accettatiOP: [], rifiuti: [], esclusi: [], stato: 'aperta' },
+      // deployment creato da un evento della piattaforma TGI Sport: resta legato a quell'evento
+      d.progettoId ? { progettoId: String(d.progettoId) } : {});
     await scrivi(async () => {
       const batch = F.writeBatch(db);
       batch.set(rif, completa);
@@ -666,6 +668,22 @@
     });
     const { senzaEmail, conEmail } = contattiEmail(extra);
     return { id: rif.id, senzaEmail, inviate: mandaRichiestaOnsite(completa, conEmail, extra.urlSito) };
+  }
+
+  // ---------- on-site dalla piattaforma TGI Sport (sola lettura di progetti) ----------
+  // eventi on-site coperti dai nostri operatori, da oggi in poi; senza permesso (regole non ancora pubblicate) nessun riquadro
+  function ascoltaProgettiOnsite(cb) {
+    const q = F.query(F.collection(db, 'progetti'), F.where('staffOnsite.attivo', '==', true), F.where('data', '>=', DO.oggi()));
+    return F.onSnapshot(q, (s) => cb(s.docs.map((d) => Object.assign({ id: d.id }, d.data()))), (e) => {
+      if (e.code !== 'permission-denied') console.warn('Eventi della piattaforma non letti:', e.message);
+      cb([]);
+    });
+  }
+
+  // eventi dei deployment legati che non sono più nell'elenco: { id: evento | null } (null = eliminato)
+  async function leggiProgetti(ids) {
+    const letti = await Promise.all(ids.map((id) => F.getDoc(F.doc(db, 'progetti', id)).then((d) => [id, d.exists() ? Object.assign({ id }, d.data()) : null], () => null)));
+    return Object.fromEntries(letti.filter(Boolean));
   }
 
   async function leggiOnsite(id) {
@@ -918,7 +936,7 @@
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
     creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa, leggiOperativo, salvaOperativo,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
-    creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
+    creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite, ascoltaProgettiOnsite, leggiProgetti,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
   };

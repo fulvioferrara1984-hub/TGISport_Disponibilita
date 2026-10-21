@@ -9,6 +9,12 @@
   let tolti = new Set();          // giorni tolti a mano dall'intervallo scelto
   let compensoAMano = false;      // il supervisore ha scritto un compenso diverso da quello proposto
   let aperto = null;              // deployment mostrato nella scheda
+  let preset = {};                // giorni precompilati da un evento della piattaforma: data → { attivita, partita }
+  let progettoScelto = '';        // evento della piattaforma da cui nasce la richiesta (diventa progettoId del deployment)
+  let segnati = [];               // eventi della piattaforma con i nostri operatori, da oggi in poi (in tempo reale)
+  const legati = {};              // eventi dei deployment legati non più in elenco: id → evento | null (letti una volta)
+  const inLettura = new Set();
+  let ascolto = null;
 
   const nomeOp = (id) => (A.operatori.find((o) => o.id === id) || {}).nome || 'operatore rimosso';
   const abilitati = () => A.operatori.filter((o) => o.attivo && (o.onsite === 'TL' || o.onsite === 'OP'))
@@ -49,7 +55,8 @@
       return;
     }
     $('ons-giorni').innerHTML = giorni.map((d, i) => {
-      const v = !proponi && prima[d] ? prima[d] : { attivita: proposte[i], altro: false, partita: (prima[d] || {}).partita || '' };
+      const v = preset[d] ? { attivita: preset[d].attivita, altro: false, partita: preset[d].partita || '' }
+        : !proponi && prima[d] ? prima[d] : { attivita: proposte[i], altro: false, partita: (prima[d] || {}).partita || '' };
       const scelta = v.altro ? ALTRO : v.attivita;
       return '<li data-data="' + d + '"><b>' + giornoBreve(d) + '</b>'
         + '<select data-attivita aria-label="Attività del ' + giornoBreve(d) + '">'
@@ -93,15 +100,20 @@
     $('ons-invia').textContent = n ? 'Invia la richiesta a ' + n + (n === 1 ? ' operatore' : ' operatori') : 'Scegli gli operatori';
   }
 
-  function apriRichiesta() {
+  // precompilato: da O.daProgetto(evento) quando la richiesta nasce da un evento della piattaforma
+  function apriRichiesta(precompilato) {
+    const p = precompilato && Array.isArray(precompilato.giorni) && precompilato.giorni.length ? precompilato : null;
     $('form-onsite').reset();
     tolti = new Set();
     compensoAMano = false;
+    preset = p ? Object.fromEntries(p.giorni.map((g) => [g.data, g])) : {};
+    progettoScelto = p ? p.progettoId : '';
     const domani = DO.aggiungi(DO.oggi(), 1);
     $('ons-da').min = $('ons-a').min = domani;
-    $('ons-da').value = domani;
-    $('ons-a').value = DO.aggiungi(domani, 3);
-    $('ons-a').max = DO.aggiungi(domani, 30);
+    $('ons-da').value = p ? p.giorni[0].data : domani;
+    $('ons-a').value = p ? p.giorni[p.giorni.length - 1].data : DO.aggiungi(domani, 3);
+    $('ons-a').max = DO.aggiungi($('ons-da').value, 30);
+    if (p) { $('ons-luogo').value = p.luogo; $('ons-sport').value = p.sport; $('ons-titolo').value = p.titolo; }
     $('ons-tl').value = 1;
     $('ons-op').value = 1;
     $('ons-sport-elenco').innerHTML = (A.regole.sport || []).map((s) => '<option value="' + DO.esc(s) + '">').join('');
@@ -124,7 +136,7 @@
     }).catch((e) => DO.avviso(prima + ', ma le email non sono partite: ' + e.message, 'errore', 8000));
   }
 
-  $('ev-onsite').addEventListener('click', apriRichiesta);
+  $('ev-onsite').addEventListener('click', () => apriRichiesta());
   $('ons-da').addEventListener('change', () => {
     if (!$('ons-a').value || $('ons-a').value < $('ons-da').value) $('ons-a').value = $('ons-da').value;
     $('ons-a').max = $('ons-da').value ? DO.aggiungi($('ons-da').value, 30) : '';
@@ -159,7 +171,7 @@
     $('ons-errore').hidden = true;
     try {
       const r = await DO.dati.creaOnsite(
-        { titolo: $('ons-titolo').value, luogo, sport, note: $('ons-note').value, giorni, posti: { TL: $('ons-tl').value, OP: $('ons-op').value }, destinatari },
+        { titolo: $('ons-titolo').value, luogo, sport, note: $('ons-note').value, giorni, posti: { TL: $('ons-tl').value, OP: $('ons-op').value }, destinatari, progettoId: progettoScelto },
         { compenso: $('ons-compenso').value, email, contatti: contatti(destinatari), urlSito: A.linkSito() },
       );
       $('dlg-onsite').close();
@@ -282,6 +294,44 @@
     }, 'Deployment aggiornato.');
   });
 
-  A.registra({ aggiorna: () => { if ($('dlg-onsite-scheda').open) disegnaScheda(); } });
+  // ---------- on-site dalla piattaforma: riquadro in cima a Convocazioni ----------
+  function disegnaPiattaforma() {
+    const box = $('onsite-piattaforma');
+    const eventi = Object.assign({}, legati, Object.fromEntries(segnati.map((e) => [e.id, e])));
+    // eventi dei deployment legati che non sono (più) tra i segnati: si leggono una volta sola
+    const mancanti = (A.onsite || []).filter((d) => d.progettoId && d.stato !== 'annullata' && d.a >= DO.oggi()
+      && !Object.prototype.hasOwnProperty.call(eventi, d.progettoId) && !inLettura.has(d.progettoId)).map((d) => d.progettoId);
+    if (mancanti.length) {
+      mancanti.forEach((id) => inLettura.add(id));
+      DO.dati.leggiProgetti(mancanti).then((letti) => { Object.assign(legati, letti); disegnaPiattaforma(); }, () => {});
+    }
+    const r = O.righePiattaforma(eventi, A.onsite || [], DO.oggi());
+    box.hidden = !r.daRichiedere.length && !r.daRivedere.length;
+    if (box.hidden) return;
+    const md = (e) => ((e.staffOnsite && e.staffOnsite.giorni) || []).find((g) => g.attivita === 'MD') || { data: e.data };
+    const riga = (testo, etichetta, tasto) => '<li>' + testo + ' <span class="tag-piattaforma">' + DO.esc(etichetta) + '</span>' + tasto + '</li>';
+    box.innerHTML = '<div class="scheda-testa"><h2>On-site dalla piattaforma</h2></div><ul class="righe-piattaforma">'
+      + r.daRichiedere.map((e) => {
+        const p = O.daProgetto(e), g = p.giorni;
+        return riga('<b>' + giornoBreve(md(e).data) + '</b> ' + DO.esc(p.titolo) + ' · ' + DO.esc(p.luogo) + ' · ' + DO.esc(O.periodoBreve(g[0].data, g[g.length - 1].data)),
+          'da richiedere', '<button type="button" class="bottone solo-modifica" data-richiedi="' + DO.esc(e.id) + '">Richiedi disponibilità</button>');
+      }).join('')
+      + r.daRivedere.map((x) => riga('<b>' + giornoBreve(x.deployment.da) + '</b> ' + DO.esc(x.deployment.titolo || x.deployment.luogo) + ' · ' + DO.esc(x.deployment.luogo),
+        'da rivedere: ' + x.motivo, '<button type="button" class="bottone" data-apri-dep="' + DO.esc(x.deployment.id) + '">Apri deployment</button>')).join('')
+      + '</ul>';
+    box._eventi = eventi;
+  }
+
+  $('onsite-piattaforma').addEventListener('click', (e) => {
+    const r = e.target.closest('[data-richiedi]'), d = e.target.closest('[data-apri-dep]');
+    if (r) apriRichiesta(O.daProgetto($('onsite-piattaforma')._eventi[r.dataset.richiedi]));
+    if (d) apri(d.dataset.apriDep);
+  });
+
+  A.registra({ aggiorna: () => {
+    if ($('dlg-onsite-scheda').open) disegnaScheda();
+    if (!ascolto) ascolto = DO.dati.ascoltaProgettiOnsite((lista) => { segnati = lista; disegnaPiattaforma(); });
+    disegnaPiattaforma();
+  } });
   DO.onsiteAdmin = { apri };
 })(window.DO);

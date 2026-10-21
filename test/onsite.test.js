@@ -167,3 +167,51 @@ test('stato dell\'on-site nel calendario', () => {
   assert.equal(s({ stato: 'annullata', accettatiTL: ['a'] }), '');
   assert.equal(O.COLORE, '#5b34c9');
 });
+
+// ---------- on-site dalla piattaforma (eventi con staffOnsite) ----------
+const evento = (campi) => Object.assign({
+  id: 'p1', squadraA: 'BENFICA', squadraB: 'INTER', competizione: 'UEFA CHAMPIONS LEAGUE', venue: 'Lisbon', sport: 'FOOTBALL',
+  data: '2026-11-04', ko: '21:00', stato: 'CONFIRMED', modalita: 'ON-SITE',
+  staffOnsite: { attivo: true, vigilie: 1, giorni: [
+    { data: '2026-11-02', attivita: 'Travel Day' }, { data: '2026-11-03', attivita: 'MD-1' },
+    { data: '2026-11-04', attivita: 'MD' }, { data: '2026-11-05', attivita: 'Travel Day' }] },
+}, campi);
+const legato = (campi) => dep(Object.assign({
+  progettoId: 'p1', da: '2026-11-02', a: '2026-11-05',
+  giorni: evento().staffOnsite.giorni.map((g) => Object.assign({ partita: g.attivita === 'MD' ? 'Benfica – Inter' : '' }, g)),
+}, campi));
+
+test('richiesta precompilata dall\'evento della piattaforma', () => {
+  const p = O.daProgetto(evento());
+  assert.equal(p.progettoId, 'p1');
+  assert.equal(p.titolo, 'Benfica – Inter');
+  assert.equal(p.luogo, 'Lisbon');
+  assert.equal(p.sport, 'FOOTBALL');
+  assert.deepEqual(p.giorni[2], { data: '2026-11-04', attivita: 'MD', partita: 'Benfica – Inter' });
+  assert.equal(p.giorni[0].partita, '');
+  assert.equal(O.daProgetto(evento({ squadraA: '', squadraB: '' })).titolo, 'UEFA CHAMPIONS LEAGUE');
+});
+
+test('riquadro: eventi da richiedere', () => {
+  const r = (eventi, deployment) => O.righePiattaforma(eventi, deployment, OGGI);
+  assert.deepEqual(r({ p1: evento() }, []).daRichiedere.map((e) => e.id), ['p1']);
+  assert.deepEqual(r({ p1: evento() }, [legato()]), { daRichiedere: [], daRivedere: [] });
+  assert.deepEqual(r({ p1: evento() }, [legato({ stato: 'annullata' })]).daRichiedere.map((e) => e.id), ['p1']);
+  assert.deepEqual(r({ p1: evento({ stato: 'CANCELLED' }) }, []).daRichiedere, []);
+  assert.deepEqual(r({ p1: evento({ staffOnsite: Object.assign({}, evento().staffOnsite, { attivo: false }) }) }, []).daRichiedere, []);
+});
+
+test('riquadro: deployment da rivedere, con il motivo', () => {
+  const motivo = (e, d) => O.righePiattaforma({ p1: e }, [d || legato()], OGGI).daRivedere.map((x) => x.motivo);
+  const spostato = evento({ data: '2026-11-11', staffOnsite: { attivo: true, vigilie: 1, giorni: [
+    { data: '2026-11-09', attivita: 'Travel Day' }, { data: '2026-11-10', attivita: 'MD-1' }, { data: '2026-11-11', attivita: 'MD' }, { data: '2026-11-12', attivita: 'Travel Day' }] } });
+  assert.deepEqual(motivo(spostato), ['giorni cambiati nella piattaforma']);
+  assert.deepEqual(motivo(evento({ stato: 'CANCELLED' })), ['evento annullato']);
+  assert.deepEqual(motivo(evento({ staffOnsite: Object.assign({}, evento().staffOnsite, { attivo: false }) })), ['non più con i nostri operatori']);
+  assert.deepEqual(motivo(null), ['evento eliminato dalla piattaforma']);
+  // deployment finito o annullato: mai da rivedere
+  assert.deepEqual(motivo(null, legato({ da: '2026-10-01', a: '2026-10-04' })), []);
+  assert.deepEqual(motivo(null, legato({ stato: 'annullata' })), []);
+  // deployment creato a mano (senza progettoId): non riguarda il riquadro
+  assert.deepEqual(motivo(null, legato({ progettoId: '' })), []);
+});
