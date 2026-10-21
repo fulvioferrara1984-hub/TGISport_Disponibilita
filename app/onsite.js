@@ -207,7 +207,8 @@
     const vivi = lista(deployment).filter((d) => d.stato !== 'annullata' && d.progettoId);
     const coperti = new Set(vivi.map((d) => d.progettoId));
     const daRichiedere = Object.values(eventi || {})
-      .filter((e) => e && e.modalita === 'ON-SITE' && e.staffOnsite && e.staffOnsite.attivo && e.stato !== 'CANCELLED' && e.data >= oggi && !coperti.has(e.id))
+      .filter((e) => e && e.modalita === 'ON-SITE' && e.staffOnsite && e.staffOnsite.attivo && lista(e.staffOnsite.giorni).length
+        && e.stato !== 'CANCELLED' && e.data >= oggi && !coperti.has(e.id))
       .sort((x, y) => (x.data + (x.ko || '')).localeCompare(y.data + (y.ko || '')));
     const daRivedere = vivi.filter((d) => d.a >= oggi && Object.prototype.hasOwnProperty.call(eventi || {}, d.progettoId)).map((d) => {
       const e = eventi[d.progettoId];

@@ -201,6 +201,8 @@ test('riquadro: eventi da richiedere', () => {
   assert.deepEqual(r({ p1: evento({ staffOnsite: Object.assign({}, evento().staffOnsite, { attivo: false }) }) }, []).daRichiedere, []);
   // diventato remoto con la spunta ancora accesa: non si chiede personale on-site
   assert.deepEqual(r({ p1: evento({ modalita: 'REMOTE' }) }, []).daRichiedere, []);
+  // spunta senza giorni (es. data non valida): non c'è niente da chiedere e la dashboard non si blocca
+  assert.deepEqual(r({ p1: evento({ staffOnsite: { attivo: true, vigilie: 0, giorni: [] } }), p2: evento({ id: 'p2', staffOnsite: { attivo: true, vigilie: 0 } }) }, []).daRichiedere, []);
 });
 
 test('riquadro: deployment da rivedere, con il motivo', () => {
