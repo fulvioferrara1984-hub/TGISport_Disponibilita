@@ -199,6 +199,8 @@ test('riquadro: eventi da richiedere', () => {
   assert.deepEqual(r({ p1: evento() }, [legato({ stato: 'annullata' })]).daRichiedere.map((e) => e.id), ['p1']);
   assert.deepEqual(r({ p1: evento({ stato: 'CANCELLED' }) }, []).daRichiedere, []);
   assert.deepEqual(r({ p1: evento({ staffOnsite: Object.assign({}, evento().staffOnsite, { attivo: false }) }) }, []).daRichiedere, []);
+  // diventato remoto con la spunta ancora accesa: non si chiede personale on-site
+  assert.deepEqual(r({ p1: evento({ modalita: 'REMOTE' }) }, []).daRichiedere, []);
 });
 
 test('riquadro: deployment da rivedere, con il motivo', () => {
@@ -209,6 +211,7 @@ test('riquadro: deployment da rivedere, con il motivo', () => {
   assert.deepEqual(motivo(evento({ stato: 'CANCELLED' })), ['evento annullato']);
   assert.deepEqual(motivo(evento({ staffOnsite: Object.assign({}, evento().staffOnsite, { attivo: false }) })), ['non più con i nostri operatori']);
   assert.deepEqual(motivo(null), ['evento eliminato dalla piattaforma']);
+  assert.deepEqual(motivo(evento({ modalita: 'REMOTE' })), ['non più on-site']);
   // deployment finito o annullato: mai da rivedere
   assert.deepEqual(motivo(null, legato({ da: '2026-10-01', a: '2026-10-04' })), []);
   assert.deepEqual(motivo(null, legato({ stato: 'annullata' })), []);

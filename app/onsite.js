@@ -207,13 +207,14 @@
     const vivi = lista(deployment).filter((d) => d.stato !== 'annullata' && d.progettoId);
     const coperti = new Set(vivi.map((d) => d.progettoId));
     const daRichiedere = Object.values(eventi || {})
-      .filter((e) => e && e.staffOnsite && e.staffOnsite.attivo && e.stato !== 'CANCELLED' && e.data >= oggi && !coperti.has(e.id))
+      .filter((e) => e && e.modalita === 'ON-SITE' && e.staffOnsite && e.staffOnsite.attivo && e.stato !== 'CANCELLED' && e.data >= oggi && !coperti.has(e.id))
       .sort((x, y) => (x.data + (x.ko || '')).localeCompare(y.data + (y.ko || '')));
     const daRivedere = vivi.filter((d) => d.a >= oggi && Object.prototype.hasOwnProperty.call(eventi || {}, d.progettoId)).map((d) => {
       const e = eventi[d.progettoId];
       const motivo = !e ? 'evento eliminato dalla piattaforma' : e.stato === 'CANCELLED' ? 'evento annullato'
-        : !(e.staffOnsite && e.staffOnsite.attivo) ? 'non più con i nostri operatori'
-          : !stessiGiorni(e.staffOnsite.giorni, d.giorni) ? 'giorni cambiati nella piattaforma' : '';
+        : e.modalita !== 'ON-SITE' ? 'non più on-site'
+          : !(e.staffOnsite && e.staffOnsite.attivo) ? 'non più con i nostri operatori'
+            : !stessiGiorni(e.staffOnsite.giorni, d.giorni) ? 'giorni cambiati nella piattaforma' : '';
       return { deployment: d, evento: e, motivo };
     }).filter((x) => x.motivo).sort((x, y) => String(x.deployment.da).localeCompare(String(y.deployment.da)));
     return { daRichiedere, daRivedere };
