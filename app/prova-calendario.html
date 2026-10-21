@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Prova calendario</title>
+  <style>
+    body { margin: 0; padding: 20px 16px 40px; font: 16px/1.45 -apple-system, system-ui, sans-serif; background: #f3f5f9; color: #0f1830; }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    p { margin: 0 0 14px; color: #4a5470; }
+    a.prova { display: block; margin: 0 0 10px; padding: 12px 14px; border: 1px solid #c9d0de; border-radius: 10px; background: #fff; color: #0f1830; text-decoration: none; }
+    a.prova b { display: block; font-size: 17px; }
+    a.prova small { color: #4a5470; }
+    code { font-size: 12px; word-break: break-all; color: #4a5470; }
+  </style>
+</head>
+<body>
+  <!-- Pagina temporanea: prova dei modi di aprire un file .ics su iPhone. Non usata dal sito, si toglie dopo la prova. -->
+  <h1>Prova calendario</h1>
+  <p>Tocca un tasto alla volta e guarda se si apre Calendario con l'evento «TGI Sport · Prova calendario» (venerdì 23 ottobre, 10–11). Se si apre, non serve aggiungerlo: torna indietro e prova il tasto successivo. Annota anche se compare una freccetta blu di download vicino all'indirizzo.</p>
+  <a class="prova" id="a"><b>A · come adesso</b><small>file generato nella pagina, con nome del file</small></a>
+  <a class="prova" id="b"><b>B</b><small>file generato nella pagina, senza nome del file</small></a>
+  <a class="prova" id="c"><b>C</b><small>file in memoria, con nome del file</small></a>
+  <a class="prova" id="d"><b>D</b><small>file in memoria, senza nome del file</small></a>
+  <a class="prova" id="e" href="prova-calendario.ics"><b>E</b><small>file vero sul sito</small></a>
+  <p style="margin-top: 18px;">Il tuo telefono: <code id="ua"></code></p>
+  <script>
+    // stesso testo del file prova-calendario.ics (generato con app/agenda.js)
+    fetch('prova-calendario.ics', { cache: 'no-store' }).then((r) => r.text()).then((ics) => {
+      const dati = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+      const blob = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+      const imposta = (id, href, nome) => { const a = document.getElementById(id); a.href = href; if (nome) a.download = nome; };
+      imposta('a', dati, 'TGI-Sport-2026-10-23.ics');
+      imposta('b', dati);
+      imposta('c', blob, 'TGI-Sport-2026-10-23.ics');
+      imposta('d', blob);
+    });
+    document.getElementById('ua').textContent = navigator.userAgent;
+  </script>
+</body>
+</html>
