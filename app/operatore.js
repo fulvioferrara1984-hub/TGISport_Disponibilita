@@ -232,12 +232,14 @@
   const { apple, fuoriDaSafari } = DO.agenda.dispositivo(navigator.userAgent || '', navigator.maxTouchPoints || 0);
   const tastoCalendario = (tipo, id) => '<button type="button" class="link cal-aggiungi" data-calendario="' + tipo + '" data-id="' + DO.esc(id) + '">📅 Aggiungi al calendario</button>';
 
+  let fileAperto = '';   // indirizzo blob dell'ultimo pannello: si libera quando se ne apre un altro
   function apriCalendario(tipo, id) {
     const x = (tipo === 'onsite' ? onsite : convocazioni).find((v) => v.id === id);
     if (!x) return;
     const indirizzo = location.origin + location.pathname;
     const ev = tipo === 'onsite' ? DO.agenda.daOnsite(x, DO.onsite.ruoloAccettato(x, operatore.id), indirizzo) : DO.agenda.daConvocazione(x, indirizzo);
-    const file = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(DO.agenda.ics(ev, new Date()));
+    if (fileAperto) URL.revokeObjectURL(fileAperto);
+    const file = fileAperto = DO.agenda.indirizzoFile(DO.agenda.ics(ev, new Date()));
     const dlg = $('dlg-calendario');
     // browser senza <dialog> (iPhone prima di iOS 15.4): subito il file
     if (typeof dlg.showModal !== 'function') { location.href = file; return; }

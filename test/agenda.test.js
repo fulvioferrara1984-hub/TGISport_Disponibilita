@@ -144,6 +144,15 @@ test('file .ics: on-site tutto il giorno, senza fuso né avviso', () => {
   assert.ok(!r.includes('BEGIN:VALARM'));
 });
 
+test('file .ics da aprire: indirizzo blob, non data: (su iPhone Safari un indirizzo data: non apre nulla)', async () => {
+  const testo = A.ics(A.daConvocazione(partita({ titolo: 'Società-Fiorentina' }), SITO), ADESSO);
+  const indirizzo = A.indirizzoFile(testo);
+  assert.match(indirizzo, /^blob:/);
+  const file = require('node:buffer').resolveObjectURL(indirizzo);
+  assert.equal(file.type, 'text/calendar');
+  assert.equal(await file.text(), testo);
+});
+
 test('link di Google Calendar', () => {
   const ev = A.daConvocazione(partita(), SITO);
   const link = A.linkGoogle(ev);

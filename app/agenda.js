@@ -93,6 +93,9 @@
   }
 
   const nomeFile = (ev) => 'TGI-Sport-' + ev.da.slice(0, 10) + '.ics';
+  // indirizzo del file da aprire: blob, perché su iPhone Safari un indirizzo data: non fa nulla
+  // (provato su iPhone il 2026-10-21: data: con e senza nome del file nulla, blob: e file vero aprono Calendario)
+  const indirizzoFile = (testo) => URL.createObjectURL(new Blob([testo], { type: 'text/calendar' }));
 
   // riga del pannello: «Sabato 24 ottobre · 19:15 – 23:00», «Dal 12 al 13 novembre»
   function quando(ev) {
@@ -113,5 +116,5 @@
     return { apple: iPhone || /Macintosh/.test(ua), fuoriDaSafari: iPhone && !safari };
   }
 
-  DO.agenda = { daConvocazione, daOnsite, ics, linkGoogle, nomeFile, quando, dispositivo };
+  DO.agenda = { daConvocazione, daOnsite, ics, linkGoogle, nomeFile, indirizzoFile, quando, dispositivo };
 })(window.DO = window.DO || {});
