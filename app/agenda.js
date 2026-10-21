@@ -5,7 +5,8 @@
   'use strict';
 
   const ZONA = 'Europe/Rome';
-  const SENZA_FINE = 3 * 60;   // minuti di un turno senza fine turno
+  const SENZA_FINE = 3 * 60;     // minuti di un turno senza fine turno
+  const DOPO_PARTITA = 2 * 60;   // … ma almeno fino a 2 ore dopo l'inizio della partita
   const ritrovo = (c) => c.convocazione || c.convocazioneCalcolata || '';
   const fineTurno = (c) => c.fine || c.fineCalcolata || '';
   const minuti = (h) => { const [o, m] = h.split(':').map(Number); return o * 60 + m; };
@@ -29,7 +30,9 @@
     // ritrovo dopo l'orario della partita: il turno parte il giorno prima (come R.giaIniziato)
     const giorno = c.orario && inizio > c.orario ? DO.aggiungi(c.data, -1) : c.data;
     const da = minuti(inizio);
-    let a = fine && fine !== inizio ? minuti(fine) : da + SENZA_FINE;
+    // senza fine turno: 3 ore dal ritrovo, ma non prima di 2 ore dopo l'inizio della partita
+    const partita = c.orario ? minuti(c.orario) + (giorno !== c.data ? 24 * 60 : 0) : 0;
+    let a = fine && fine !== inizio ? minuti(fine) : Math.max(da + SENZA_FINE, partita + DOPO_PARTITA);
     if (a <= da) a += 24 * 60;   // fine dopo mezzanotte
     return Object.assign(ev, { tuttoIlGiorno: false, da: giorno + 'T' + inizio, a: DO.aggiungi(giorno, Math.floor(a / 1440)) + 'T' + hhmm(a % 1440) });
   }

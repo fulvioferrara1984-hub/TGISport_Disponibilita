@@ -274,6 +274,14 @@ button.primario:disabled { background: #b4c0ef; box-shadow: none; cursor: not-al
 .onsite-giorni b { color: var(--inchiostro); font-weight: 600; }
 .convocazione.onsite .conv-data { background: #efe7ff; color: #5b34c9; }
 .onsite-nota { font-size: var(--t-12); color: var(--inchiostro-2); }
+/* aggiungi al calendario: tasto nella convocazione e pannello con le due scelte */
+.cal-aggiungi { align-self: flex-start; margin-top: 2px; padding: 6px 0; font-size: var(--t-14); }
+.dlg-calendario .cal-evento { display: flex; flex-direction: column; gap: 2px; margin: -6px 0 16px; }
+.dlg-calendario .cal-evento span { color: var(--inchiostro-2); font-size: var(--t-14); }
+.cal-scelte { display: flex; flex-direction: column; gap: 8px; }
+.cal-scelta { flex-direction: column; gap: 0; height: auto; min-height: 46px; padding: 6px 14px; }
+.cal-scelta small { font-size: var(--t-12); font-weight: 400; color: var(--inchiostro-2); }
+.cal-nota { margin: 12px 0 0; font-size: var(--t-12); color: var(--inchiostro-2); line-height: 1.5; }
 .convocazione.richiesta-evento .conv-data { background: var(--accento-tenue); color: var(--accento); }
 .convocazione.richiesta-evento.coperta { opacity: .7; }
 .aggiungi-nota:hover { color: var(--accento); }

@@ -227,6 +227,37 @@
       : '<span class="conv-senza-numero">Chiedi ai supervisori il numero di reperibilità</span>';
   }
 
+  // ---------- aggiungi al calendario (convocazioni confermate e on-site) ----------
+  const ua = navigator.userAgent || '';
+  // iPhone e iPad (anche l'iPad che si presenta come Mac): il file .ics apre Calendario, ma solo da Safari
+  const iPhone = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const apple = iPhone || /Macintosh/.test(ua);
+  const fuoriDaSafari = iPhone && !/^(?:(?!crios|fxios|edgios).)*safari/i.test(ua);
+  const tastoCalendario = (tipo, id) => '<button type="button" class="link cal-aggiungi" data-calendario="' + tipo + '" data-id="' + DO.esc(id) + '">📅 Aggiungi al calendario</button>';
+
+  function apriCalendario(tipo, id) {
+    const x = (tipo === 'onsite' ? onsite : convocazioni).find((v) => v.id === id);
+    if (!x) return;
+    const indirizzo = location.origin + location.pathname;
+    const ev = tipo === 'onsite' ? DO.agenda.daOnsite(x, DO.onsite.ruoloAccettato(x, operatore.id), indirizzo) : DO.agenda.daConvocazione(x, indirizzo);
+    const file = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(DO.agenda.ics(ev, new Date()));
+    const dlg = $('dlg-calendario');
+    // browser senza <dialog> (iPhone prima di iOS 15.4): subito il file
+    if (typeof dlg.showModal !== 'function') { location.href = file; return; }
+    const google = '<a class="bottone cal-scelta" href="' + DO.esc(DO.agenda.linkGoogle(ev)) + '" target="_blank" rel="noopener" data-scelta>Google Calendar</a>';
+    const telefono = '<a class="bottone cal-scelta" href="' + DO.esc(file) + '" download="' + DO.agenda.nomeFile(ev) + '" data-scelta>Calendario del telefono<small>iPhone, Outlook, altri</small></a>';
+    dlg.innerHTML = '<form method="dialog"><h2 id="dlg-calendario-titolo">Aggiungi al calendario</h2>'
+      + '<p class="cal-evento"><b>' + DO.esc(ev.titolo) + '</b><span>' + DO.esc(DO.agenda.quando(ev)) + '</span></p>'
+      + '<div class="cal-scelte">' + (apple ? telefono + google : google + telefono) + '</div>'
+      + (fuoriDaSafari ? '<p class="cal-nota">Su iPhone il file si apre in Calendario solo da Safari: se non succede niente, apri questa pagina con Safari.</p>' : '')
+      + '<p class="cal-nota">Se l\'evento cambia o viene annullato, il calendario non si aggiorna da solo.</p>'
+      + '<div class="dialog-azioni"><button type="submit" class="bottone">Chiudi</button></div></form>';
+    // dopo la scelta il pannello si chiude (il link intanto si apre)
+    dlg.querySelectorAll('[data-scelta]').forEach((a) => a.addEventListener('click', () => setTimeout(() => dlg.close(), 300)));
+    dlg.showModal();
+    dlg.querySelector('[data-scelta]').focus();
+  }
+
   // deployment accettati (o annullati dopo l'accettazione) ancora in corso o futuri
   const onsiteMiei = () => onsite.filter((d) => d.a >= oggi && ['accettato', 'annullato'].includes(DO.onsite.statoPerOperatore(d, operatore, oggi)));
   const giorniElenco = (d) => '<ul class="onsite-giorni">' + d.giorni.map((x) => {
@@ -240,7 +271,8 @@
       + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
       + '<div class="conv-info"><b>On-site · ' + DO.esc(d.luogo) + (d.titolo ? ' · ' + DO.esc(d.titolo) : '') + '</b>'
       + '<span>' + DO.esc(d.sport) + ' · ' + DO.onsite.periodoBreve(d.da, d.a) + ' · posto on-site ' + DO.onsite.ruoloAccettato(d, operatore.id) + '</span>'
-      + giorniElenco(d) + (d.note ? '<span class="onsite-nota">' + DO.esc(d.note) + '</span>' : '') + '</div>'
+      + giorniElenco(d) + (d.note ? '<span class="onsite-nota">' + DO.esc(d.note) + '</span>' : '')
+      + (annullato ? '' : tastoCalendario('onsite', d.id)) + '</div>'
       + '<div class="conv-azioni">' + (annullato ? '<span class="stato-chip st-annullato">Annullato dal supervisore</span>'
         : '<span class="stato-chip st-D">Confermato</span>' + tasto('telefona')) + '</div></div>';
   }
@@ -276,11 +308,14 @@
       + '<div class="conv-info"><b>' + DO.esc(sup ? DO.nomeTurno(c.tipo) : c.titolo) + '</b>'
       + (sup ? '' : '<span>' + DO.esc([c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · ')) + '</span>')
       + '<span>' + orari + '</span>'
-      + (spiegazione ? '<small class="conv-spiegazione">' + DO.esc(DO.testoBlocco(operativo.giorniBlocco)) + '</small>' : '') + '</div>'
+      + (c.stato === 'confermato' ? tastoCalendario('convocazione', c.id) : '')
+      + (spiegazione ?'<small class="conv-spiegazione">' + DO.esc(DO.testoBlocco(operativo.giorniBlocco)) + '</small>' : '') + '</div>'
       + '<div class="conv-azioni">' + azioni + '</div></div>';
   }
 
   $('mie-convocazioni').addEventListener('click', async (e) => {
+    const cal = e.target.closest('[data-calendario]');
+    if (cal) { apriCalendario(cal.dataset.calendario, cal.dataset.id); return; }
     const b = e.target.closest('[data-rispondi]');
     if (!b) return;
     const c = convocazioni.find((x) => x.id === b.dataset.id), stato = b.dataset.rispondi;

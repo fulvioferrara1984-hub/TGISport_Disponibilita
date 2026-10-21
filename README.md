@@ -2,7 +2,7 @@
 
 Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file Excel delle convocazioni (fogli Convocazioni, Riepilogo, Consultivo, Impostazioni, Assenze). La piattaforma è solo operativa: niente fatture.
 
-- **`index.html` – operatori**: ognuno entra con il proprio codice personale, indica giorno per giorno se è *Disponibile*, *Parziale* (con gli orari) o *Non disponibile* e preme **Invia ai supervisori**. In alto trova **Le tue convocazioni** e le conferma (o dice che non può) con un tasto. Non vede compensi né note interne.
+- **`index.html` – operatori**: ognuno entra con il proprio codice personale, indica giorno per giorno se è *Disponibile*, *Parziale* (con gli orari) o *Non disponibile* e preme **Invia ai supervisori**. In alto trova **Le tue convocazioni** e le conferma (o dice che non può) con un tasto; quelle confermate e i deployment on-site si aggiungono al calendario del telefono con **📅 Aggiungi al calendario** (Google Calendar o file .ics per iPhone, Outlook e altri; il calendario non si aggiorna da solo se l'evento cambia). Non vede compensi né note interne.
 - **`admin.html` – supervisori**:
   - **Convocazioni**: partite e turni Remote TL e Remote Support della settimana; per ogni evento si sceglie l'operatore da un menu che mostra chi è disponibile, parziale, non disponibile o già impegnato; avviso di **doppio turno**; stati *da assegnare → da inviare → in attesa → confermato / rifiutato*, più *da sostituire* e *annullato*; **Invia convocazioni** le rende visibili agli operatori e manda le email.
   - **Disponibilità**: griglia settimanale del team in tempo reale (passando su una casella si leggono nota e impegni del giorno), pannello per ogni giorno, **Richiedi disponibilità** per un periodo.
@@ -259,6 +259,7 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/regole.js` | ritrovo, notturno, gettoni, stagione |
 | `app/calendario.js` | calendario mensile a schermo intero delle Convocazioni |
 | `app/richieste-evento.js` | richieste di disponibilità per un evento: allineamento con l'evento, stato per l'operatore, riepilogo delle risposte |
+| `app/agenda.js` | «Aggiungi al calendario» della pagina operatori: file .ics e link di Google Calendar |
 | `app/onsite.js`, `app/onsite-admin.js` | deployment on-site: calcoli (giorni, posti, presenze, compensi) e richiesta/scheda nella dashboard |
 | `app/convocazioni.js`, `app/riepilogo.js`, `app/impostazioni.js` | schede Convocazioni, Riepilogo, regole e importazione |
 | `app/config.js` | collegamento a Firebase e allo script delle email |

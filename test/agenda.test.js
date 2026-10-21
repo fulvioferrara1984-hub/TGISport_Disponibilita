@@ -62,6 +62,21 @@ test('calendario: turni remoti, senza fine turno 3 ore', () => {
   assert.equal(A.daConvocazione(Object.assign({}, turno, { fine: '22:30' }), SITO).a, '2026-10-25T01:30');
 });
 
+test('calendario: partita senza fine turno, almeno 2 ore dopo l\'inizio della partita', () => {
+  // ritrovo molto prima della partita: 3 ore dal ritrovo finirebbero prima del calcio d'inizio
+  const presto = A.daConvocazione(partita({ orario: '18:45', convocazioneCalcolata: '14:45', fineCalcolata: '' }), SITO);
+  assert.equal(presto.da, '2026-10-24T14:45');
+  assert.equal(presto.a, '2026-10-24T20:45');
+  // ritrovo un'ora e mezza prima: 2 ore dopo la partita (22:45) è più tardi di 3 ore dal ritrovo (22:15)
+  assert.equal(A.daConvocazione(partita({ fineCalcolata: '' }), SITO).a, '2026-10-24T22:45');
+  // ritrovo mezz'ora prima: valgono le 3 ore dal ritrovo
+  assert.equal(A.daConvocazione(partita({ convocazioneCalcolata: '20:15', fineCalcolata: '' }), SITO).a, '2026-10-24T23:15');
+  // di notte: la partita è il giorno dopo il ritrovo
+  const notte = A.daConvocazione(partita({ data: '2026-10-25', orario: '01:00', convocazioneCalcolata: '21:00', fineCalcolata: '' }), SITO);
+  assert.equal(notte.da, '2026-10-24T21:00');
+  assert.equal(notte.a, '2026-10-25T03:00');
+});
+
 test('calendario: senza ritrovo né orario tutto il giorno', () => {
   const ev = A.daConvocazione(partita({ orario: '', convocazioneCalcolata: '', fineCalcolata: '' }), SITO);
   assert.equal(ev.tuttoIlGiorno, true);
