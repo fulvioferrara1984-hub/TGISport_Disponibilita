@@ -122,6 +122,12 @@ test('file .ics: virgole, punti e virgola e barre nel testo', () => {
   assert.ok(r.includes('SUMMARY:TGI Sport · Roma\\, Lazio\\; derby \\\\ ritorno'));
 });
 
+test('file .ics: a capo di ogni tipo nelle note (anche il ritorno a capo da solo)', () => {
+  const r = righe(A.ics(A.daOnsite(deployment({ note: 'Riga uno\rRiga due\r\nRiga tre\nRiga quattro' }), 'TL', SITO), ADESSO));
+  assert.ok(r.find((x) => x.startsWith('DESCRIPTION:')).includes('Riga uno\\nRiga due\\nRiga tre\\nRiga quattro'));
+  assert.ok(r.every((x) => !x.includes('\r')));
+});
+
 test('file .ics: righe lunghe spezzate a 75 byte senza rompere le lettere', () => {
   const lungo = 'Società Sportiva Lazio – Associazione Calcio Fiorentina · ritorno à è ì ò ù '.repeat(3);
   const testo = A.ics(A.daConvocazione(partita({ titolo: lungo }), SITO), ADESSO);
@@ -150,6 +156,23 @@ test('link di Google Calendar', () => {
   const giornata = new URL(A.linkGoogle(A.daOnsite(deployment(), 'TL', SITO))).searchParams;
   assert.equal(giornata.get('dates'), '20261112/20261114');
   assert.equal(giornata.get('ctz'), null);
+});
+
+test('dispositivo: iPhone, iPad, Safari o altri browser', () => {
+  const iOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) ';
+  const casi = [
+    ['Safari su iPhone', iOS + 'Version/18.0 Mobile/15E148 Safari/604.1', 5, { apple: true, fuoriDaSafari: false }],
+    ['Chrome su iPhone', iOS + 'CriOS/130.0.6723.90 Mobile/15E148 Safari/604.1', 5, { apple: true, fuoriDaSafari: true }],
+    ['app Google', iOS + 'GSA/340.0.689276455 Mobile/15E148 Safari/604.1', 5, { apple: true, fuoriDaSafari: true }],
+    ['Edge su iPhone', iOS + 'Version/18.0 EdgiOS/130.0.2849.80 Mobile/15E148 Safari/605.1.15', 5, { apple: true, fuoriDaSafari: true }],
+    ['Opera su iPhone', iOS + 'Version/18.0 Mobile/15E148 Safari/604.1 OPT/5.1.0', 5, { apple: true, fuoriDaSafari: true }],
+    ['Firefox su iPhone', iOS + 'FxiOS/132.0 Mobile/15E148 Safari/605.1.15', 5, { apple: true, fuoriDaSafari: true }],
+    ['browser dentro un\'app', iOS + 'Mobile/15E148', 5, { apple: true, fuoriDaSafari: true }],
+    ['iPad che si presenta come Mac', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', 5, { apple: true, fuoriDaSafari: false }],
+    ['Chrome su Mac', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', 0, { apple: true, fuoriDaSafari: false }],
+    ['Android', 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36', 5, { apple: false, fuoriDaSafari: false }],
+  ];
+  for (const [nome, ua, tocchi, atteso] of casi) assert.deepEqual(A.dispositivo(ua, tocchi), atteso, nome);
 });
 
 test('nome del file e riga del pannello', () => {

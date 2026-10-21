@@ -228,11 +228,8 @@
   }
 
   // ---------- aggiungi al calendario (convocazioni confermate e on-site) ----------
-  const ua = navigator.userAgent || '';
-  // iPhone e iPad (anche l'iPad che si presenta come Mac): il file .ics apre Calendario, ma solo da Safari
-  const iPhone = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-  const apple = iPhone || /Macintosh/.test(ua);
-  const fuoriDaSafari = iPhone && !/^(?:(?!crios|fxios|edgios).)*safari/i.test(ua);
+  // su iPhone e Mac prima il file .ics; su iPhone fuori da Safari la nota per aprire la pagina con Safari
+  const { apple, fuoriDaSafari } = DO.agenda.dispositivo(navigator.userAgent || '', navigator.maxTouchPoints || 0);
   const tastoCalendario = (tipo, id) => '<button type="button" class="link cal-aggiungi" data-calendario="' + tipo + '" data-id="' + DO.esc(id) + '">📅 Aggiungi al calendario</button>';
 
   function apriCalendario(tipo, id) {
@@ -309,7 +306,7 @@
       + (sup ? '' : '<span>' + DO.esc([c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · ')) + '</span>')
       + '<span>' + orari + '</span>'
       + (c.stato === 'confermato' ? tastoCalendario('convocazione', c.id) : '')
-      + (spiegazione ?'<small class="conv-spiegazione">' + DO.esc(DO.testoBlocco(operativo.giorniBlocco)) + '</small>' : '') + '</div>'
+      + (spiegazione ? '<small class="conv-spiegazione">' + DO.esc(DO.testoBlocco(operativo.giorniBlocco)) + '</small>' : '') + '</div>'
       + '<div class="conv-azioni">' + azioni + '</div></div>';
   }
 

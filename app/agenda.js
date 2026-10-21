@@ -57,7 +57,7 @@
     'END:VTIMEZONE'];
   // '2026-10-24T19:15' → '20261024T191500', '2026-10-24' → '20261024'
   const compatta = (s) => s.replace(/[-:]/g, '') + (s.includes('T') ? '00' : '');
-  const testoIcs = (s) => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  const testoIcs = (s) => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r\n|\r|\n/g, '\\n');
 
   // righe al massimo di 75 byte: le successive iniziano con uno spazio; una lettera non si spezza mai
   function piega(riga) {
@@ -105,5 +105,13 @@
     return data(giornoDa) + ' · ' + ev.da.slice(11) + ' – ' + ev.a.slice(11) + (giornoA !== giornoDa ? ' di ' + DO.giorno(giornoA).nome.toLowerCase() : '');
   }
 
-  DO.agenda = { daConvocazione, daOnsite, ics, linkGoogle, nomeFile, quando };
+  // iPhone e iPad (anche l'iPad che si presenta come Mac) e se il browser è proprio Safari, l'unico che apre il file .ics
+  // in Calendario: Chrome, Firefox, Edge, Opera, l'app Google e i browser dentro le altre app di solito no
+  function dispositivo(ua, tocchi) {
+    const iPhone = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && tocchi > 1);
+    const safari = /Version\/\d.*Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|OPT\/|GSA\//.test(ua);
+    return { apple: iPhone || /Macintosh/.test(ua), fuoriDaSafari: iPhone && !safari };
+  }
+
+  DO.agenda = { daConvocazione, daOnsite, ics, linkGoogle, nomeFile, quando, dispositivo };
 })(window.DO = window.DO || {});
