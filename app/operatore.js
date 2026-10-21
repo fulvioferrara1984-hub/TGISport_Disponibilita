@@ -249,7 +249,8 @@
       + '<p class="cal-evento"><b>' + DO.esc(ev.titolo) + '</b><span>' + DO.esc(DO.agenda.quando(ev)) + '</span></p>'
       + '<div class="cal-scelte">' + (apple ? telefono + google : google + telefono) + '</div>'
       + (fuoriDaSafari ? '<p class="cal-nota">Su iPhone il file si apre in Calendario solo da Safari: se non succede niente, apri questa pagina con Safari.</p>' : '')
-      + '<p class="cal-nota">Se l\'evento cambia o viene annullato, il calendario non si aggiorna da solo.</p>'
+      + '<p class="cal-nota">Il calendario non si aggiorna da solo. Se l\'orario è cambiato e l\'avevi già aggiunto: tocca «Calendario del telefono», '
+      + 'elimina l\'evento vecchio quando te lo propone e poi toccalo di nuovo. Su Google Calendar cancella quello vecchio.</p>'
       + '<div class="dialog-azioni"><button type="submit" class="bottone">Chiudi</button></div></form>';
     // dopo la scelta il pannello si chiude (il link intanto si apre)
     dlg.querySelectorAll('[data-scelta]').forEach((a) => a.addEventListener('click', () => setTimeout(() => dlg.close(), 300)));
@@ -271,7 +272,7 @@
       + '<div class="conv-info"><b>On-site · ' + DO.esc(d.luogo) + (d.titolo ? ' · ' + DO.esc(d.titolo) : '') + '</b>'
       + '<span>' + DO.esc(d.sport) + ' · ' + DO.onsite.periodoBreve(d.da, d.a) + ' · posto on-site ' + DO.onsite.ruoloAccettato(d, operatore.id) + '</span>'
       + giorniElenco(d) + (d.note ? '<span class="onsite-nota">' + DO.esc(d.note) + '</span>' : '')
-      + (annullato ? '' : tastoCalendario('onsite', d.id)) + '</div>'
+      + (annullato ? '<small class="conv-spiegazione">Se l\'avevi aggiunto al calendario, cancellalo da lì.</small>' : tastoCalendario('onsite', d.id)) + '</div>'
       + '<div class="conv-azioni">' + (annullato ? '<span class="stato-chip st-annullato">Annullato dal supervisore</span>'
         : '<span class="stato-chip st-D">Confermato</span>' + tasto('telefona')) + '</div></div>';
   }
@@ -308,6 +309,7 @@
       + (sup ? '' : '<span>' + DO.esc([c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · ')) + '</span>')
       + '<span>' + orari + '</span>'
       + (c.stato === 'confermato' ? tastoCalendario('convocazione', c.id) : '')
+      + (c.stato === 'annullato' ? '<small class="conv-spiegazione">Se l\'avevi aggiunta al calendario, cancellala da lì.</small>' : '')
       + (spiegazione ? '<small class="conv-spiegazione">' + DO.esc(DO.testoBlocco(operativo.giorniBlocco)) + '</small>' : '') + '</div>'
       + '<div class="conv-azioni">' + azioni + '</div></div>';
   }
