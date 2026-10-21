@@ -10,7 +10,7 @@
   let compensoAMano = false;      // il supervisore ha scritto un compenso diverso da quello proposto
   let aperto = null;              // deployment mostrato nella scheda
   let preset = {};                // giorni precompilati da un evento della piattaforma: data → { attivita, partita }
-  let progettoScelto = '';        // evento della piattaforma da cui nasce la richiesta (diventa progettoId del deployment)
+  let progettoScelto = {};        // evento della piattaforma da cui nasce la richiesta: { progettoId, giorniRichiesti } del deployment
   let segnati = [];               // eventi della piattaforma con i nostri operatori, da oggi in poi (in tempo reale)
   const legati = {};              // eventi dei deployment legati non più in elenco: id → evento | null (letti una volta)
   const inLettura = new Set();
@@ -107,7 +107,7 @@
     tolti = new Set();
     compensoAMano = false;
     preset = p ? Object.fromEntries(p.giorni.map((g) => [g.data, g])) : {};
-    progettoScelto = p ? p.progettoId : '';
+    progettoScelto = p ? { progettoId: p.progettoId, giorniRichiesti: p.giorniRichiesti } : {};
     const domani = DO.aggiungi(DO.oggi(), 1);
     $('ons-da').min = $('ons-a').min = domani;
     $('ons-da').value = p ? p.giorni[0].data : domani;
@@ -171,7 +171,7 @@
     $('ons-errore').hidden = true;
     try {
       const r = await DO.dati.creaOnsite(
-        { titolo: $('ons-titolo').value, luogo, sport, note: $('ons-note').value, giorni, posti: { TL: $('ons-tl').value, OP: $('ons-op').value }, destinatari, progettoId: progettoScelto },
+        Object.assign({ titolo: $('ons-titolo').value, luogo, sport, note: $('ons-note').value, giorni, posti: { TL: $('ons-tl').value, OP: $('ons-op').value }, destinatari }, progettoScelto),
         { compenso: $('ons-compenso').value, email, contatti: contatti(destinatari), urlSito: A.linkSito() },
       );
       $('dlg-onsite').close();
@@ -309,6 +309,7 @@
     box.hidden = !r.daRichiedere.length && !r.daRivedere.length;
     if (box.hidden) return;
     const md = (e) => ((e.staffOnsite && e.staffOnsite.giorni) || []).find((g) => g.attivita === 'MD') || { data: e.data };
+    const periodoEvento = (e) => { const g = (e.staffOnsite && e.staffOnsite.giorni) || []; return g.length ? O.periodoBreve(g[0].data, g[g.length - 1].data) : '—'; };
     const riga = (testo, etichetta, tasto) => '<li>' + testo + ' <span class="tag-piattaforma">' + DO.esc(etichetta) + '</span>' + tasto + '</li>';
     box.innerHTML = '<div class="scheda-testa"><h2>On-site dalla piattaforma</h2></div><ul class="righe-piattaforma">'
       + r.daRichiedere.map((e) => {
@@ -317,15 +318,26 @@
           'da richiedere', '<button type="button" class="bottone solo-modifica" data-richiedi="' + DO.esc(e.id) + '">Richiedi disponibilità</button>');
       }).join('')
       + r.daRivedere.map((x) => riga('<b>' + giornoBreve(x.deployment.da) + '</b> ' + DO.esc(x.deployment.titolo || x.deployment.luogo) + ' · ' + DO.esc(x.deployment.luogo),
-        'da rivedere: ' + x.motivo, '<button type="button" class="bottone" data-apri-dep="' + DO.esc(x.deployment.id) + '">Apri deployment</button>')).join('')
+        'da rivedere: ' + x.motivo, (x.motivo === 'giorni cambiati nella piattaforma'
+          // il supervisore ha già sistemato il deployment o il cambio non lo riguarda: «Segna come rivisto» chiude l'avviso
+          ? '<span class="tenue">ora ' + DO.esc(periodoEvento(x.evento)) + '</span>'
+            + '<button type="button" class="bottone solo-modifica" data-rivisto="' + DO.esc(x.deployment.id) + '">Segna come rivisto</button>' : '')
+          + '<button type="button" class="bottone" data-apri-dep="' + DO.esc(x.deployment.id) + '">Apri deployment</button>')).join('')
       + '</ul>';
     box._eventi = eventi;
   }
 
   $('onsite-piattaforma').addEventListener('click', (e) => {
-    const r = e.target.closest('[data-richiedi]'), d = e.target.closest('[data-apri-dep]');
+    const r = e.target.closest('[data-richiedi]'), d = e.target.closest('[data-apri-dep]'), v = e.target.closest('[data-rivisto]');
     if (r) apriRichiesta(O.daProgetto($('onsite-piattaforma')._eventi[r.dataset.richiedi]));
     if (d) apri(d.dataset.apriDep);
+    if (v) {
+      const dep = (A.onsite || []).find((x) => x.id === v.dataset.rivisto), ev = dep && $('onsite-piattaforma')._eventi[dep.progettoId];
+      if (!ev || !ev.staffOnsite) return;
+      v.disabled = true;
+      DO.dati.segnaRivisto(dep.id, ev.staffOnsite.giorni)
+        .then(() => DO.avviso('Deployment segnato come rivisto.', 'ok'), (err) => { v.disabled = false; DO.avviso(err.message, 'errore'); });
+    }
   });
 
   A.registra({ aggiorna: () => {

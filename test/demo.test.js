@@ -76,6 +76,16 @@ test('on-site: richiesta valida e controlli', async () => {
   assert.equal(s.compensiOnsite[r.id], 300);
 });
 
+test('on-site dalla piattaforma: deployment legato all\'evento e «Segna come rivisto»', async () => {
+  const richiesti = [{ data: tra(9), attivita: 'Travel Day' }, { data: tra(10), attivita: 'Travel Day' }, { data: tra(11), attivita: 'MD' }];
+  const id = await creaOnsite({ progettoId: 'p7', giorniRichiesti: richiesti });
+  assert.deepEqual([(await scheda(id)).progettoId, (await scheda(id)).giorniRichiesti], ['p7', richiesti]);
+  assert.equal((await scheda(await creaOnsite())).progettoId, undefined);
+  const nuovi = [{ data: tra(12), attivita: 'Travel Day' }, { data: tra(13), attivita: 'MD' }];
+  await D.segnaRivisto(id, nuovi);
+  assert.deepEqual((await scheda(id)).giorniRichiesti, nuovi);
+});
+
 test('on-site: l\'ultimo posto va al primo', async () => {
   await abilita('op-demo3', 'OP');
   await abilita('op-demo4', 'OP');

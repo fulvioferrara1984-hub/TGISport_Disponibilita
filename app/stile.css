@@ -905,4 +905,5 @@ body.con-calendario { overflow: hidden; }
 .righe-piattaforma { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .righe-piattaforma li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .righe-piattaforma li .bottone { margin-left: auto; }
+.righe-piattaforma li .bottone + .bottone { margin-left: 0; }
 .tag-piattaforma { padding: 1px 8px; border-radius: 10px; background: #efe7ff; color: #5b34c9; font-size: var(--t-12); font-weight: 600; }

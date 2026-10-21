@@ -659,7 +659,7 @@
     const completa = Object.assign({ creato: new Date().toISOString() }, scheda,
       { destinatari, accettatiTL: [], accettatiOP: [], rifiuti: [], esclusi: [], stato: 'aperta' },
       // deployment creato da un evento della piattaforma TGI Sport: resta legato a quell'evento
-      d.progettoId ? { progettoId: String(d.progettoId) } : {});
+      DO.onsite.legame(d));
     await scrivi(async () => {
       const batch = F.writeBatch(db);
       batch.set(rif, completa);
@@ -684,6 +684,11 @@
   async function leggiProgetti(ids) {
     const letti = await Promise.all(ids.map((id) => F.getDoc(F.doc(db, 'progetti', id)).then((d) => [id, d.exists() ? Object.assign({ id }, d.data()) : null], () => null)));
     return Object.fromEntries(letti.filter(Boolean));
+  }
+
+  // «Segna come rivisto»: i giorni dell'evento di adesso diventano quelli richiesti e l'avviso «giorni cambiati» si chiude
+  async function segnaRivisto(id, giorni) {
+    await scrivi(() => F.updateDoc(F.doc(db, 'onsite', id), { giorniRichiesti: DO.onsite.soloGiorni(giorni) }));
   }
 
   async function leggiOnsite(id) {
@@ -936,7 +941,7 @@
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
     creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa, leggiOperativo, salvaOperativo,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
-    creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite, ascoltaProgettiOnsite, leggiProgetti,
+    creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite, ascoltaProgettiOnsite, leggiProgetti, segnaRivisto,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
   };

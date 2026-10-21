@@ -190,6 +190,15 @@ test('richiesta precompilata dall\'evento della piattaforma', () => {
   assert.deepEqual(p.giorni[2], { data: '2026-11-04', attivita: 'MD', partita: 'Benfica – Inter' });
   assert.equal(p.giorni[0].partita, '');
   assert.equal(O.daProgetto(evento({ squadraA: '', squadraB: '' })).titolo, 'UEFA CHAMPIONS LEAGUE');
+  // i giorni chiesti dall'evento, anche se poi il supervisore li cambia nel modulo
+  assert.deepEqual(p.giorniRichiesti, evento().staffOnsite.giorni);
+});
+
+test('legame del deployment con l\'evento della piattaforma', () => {
+  assert.deepEqual(O.legame({}), {});
+  assert.deepEqual(O.legame({ progettoId: 'p1', giorniRichiesti: [{ data: '2026-11-04', attivita: 'MD', partita: 'x' }, { data: 'no', attivita: 'MD' }] }),
+    { progettoId: 'p1', giorniRichiesti: [{ data: '2026-11-04', attivita: 'MD' }] });
+  assert.deepEqual(O.legame({ progettoId: 'p1' }), { progettoId: 'p1', giorniRichiesti: [] });
 });
 
 test('riquadro: eventi da richiedere', () => {
@@ -210,6 +219,12 @@ test('riquadro: deployment da rivedere, con il motivo', () => {
   const spostato = evento({ data: '2026-11-11', staffOnsite: { attivo: true, vigilie: 1, giorni: [
     { data: '2026-11-09', attivita: 'Travel Day' }, { data: '2026-11-10', attivita: 'MD-1' }, { data: '2026-11-11', attivita: 'MD' }, { data: '2026-11-12', attivita: 'Travel Day' }] } });
   assert.deepEqual(motivo(spostato), ['giorni cambiati nella piattaforma']);
+  // si confronta con i giorni richiesti: un Travel Day tolto dal supervisore non conta, un evento spostato sì
+  const richiesti = evento().staffOnsite.giorni;
+  assert.deepEqual(motivo(evento(), legato({ giorni: legato().giorni.slice(1), da: '2026-11-03', giorniRichiesti: richiesti })), []);
+  assert.deepEqual(motivo(spostato, legato({ giorniRichiesti: richiesti })), ['giorni cambiati nella piattaforma']);
+  // dopo «Segna come rivisto» i giorni richiesti sono quelli nuovi dell'evento
+  assert.deepEqual(motivo(spostato, legato({ giorniRichiesti: spostato.staffOnsite.giorni })), []);
   assert.deepEqual(motivo(evento({ stato: 'CANCELLED' })), ['evento annullato']);
   assert.deepEqual(motivo(evento({ staffOnsite: Object.assign({}, evento().staffOnsite, { attivo: false }) })), ['non più con i nostri operatori']);
   assert.deepEqual(motivo(null), ['evento eliminato dalla piattaforma']);

@@ -339,7 +339,7 @@
     const compenso = DO.onsite.compensoValido(extra && extra.compenso);
     const id = 'ons' + Date.now().toString(36) + Math.floor(Math.random() * 1e4);
     dati.onsite.push(Object.assign({ id, creato: new Date().toISOString() }, scheda,
-      { destinatari, accettatiTL: [], accettatiOP: [], rifiuti: [], esclusi: [], stato: 'aperta' }));
+      { destinatari, accettatiTL: [], accettatiOP: [], rifiuti: [], esclusi: [], stato: 'aperta' }, DO.onsite.legame(d)));
     dati.onsiteRiservato[id] = { compenso };
     salva();
     const { senzaEmail, conEmail } = contattiEmail(extra);
@@ -357,6 +357,12 @@
     salva();
     const { senzaEmail, conEmail } = contattiEmail(extra);
     return { senzaEmail, inviate: pausa(800).then(() => ({ email: conEmail.length })) };
+  }
+
+  async function segnaRivisto(id, giorni) {
+    await pausa(150);
+    deployment(id).giorniRichiesti = DO.onsite.soloGiorni(giorni);
+    salva();
   }
 
   async function togliOnsite(id, idOperatore) {
@@ -494,7 +500,7 @@
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
     // la demo non ha la piattaforma TGI Sport: nessun evento da coprire
-    ascoltaProgettiOnsite: (cb) => { cb([]); return () => {}; }, leggiProgetti: async () => ({}),
+    ascoltaProgettiOnsite: (cb) => { cb([]); return () => {}; }, leggiProgetti: async () => ({}), segnaRivisto,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
     azzera: () => { try { localStorage.removeItem(CHIAVE); } catch (e) { /* niente */ } },

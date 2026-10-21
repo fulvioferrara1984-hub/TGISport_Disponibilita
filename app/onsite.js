@@ -192,12 +192,21 @@
   const partitaDi = (e) => (e.squadraA && e.squadraB ? parola(e.squadraA) + ' – ' + parola(e.squadraB) : '');
 
   // dati per «+ On-site» precompilato: la partita compare nel giorno MD
+  const soloGiorni = (l) => lista(l).filter((g) => g && /^\d{4}-\d{2}-\d{2}$/.test(g.data)).map((g) => ({ data: g.data, attivita: String(g.attivita || '') }));
+
   function daProgetto(e) {
     const partita = partitaDi(e);
     return {
       progettoId: e.id, titolo: partita || String(e.competizione || ''), luogo: String(e.venue || ''), sport: String(e.sport || ''),
       giorni: lista(e.staffOnsite && e.staffOnsite.giorni).map((g) => ({ data: g.data, attivita: g.attivita, partita: g.attivita === 'MD' ? partita : '' })),
+      giorniRichiesti: soloGiorni(e.staffOnsite && e.staffOnsite.giorni),
     };
+  }
+
+  // deployment nato da un evento della piattaforma: resta legato all'evento e ricorda i giorni che l'evento chiedeva
+  // (l'avviso «giorni cambiati» confronta l'evento con questi, non con i giorni scelti dal supervisore)
+  function legame(d) {
+    return d && d.progettoId ? { progettoId: String(d.progettoId), giorniRichiesti: soloGiorni(d.giorniRichiesti) } : {};
   }
 
   const stessiGiorni = (a, b) => lista(a).map((g) => g.data + ' ' + g.attivita).join('|') === lista(b).map((g) => g.data + ' ' + g.attivita).join('|');
@@ -215,14 +224,14 @@
       const motivo = !e ? 'evento eliminato dalla piattaforma' : e.stato === 'CANCELLED' ? 'evento annullato'
         : e.modalita !== 'ON-SITE' ? 'non più on-site'
           : !(e.staffOnsite && e.staffOnsite.attivo) ? 'non più con i nostri operatori'
-            : !stessiGiorni(e.staffOnsite.giorni, d.giorni) ? 'giorni cambiati nella piattaforma' : '';
+              : !stessiGiorni(e.staffOnsite.giorni, d.giorniRichiesti || d.giorni) ? 'giorni cambiati nella piattaforma' : '';
       return { deployment: d, evento: e, motivo };
     }).filter((x) => x.motivo).sort((x, y) => String(x.deployment.da).localeCompare(String(y.deployment.da)));
     return { daRichiedere, daRivedere };
   }
 
   DO.onsite = {
-    daProgetto, righePiattaforma,
+    daProgetto, legame, soloGiorni, righePiattaforma,
     ATTIVITA, MESSAGGI, attivitaProposte, giorniDa, normalizza, compensoProposto, compensoValido, modifiche, postiLiberi, etichettaPosti,
     ruoloAccettato, giorniOnsite, conflittiRemoti, conflittiOnsite, statoPerOperatore, quoteMese, periodoBreve,
     COLORE, statoCalendarioOnsite,
