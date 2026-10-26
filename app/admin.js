@@ -12,6 +12,8 @@
   let onsite = [], compensiOnsite = {};   // deployment on-site e compensi (solo supervisori)
   let richiesteEvento = [];               // richieste di disponibilità per un singolo evento
   let solaLettura = false, visualizzatori = [];   // collega in sola visualizzazione; elenco dei colleghi (supervisori)
+  let messaggi = [], segniMessaggi = new Set();   // messaggi con gli operatori; eventi e deployment con un messaggio da leggere
+  let conversazione = null;                        // conversazione aperta nel pannello: { tipo, rif, operatoreId, pannello }
   const VISTE_SOLA = ['convocazioni', 'riepilogo', 'operatori'];
   // ogni dashboard aperta tiene le richieste per evento allineate agli eventi (scritture idempotenti)
   const allineaRichiesteEvento = DO.richiesteEvento.allineatore((id, campi) => DO.dati.allineaRichiestaEvento(id, campi));
@@ -63,6 +65,8 @@
     compensiOnsite = stato.compensiOnsite || {};
     richiesteEvento = stato.richiesteEvento || [];
     visualizzatori = stato.visualizzatori || [];
+    messaggi = stato.messaggi || [];
+    segniMessaggi = DO.messaggi.segniDaLeggere(feed);
     // la dashboard di un collega non scrive mai: niente allineamento delle richieste per evento
     if (stato.sincronizzato && !solaLettura) allineaRichiesteEvento(richiesteEvento, eventi, regole, oggi);
     onsitePerOp = {};
@@ -77,6 +81,7 @@
     disegnaFeed();
     if (vista === 'operatori') disegnaOperatori();
     moduli.forEach((m) => m.aggiorna && m.aggiorna());
+    if (conversazione) conversazione.pannello.aggiorna(DO.messaggi.conversazione(messaggi, conversazione.tipo, conversazione.rif, conversazione.operatoreId));
   }
 
   // Le altre schede (convocazioni, riepilogo, impostazioni) sono in file a parte e leggono da qui.
@@ -94,6 +99,9 @@
     get richiesteEvento() { return richiesteEvento; },
     get solaLettura() { return solaLettura; },
     get visualizzatori() { return visualizzatori; },
+    get messaggi() { return messaggi; },
+    get segniMessaggi() { return segniMessaggi; },
+    apriMessaggi: (tipo, rif, operatoreId) => apriMessaggi(tipo, rif, operatoreId),
     linkDashboard: () => new URL('admin.html', location.href).href,
     get vista() { return vista; },
     valore, impegni, etichettaGiorno, linkSito, mostra: (n) => mostra(n), esitoRichiesta: (r, email, whatsapp) => esitoRichiesta(r, email, whatsapp),
@@ -124,9 +132,10 @@
     nuovi.forEach((x) => visti.add(x.id));
     const nomi = [...new Set(nuovi.map((x) => x.nome))].join(', ');
     if (!nomi) return;
-    DO.avviso('Nuovo aggiornamento da ' + nomi + '.', 'ok', 6000);
+    const soloMessaggi = nuovi.every((x) => x.tipo === 'messaggio');
+    DO.avviso((soloMessaggi ? 'Nuovo messaggio da ' : 'Nuovo aggiornamento da ') + nomi + '.', 'ok', 6000);
     if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-      new Notification('Disponibilità aggiornate', { body: nomi + ' ha inviato le disponibilità.', icon: 'app/favicon-180.png' });
+      new Notification(soloMessaggi ? 'Nuovo messaggio' : 'Disponibilità aggiornate', { body: soloMessaggi ? nomi + ' ti ha scritto.' : nomi + ' ha inviato le disponibilità.', icon: 'app/favicon-180.png' });
     }
   }
 
@@ -533,6 +542,7 @@
       if (x.tipo === 'convocazione') return vocePerConvocazione(x);
       if (x.tipo === 'onsite') return vocePerOnsite(x);
       if (x.tipo === 'risposta-evento') return vocePerRispostaEvento(x);
+      if (x.tipo === 'messaggio') return vocePerMessaggio(x);
       const n = x.modifiche.length;
       const modifiche = x.modifiche.slice(0, 14).map((m) => {
         const g = DO.giorno(m.d);
@@ -582,6 +592,61 @@
       + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
   }
 
+  function vocePerMessaggio(x) {
+    const ev = x.evento || {}, g = ev.data ? DO.giorno(ev.data) : null;
+    return '<li class="feed-voce' + (x.letto ? '' : ' non-letto') + '"><span class="iniziali">' + DO.esc(DO.iniziali(x.nome)) + '</span>'
+      + '<div><p class="feed-titolo"><b>' + DO.esc(x.nome) + '</b> ha scritto · ' + DO.esc(ev.titolo || '') + (g ? ' · ' + g.breve + ' ' + g.num + ' ' + g.meseBreve : '') + '</p>'
+      + '<span class="feed-quando">' + DO.quando(x.quando) + '</span>'
+      + (ev.testo ? '<ul class="modifiche"><li>' + DO.esc(ev.testo).replace(/\n/g, '<br>') + '</li></ul>' : '') + '</div>'
+      + '<div class="feed-azioni"><button type="button" class="bottone" data-rispondi-msg="' + x.id + '">Rispondi</button>'
+      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
+  }
+
+  // ---------- messaggi con gli operatori ----------
+  // nome del supervisore nei messaggi: gli account hanno solo l'email, si chiede una volta e resta su questo computer
+  function nomeSupervisore(cambia) {
+    const attuale = DO.leggi('do-nome-supervisore') || '';
+    if (attuale && !cambia) return attuale;
+    const scritto = String(prompt('Il tuo nome (lo vedono gli operatori)', attuale) || '').trim().slice(0, 60);
+    if (scritto) DO.scrivi('do-nome-supervisore', scritto, true);
+    return scritto || (cambia ? attuale : '');
+  }
+  const notaNome = () => (DO.leggi('do-nome-supervisore') ? 'Scrivi come <b>' + DO.esc(DO.leggi('do-nome-supervisore')) + '</b> · <button type="button" class="link" data-cambia-nome>cambia</button>' : '');
+  function aggiornaNota() {
+    const nota = document.querySelector('#dlg-messaggi .msg-nota');
+    if (nota) { nota.innerHTML = notaNome(); nota.hidden = !nota.innerHTML; }
+  }
+
+  function apriMessaggi(tipo, rif, operatoreId) {
+    const M = DO.messaggi, x = tipo === 'onsite' ? onsite.find((d) => d.id === rif) : eventi.find((e) => e.id === rif);
+    const op = operatori.find((o) => o.id === operatoreId) || { id: operatoreId, nome: 'Operatore', email: '' };
+    const s = x ? M.soggetto(tipo, x) : { titolo: 'Convocazione', data: '' };
+    const g = s.data ? DO.giorno(s.data) : null;
+    const quando = !x ? '' : tipo === 'onsite' ? DO.onsite.periodoBreve(x.da, x.a) : g.nome + ' ' + g.num + ' ' + g.mese;
+    // un operatore non più assegnato all'evento non vede più la convocazione: la sua conversazione si legge soltanto
+    const chiuso = solaLettura ? 'Sola visualizzazione.' : tipo === 'evento' && x && x.operatoreId !== operatoreId ? 'Conversazione con un operatore non più assegnato a questo evento.'
+      : tipo === 'evento' && x ? M.chiusoPerSupervisore(x) : '';
+    const elenco = () => M.conversazione(messaggi, tipo, rif, operatoreId);
+    const pannello = M.apriConversazione({
+      titolo: op.nome + ' · ' + s.titolo, sotto: quando, messaggi: elenco(), mio: 'supervisore', chiuso, nota: chiuso ? null : notaNome(),
+      invia: async (testo) => {
+        const autore = nomeSupervisore(false);
+        if (!autore) throw new Error('Serve il tuo nome per mandare il messaggio.');
+        const r = await DO.dati.messaggioSupervisore({ tipo, rif, operatoreId, testo, autore }, { nome: op.nome, email: op.email }, linkSito(),
+          M.inviiDellaConversazione(feed, tipo, rif, operatoreId));
+        if (r.senzaEmail) DO.avviso('Messaggio salvato. ' + op.nome + ' non ha un\'email: lo vedrà sulla piattaforma.', 'ok', 7000);
+        else {
+          DO.avviso('Messaggio inviato a ' + op.nome + '.', 'ok');
+          r.inviata.catch((e) => DO.avviso('Messaggio salvato, ma l\'email a ' + op.nome + ' non è partita: ' + e.message, 'errore', 8000));
+        }
+        aggiornaNota();
+      },
+    });
+    conversazione = { tipo, rif, operatoreId, pannello };
+    const dlg = document.getElementById('dlg-messaggi');
+    dlg.onclick = (e) => { if (e.target.closest('[data-cambia-nome]')) { nomeSupervisore(true); aggiornaNota(); } };
+  }
+
   async function segnaLetti(ids) {
     const daSegnare = (ids || feed.filter((x) => !x.letto).map((x) => x.id));
     if (!daSegnare.length) return;
@@ -597,6 +662,11 @@
       if (x && !x.letto) segnaLetti([x.id]);
       mostra('convocazioni');
       moduli.forEach((m) => m.vaiA && m.vaiA(vediEv.dataset.vediEvento));
+    }
+    const rispondi = e.target.closest('[data-rispondi-msg]');
+    if (rispondi) {
+      const x = feed.find((v) => v.id === rispondi.dataset.rispondiMsg);
+      if (x && x.evento) apriMessaggi(x.evento.tipo, x.evento.rif, x.operatoreId);
     }
     const vediOn = e.target.closest('[data-vedi-onsite]');
     if (vediOn) {

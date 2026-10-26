@@ -199,6 +199,8 @@
     return { testo: 'Nessuna risposta', cls: 'st-vuoto', ordine: 2 };
   }
 
+  const messaggiCon = (id, operatoreId) => DO.messaggi.conversazione(A.messaggi, 'onsite', id, operatoreId).length;
+
   function disegnaScheda() {
     const d = corrente();
     if (!d) { if ($('dlg-onsite-scheda').open) $('dlg-onsite-scheda').close(); return; }
@@ -211,6 +213,8 @@
       .sort((x, y) => x.ordine - y.ordine || x.nome.localeCompare(y.nome, 'it'));
     $('onss-persone').innerHTML = persone.map((p) => '<li class="persona"><span class="chi"><b>' + DO.esc(p.nome) + '</b></span>'
       + '<span class="stato-chip ' + p.cls + '">' + p.testo + '</span>'
+      + '<button type="button" class="link msg-op" data-msg-op="' + p.id + '" title="Messaggi con ' + DO.esc(p.nome) + '">💬'
+        + (messaggiCon(d.id, p.id) ? ' ' + messaggiCon(d.id, p.id) : '') + '</button>'
       + (p.togli ? '<button type="button" class="link testo-errore solo-modifica" data-togli="' + p.id + '">Togli</button>' : '') + '</li>').join('');
     const annullata = d.stato === 'annullata';
     $('onss-stato').hidden = $('onss-annulla').hidden = $('onss-modifica-apri').hidden = annullata;
@@ -238,6 +242,8 @@
   }
 
   $('onss-persone').addEventListener('click', (e) => {
+    const msg = e.target.closest('[data-msg-op]');
+    if (msg) { A.apriMessaggi('onsite', aperto, msg.dataset.msgOp); return; }
     const b = e.target.closest('[data-togli]');
     if (!b) return;
     const nome = nomeOp(b.dataset.togli);

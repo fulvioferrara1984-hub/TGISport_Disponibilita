@@ -78,13 +78,14 @@
     return g.breve + ' ' + g.num + ' ' + g.meseBreve + ' · ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
 
-  // conversazione in HTML: i propri messaggi a destra, quelli dell'altra parte a sinistra con il nome
+  // conversazione in HTML: i propri messaggi a destra, quelli dell'altra parte a sinistra; il nome c'è sempre,
+  // tranne sui messaggi dell'operatore nella sua pagina (nella dashboard i supervisori sono più di uno)
   function htmlConversazione(messaggi, mio) {
     if (!lista(messaggi).length) return '<p class="msg-vuoto">Nessun messaggio.</p>';
     return '<ol class="msg-elenco">' + messaggi.map((m) => {
       const proprio = m.da === mio;
       return '<li class="msg ' + (proprio ? 'msg-mio' : 'msg-altro') + '">'
-        + (proprio ? '' : '<span class="msg-chi">' + DO.esc(m.autore) + '</span>')
+        + (proprio && mio === 'operatore' ? '' : '<span class="msg-chi">' + DO.esc(m.autore) + '</span>')
         + '<p>' + DO.esc(m.testo).replace(/\n/g, '<br>') + '</p>'
         + '<span class="msg-quando">' + quandoBreve(m.quando) + '</span></li>';
     }).join('') + '</ol>';
@@ -108,7 +109,7 @@
       + '<div class="msg-lista"></div>'
       + (chiuso ? '<p class="msg-chiuso">' + DO.esc(chiuso) + '</p>'
         : '<label class="campo msg-campo"><span>Messaggio</span><textarea rows="3" maxlength="' + TESTO_MAX + '"></textarea></label><small class="msg-resto" hidden></small>')
-      + (nota ? '<p class="msg-nota">' + nota + '</p>' : '')
+      + (nota == null ? '' : '<p class="msg-nota"' + (nota ? '' : ' hidden') + '>' + nota + '</p>')
       + '<div class="dialog-azioni"><button type="button" class="bottone" data-chiudi>Chiudi</button>'
       + (chiuso ? '' : '<button type="submit" class="primario" data-invia>Invia</button>') + '</div></form>';
     const elenco = d.querySelector('.msg-lista'), campo = chiuso ? null : d.querySelector('textarea');

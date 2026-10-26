@@ -302,6 +302,17 @@ dialog.dlg-messaggi { width: min(520px, calc(100vw - 32px)); }
 .msg-campo textarea { min-height: 76px; }
 .msg-resto, .msg-nota { margin: -4px 0 0; font-size: var(--t-12); color: var(--inchiostro-2); }
 .dlg-messaggi .dialog-azioni { margin-top: 4px; }
+.msg-nota .link { font-size: var(--t-12); }
+/* dashboard: segno 💬, messaggi nella finestra dell'evento e nella scheda on-site */
+.segno-msg { display: inline-block; margin-left: 6px; font-size: var(--t-14); line-height: 1; }
+.msg-evento { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--linea); }
+.msg-evento > b { font-size: var(--t-14); }
+.msg-evento .msg-elenco { max-height: 220px; overflow-y: auto; }
+.msg-evento > .bottone { align-self: flex-start; }
+.msg-evento .nota { margin: 0; }
+.msg-precedenti summary { cursor: pointer; font-size: var(--t-12); color: var(--inchiostro-2); }
+.msg-precedenti .msg-elenco { margin-top: 8px; }
+.msg-op { font-size: var(--t-14); white-space: nowrap; }
 .convocazione.richiesta-evento .conv-data { background: var(--accento-tenue); color: var(--accento); }
 .convocazione.richiesta-evento.coperta { opacity: .7; }
 .aggiungi-nota:hover { color: var(--accento); }

@@ -120,6 +120,8 @@ test('conversazione in HTML: testo protetto e a capo', () => {
   assert.ok(!op.includes('Marco &lt;Rossi&gt;'));   // il proprio nome no
   const sup = M.htmlConversazione(elenco, 'supervisore');
   assert.ok(sup.includes('Marco &lt;Rossi&gt;'));
+  // nella dashboard anche i messaggi dei supervisori hanno il nome: i supervisori sono più di uno
+  assert.ok(sup.includes('<span class="msg-chi">Giulia</span>'), sup);
   assert.equal((sup.match(/class="msg msg-mio"/g) || []).length, 1);
   assert.equal(M.htmlConversazione([], 'operatore'), '<p class="msg-vuoto">Nessun messaggio.</p>');
 });
@@ -153,6 +155,11 @@ test('pannello: aggiorna senza perdere la bozza', () => {
     M.apriConversazione({ titolo: 'Annullata', messaggi: [], mio: 'operatore', chiuso: 'Convocazione annullata: non si possono più mandare messaggi.', invia: async () => {} });
     assert.ok(!/<textarea/.test(document.getElementById('dlg-messaggi').innerHTML));
     assert.ok(document.getElementById('dlg-messaggi').innerHTML.includes('Convocazione annullata'));
+    // nota vuota: la riga c'è (nascosta) e si può riempire dopo, per esempio con il nome del supervisore
+    M.apriConversazione({ titolo: 'x', messaggi: [], mio: 'supervisore', chiuso: '', nota: '', invia: async () => {} });
+    assert.ok(document.getElementById('dlg-messaggi').innerHTML.includes('<p class="msg-nota" hidden></p>'));
+    M.apriConversazione({ titolo: 'x', messaggi: [], mio: 'operatore', chiuso: '', invia: async () => {} });
+    assert.ok(!document.getElementById('dlg-messaggi').innerHTML.includes('msg-nota'));
   } finally { delete global.document; }
 });
 

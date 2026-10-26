@@ -88,10 +88,13 @@
         + (x.titolo ? '<small>' + DO.esc(x.titolo) + '</small>' : '') + '</div>'
         + '<div class="ev-op"><small>' + (nomi.length ? DO.esc(nomi.join(', ')) : 'nessuno ha ancora accettato') + '</small></div>'
         + '<div class="ev-stato"><span class="stato-chip st-onsite">' + DO.onsite.etichettaPosti(x) + '</span>'
-        + (x.stato === 'chiusa' ? '<small>richiesta chiusa</small>' : '') + '</div>'
+        + (x.stato === 'chiusa' ? '<small>richiesta chiusa</small>' : '') + segnoMessaggio('onsite', x.id) + '</div>'
         + '<span class="ev-modifica" aria-hidden="true"></span></div>';
     }).join('');
   }
+
+  // 💬 su eventi e deployment con un messaggio di un operatore non ancora letto (voci di Aggiornamenti)
+  const segnoMessaggio = (tipo, id) => (A.segniMessaggi.has(tipo + '/' + id) ? '<span class="segno-msg" title="Messaggio da leggere">💬</span>' : '');
 
   function riga(e) {
     const st = STATI[e.stato] || STATI['da-assegnare'];
@@ -118,7 +121,7 @@
         + (e.note ? '<small class="ev-nota">' + DO.esc(e.note) + '</small>' : '') + '</div>'
       + '<div class="ev-op">' + selettore(e) + avvisiOperatore(e) + '</div>'
       + '<div class="ev-stato"><span class="stato-chip ' + st.cls + '" title="' + DO.esc(e.risposta || '') + '">' + st.nome + '</span>'
-        + (e.stato === 'rifiutato' && e.risposta ? '<small class="testo-errore">' + DO.esc(e.risposta) + '</small>' : '') + '</div>'
+        + (e.stato === 'rifiutato' && e.risposta ? '<small class="testo-errore">' + DO.esc(e.risposta) + '</small>' : '') + segnoMessaggio('evento', e.id) + '</div>'
       + '<button type="button" class="icona ev-modifica" data-modifica-evento="' + e.id + '" aria-label="' + (A.solaLettura ? 'Apri evento' : 'Modifica evento') + '">'
         + '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg></button>'
       + '</div>';
@@ -290,8 +293,27 @@
     $('evd-storico').innerHTML = (e.storico || []).length ? '<b>Storico</b>' + e.storico.slice().reverse().map((s) =>
       '<span>' + DO.quando(s.quando) + ' · ' + DO.esc(s.testo) + '</span>').join('') : '';
     disegnaRichiestaEvento();
+    disegnaMessaggiEvento();
     $('dlg-evento').showModal();
   }
+
+  // ---------- messaggi con l'operatore dell'evento ----------
+  function disegnaMessaggiEvento() {
+    const e = eventoAttuale(), box = $('evd-messaggi'), M = DO.messaggi;
+    const gruppi = e ? M.perEvento(A.messaggi, 'evento', e.id, e.operatoreId) : [];
+    const attuale = e && e.operatoreId ? (gruppi.find((g) => g.operatoreId === e.operatoreId) || { messaggi: [] }) : null;
+    const chiuso = e ? M.chiusoPerSupervisore(e) : '';
+    box.innerHTML = (attuale ? '<b>Messaggi con ' + DO.esc(nomeOp(e.operatoreId)) + '</b>' + M.htmlConversazione(attuale.messaggi, 'supervisore')
+      + (A.solaLettura ? '' : chiuso ? '<p class="nota">' + DO.esc(chiuso) + '</p>'
+        : '<button type="button" class="bottone" data-msg-scrivi>' + (attuale.messaggi.length ? 'Rispondi' : 'Scrivi all\'operatore') + '</button>') : '')
+      + gruppi.filter((g) => !e || g.operatoreId !== e.operatoreId).map((g) => '<details class="msg-precedenti"><summary>Conversazioni precedenti: '
+        + DO.esc(nomeOp(g.operatoreId)) + ' (' + g.messaggi.length + ')</summary>' + M.htmlConversazione(g.messaggi, 'supervisore') + '</details>').join('');
+    box.hidden = !box.innerHTML;
+  }
+  $('evd-messaggi').addEventListener('click', (ev) => {
+    const e = eventoAttuale();
+    if (e && ev.target.closest('[data-msg-scrivi]')) A.apriMessaggi('evento', e.id, e.operatoreId);
+  });
 
   // ---------- richiesta di disponibilità per questo evento ----------
   // Si può segnare confermata una convocazione in attesa di risposta, o una da inviare già iniziata o passata
@@ -654,7 +676,7 @@
   });
 
   A.registra({
-    aggiorna: () => { disegna(); if ($('dlg-evento').open && inModifica) disegnaRichiestaEvento(); },
+    aggiorna: () => { disegna(); if ($('dlg-evento').open && inModifica) { disegnaRichiestaEvento(); disegnaMessaggiEvento(); } },
     mostra: (nome) => { if (nome === 'convocazioni') disegna(); },
     // arrivando da un altro punto (calendario, Aggiornamenti) si toglie ogni filtro: l'evento cercato deve vedersi
     vaiA: (data) => { if (data) inizio = DO.martedi(data); $('ev-filtro-stato').value = ''; $('ev-filtro-comp').value = ''; disegna(); },

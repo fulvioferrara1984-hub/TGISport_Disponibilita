@@ -53,7 +53,8 @@
       return '<div class="cal-giorno' + (delMese ? '' : ' fuori') + (data === oggi ? ' oggi' : '') + '">'
         + '<span class="cal-num">' + Number(data.slice(8)) + '</span>'
         + visibili.map((v) => '<button type="button" class="cal-voce cal-' + v.stato + '" style="--comp: ' + v.colore + '" data-tipo="' + v.tipo + '" data-id="' + DO.esc(v.id)
-          + '" data-giorno="' + data + '" aria-label="' + DO.esc(giorno + ', ' + v.testo + ', ' + (NOMI_CAL[v.stato] || v.stato)) + '">' + DO.esc(v.testo) + '</button>').join('')
+          + '" data-giorno="' + data + '" aria-label="' + DO.esc(giorno + ', ' + v.testo + ', ' + (NOMI_CAL[v.stato] || v.stato) + (A.segniMessaggi.has(v.tipo + '/' + v.id) ? ', messaggio da leggere' : '')) + '">'
+          + (A.segniMessaggi.has(v.tipo + '/' + v.id) ? '💬 ' : '') + DO.esc(v.testo) + '</button>').join('')
         + (altre ? '<button type="button" class="cal-altri" data-giorno="' + data + '" aria-label="' + DO.esc(giorno + ': altri ' + altre + ' eventi, apri la settimana') + '">+' + altre + ' altri</button>' : '') + '</div>';
     }).join('')).join('');
     // dopo un aggiornamento in tempo reale il riquadro dei dettagli resta sulla stessa voce, se c'è ancora
