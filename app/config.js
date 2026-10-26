@@ -11,7 +11,8 @@ window.DO_CONFIG = {
     messagingSenderId: '761667025796',
     appId: '1:761667025796:web:c2e3c06389fec6a63f7bd1',
   },
-  // email dei supervisori: le stesse di firebase/firestore.rules (aggiungerne una va fatto in entrambi i posti)
+  // email dei supervisori: le stesse delle regole di Firestore, nel file unico UnionePiattaforme/firebase/firestore.rules
+  // (aggiungerne una va fatto in entrambi i posti)
   SUPERVISORI: ['fferrara@tgisport.com', 'spedatella@tgisport.com', 'fgennaro@tgisport.com', 'ssolera@tgisport.com'],
   // app web di Google Apps Script che spedisce le email (backend/Codice.gs)
   EMAIL_URL: 'https://script.google.com/macros/s/AKfycbxs_SZqLk8OiIkxqxgXOkK7MVrNMDEBHRTXeSszl-4UiwUYG2lsVupwlUcwP4fsPyM-/exec',

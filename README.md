@@ -42,11 +42,19 @@ Pagine su GitHub Pages ──► Firebase (Firestore + Authentication)   dati e 
           └──────────────► Google Apps Script                       solo l'invio delle email, in sottofondo
 ```
 
-- **Firestore** contiene operatori, disponibilità, invii e richieste. Le **regole di sicurezza** ([`firebase/firestore.rules`](firebase/firestore.rules)) decidono chi vede cosa: un operatore legge e scrive solo i propri dati, i supervisori tutto.
+- **Firestore** contiene operatori, disponibilità, invii e richieste. Le **regole di sicurezza** (nel file unico della piattaforma TGI Sport, vedi [*Regole di Firestore*](#regole-di-firestore)) decidono chi vede cosa: un operatore legge e scrive solo i propri dati, i supervisori tutto.
 - **Authentication**: ogni supervisore ha il proprio account (email TGI Sport + password, indirizzo confermato via email); ogni codice operatore è un account a sé (nella console si vedono solo impronte, non i codici).
 - **Apps Script** ([`backend/Codice.gs`](backend/Codice.gs)) spedisce le email ai supervisori e agli operatori. Nessuno lo aspetta: la pagina risponde subito e l'email parte dopo. Ogni mattina manda anche i **promemoria**: per farlo legge Firestore da solo, in sola lettura, con l'account Google che possiede lo script (Editor del progetto Firebase).
 
 Nel repository pubblico non ci sono dati né password. La configurazione in `app/config.js` non è segreta: la protezione sta nelle regole.
+
+## Regole di Firestore
+
+Le regole di sicurezza del progetto `tgi-availability` sono **una sola**, condivisa con la piattaforma TGI Sport che usa lo stesso Firebase, e stanno nel suo repository: `~/Documents/Claude/Code/UnionePiattaforme/firebase/firestore.rules` (repository privato `TGISport_Piattaforma`, stesso percorso). Contengono anche tutte le regole di Disponibilità Ops, con le prove di non regressione in `test/regole/disponibilita.test.ts`.
+
+- Una regola nuova o cambiata di Disponibilità Ops, o un supervisore in più, **si scrive in quel file** con la sua prova e **si pubblica da lì**: Firebase → Firestore Database → Regole → incolla quel file → **Pubblica**, oppure, dalla cartella della piattaforma, `npx firebase-tools deploy --only firestore:rules --config firebase/firebase.json --project tgi-availability`.
+- [`firebase/firestore.rules`](firebase/firestore.rules) di questo repository contiene solo un rimando: **non va incollato** (non si compila). Il 2026-10-26 le regole di questo repository, pubblicate al posto di quelle uniche, hanno tolto i permessi a tutta la piattaforma per alcune ore.
+- Gli emulatori in locale ([`firebase/firebase.json`](firebase/firebase.json)) leggono il file unico attraverso il collegamento `firebase/regole-uniche.rules`, che punta alla cartella `UnionePiattaforme` accanto a questa.
 
 ## Costi
 
@@ -62,7 +70,7 @@ Con `FIREBASE: null` in `app/config.js` il sito funziona con dati di prova salva
 
 1. Vai su [console.firebase.google.com](https://console.firebase.google.com) → **Crea un progetto** (es. *tgi-disponibilita*). Google Analytics non serve.
 2. **Build → Firestore Database → Crea database** → località **europe-west8 (Milano)** → *modalità di produzione*.
-3. **Firestore → Regole**: sostituisci tutto il testo con il contenuto di [`firebase/firestore.rules`](firebase/firestore.rules) e **Pubblica**. Le email dei supervisori sono già dentro.
+3. **Firestore → Regole**: sostituisci tutto il testo con il file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)) e **Pubblica**. Le email dei supervisori sono già dentro.
 4. **Build → Authentication → Inizia → Email/password** → abilita (solo la prima opzione) → Salva.
 5. **Authentication → Impostazioni → Domini autorizzati**: aggiungi `fulvioferrara1984-hub.github.io`.
 6. **Impostazioni progetto (⚙️) → Le tue app → `</>` (Web)**: registra l'app (*Disponibilità*, senza Hosting) e copia l'oggetto `firebaseConfig`.
@@ -84,7 +92,7 @@ window.DO_CONFIG = {
 
 ### Aggiornamenti successivi
 
-Quando cambiano [`firebase/firestore.rules`](firebase/firestore.rules) o [`backend/Codice.gs`](backend/Codice.gs), l'ordine è **sito → regole → script**:
+Quando cambiano le regole di Firestore (nel file unico, vedi [*Regole di Firestore*](#regole-di-firestore)) o [`backend/Codice.gs`](backend/Codice.gs), l'ordine è **sito → regole → script**:
 
 1. **sito** (push su `main`): la pagina nuova funziona anche con le regole vecchie;
 2. **regole**, quando il sito nuovo è online (GitHub Pages lo pubblica in un paio di minuti; i telefoni possono tenere la pagina vecchia fino a 10 minuti): pubblicarle prima disconnetterebbe chi ha ancora la pagina vecchia;
@@ -94,7 +102,7 @@ Dopo **ogni** pubblicazione del sito, **ricaricare la dashboard** su ogni comput
 
 Come pubblicarli:
 
-- **regole**: Firebase → Firestore Database → Regole → incolla il file → **Pubblica**;
+- **regole**: dal file unico della piattaforma, come in [*Regole di Firestore*](#regole-di-firestore) (mai il file di questo repository);
 - **script**: incolla il codice nell'editor di Apps Script, salva, poi **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione** (l'URL resta lo stesso).
 
 ### 3. Script per le email
@@ -124,7 +132,7 @@ Per sospenderli basta togliere la casella; per fermare del tutto l'invio giornal
 Ordine come per ogni aggiornamento, **sito → regole → script**:
 
 1. **Sito**: finché le regole nuove non sono pubblicate la pagina operatori non mostra le richieste on-site (senza errori) e la dashboard avvisa *On-site non disponibile: pubblica le nuove regole di Firestore*.
-2. **Regole**: incolla [`firebase/firestore.rules`](firebase/firestore.rules) in Firebase → Firestore Database → Regole → **Pubblica**. Le regole controllano posti, ruolo on-site, richiesta aperta e primo giorno: due operatori non possono prendere lo stesso ultimo posto.
+2. **Regole**: pubblica il file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)). Le regole controllano posti, ruolo on-site, richiesta aperta e primo giorno: due operatori non possono prendere lo stesso ultimo posto.
 3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste on-site non partono e la dashboard lo segnala dopo l'invio.
 4. **Dashboard**: in **Operatori → Modifica** imposta *On-site: TL / OP* per chi può andare in trasferta, e controlla la **Tariffa on-site** in Impostazioni.
 
@@ -155,7 +163,7 @@ Rieseguire *attivaPromemoria* non serve; se lo si fa, gli attivatori già presen
 Ordine **sito → regole**, lo script delle email non cambia:
 
 1. **Sito**: finché le regole nuove non sono pubblicate i colleghi non riescono a entrare e la dashboard avvisa *Accessi in sola visualizzazione non disponibili: pubblica le nuove regole di Firestore*.
-2. **Regole**: incolla [`firebase/firestore.rules`](firebase/firestore.rules) in Firebase → Firestore Database → Regole → **Pubblica**.
+2. **Regole**: pubblica il file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)).
 3. **Dashboard**: ricaricala su ogni computer dei supervisori, poi aggiungi i colleghi da **Impostazioni → Accessi in sola visualizzazione** e manda a ciascuno l'invito con **Invia mail**.
 
 ### Richiesta di disponibilità per evento
@@ -163,7 +171,7 @@ Ordine **sito → regole**, lo script delle email non cambia:
 Ordine come per ogni aggiornamento, **sito → regole → script**:
 
 1. **Sito**: finché le regole nuove non sono pubblicate la pagina operatori non mostra le richieste per evento (senza errori), la dashboard avvisa *Richieste per evento non disponibili: pubblica le nuove regole di Firestore* e il tasto *Chiedi disponibilità* risponde *Pubblica le nuove regole di Firestore (vedi README).*
-2. **Regole**: incolla [`firebase/firestore.rules`](firebase/firestore.rules) in Firebase → Firestore Database → Regole → **Pubblica**. Le regole lasciano a ciascun operatore solo la propria risposta, con la richiesta aperta e fino al giorno dell'evento.
+2. **Regole**: pubblica il file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)). Le regole lasciano a ciascun operatore solo la propria risposta, con la richiesta aperta e fino al giorno dell'evento.
 3. **Indice** (una volta): Firebase → Firestore Database → **Indici** → *Composito* → **Crea indice**: raccolta `richiesteEvento`, campi `destinatari` *Array contains* ed `evento.data` *Crescente*, ambito *Raccolta* → **Crea** (pronto in pochi minuti). Senza l'indice la pagina operatori funziona lo stesso, ma legge anche le richieste passate.
 4. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste per evento non partono e la dashboard lo segnala dopo l'invio.
 5. **Dashboard**: ricaricala su ogni computer dei supervisori.
@@ -180,7 +188,7 @@ Ordine **sito → script**, nessuna regola di Firestore da cambiare:
 
 Ordine **regole → sito → script**:
 
-1. **Regole**: incolla [`firebase/firestore.rules`](firebase/firestore.rules) in Firebase → Firestore Database → Regole → **Pubblica** (nuova raccolta `messaggi`: ogni operatore legge solo i suoi messaggi e scrive solo sulle sue convocazioni inviate e sui deployment mandati a lui). Prima del sito: senza le regole nuove i messaggi non si leggono né si scrivono.
+1. **Regole**: pubblica il file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)) (nuova raccolta `messaggi`: ogni operatore legge solo i suoi messaggi e scrive solo sulle sue convocazioni inviate e sui deployment mandati a lui). Prima del sito: senza le regole nuove i messaggi non si leggono né si scrivono.
 2. **Sito** (versione 35), poi ricarica la dashboard su ogni computer dei supervisori.
 3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, i messaggi funzionano ma le email (ai supervisori per i messaggi degli operatori, all'operatore per le risposte) non partono.
 4. **Prova**: un messaggio da un operatore di prova e la risposta di un supervisore, con le due email.
@@ -241,7 +249,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 - **Colleghi in sola visualizzazione**: **Impostazioni → Accessi in sola visualizzazione** → email → **Aggiungi**, poi **Invia mail** (apre Outlook con il link e le istruzioni). Il collega entra dalla dashboard con *Crea account* e quella email, conferma l'indirizzo e poi entra con la sua password: vede solo Convocazioni, Riepilogo (con gli importi e l'Excel) e Operatori, senza tasti di modifica. **Togli** gli toglie l'accesso subito; se ha la pagina aperta, esce appena la pagina riceve un aggiornamento dei dati (al più tardi quando la ricarica).
 - **Messaggi**: l'operatore tocca **💬 Scrivi ai supervisori** su una convocazione (anche prima di confermare) o su un deployment on-site e scrive (massimo 500 caratteri); un messaggio non conferma e non rinuncia. I supervisori lo trovano in **Aggiornamenti** (*Rispondi*), per email e con 💬 sull'evento in Convocazioni, nel calendario e sugli on-site, finché qualcuno risponde o lo segna come letto. Si risponde anche dalla finestra dell'evento (*Messaggi con …*) e dalla scheda on-site (💬 accanto a ogni persona); il supervisore può scrivere per primo dopo l'invio della convocazione. Al primo messaggio la dashboard chiede il nome del supervisore (lo vedono gli operatori) e lo ricorda sul computer. Su convocazioni e deployment annullati la conversazione si legge soltanto; chi è in sola visualizzazione legge le conversazioni ma non scrive.
 - **Password dimenticata**: nella schermata di accesso, scrivere l'email e premere *Password dimenticata?*: arriva un'email per sceglierne una nuova.
-- **Aggiungere o togliere un supervisore**: modificare l'elenco delle email sia in [`firebase/firestore.rules`](firebase/firestore.rules) (poi ripubblicare le regole in console) sia in `SUPERVISORI` di `app/config.js`. Per togliere l'accesso basta toglierlo dalle regole; l'account si può eliminare da Authentication → Utenti.
+- **Aggiungere o togliere un supervisore**: modificare l'elenco delle email sia nel file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore); poi si ripubblica da lì) sia in `SUPERVISORI` di `app/config.js`. Per togliere l'accesso basta toglierlo dalle regole; l'account si può eliminare da Authentication → Utenti.
 
 ## Sicurezza
 
@@ -256,7 +264,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 
 ## Prove in locale
 
-Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --config firebase/firebase.json --project demo-tgi` e `EMULATORI: true` in `app/config.js`.
+Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --config firebase/firebase.json --project demo-tgi` e `EMULATORI: true` in `app/config.js`. Le regole dell'emulatore sono quelle del file unico (collegamento `firebase/regole-uniche.rules` verso la cartella `UnionePiattaforme` accanto a questa).
 
 ## File
 
@@ -277,6 +285,6 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/config.js` | collegamento a Firebase e allo script delle email |
 | `app/stile.css`, `Logo/`, favicon | identità TGI Sport: colori del logo, Montserrat con cinque grandezze (12, 14, 16, 20, 28 px) uguali su computer e telefono |
 | `app/font/` | carattere Montserrat incluso nel sito (nessuna richiesta a Google Fonts), licenza in `OFL.txt` |
-| `firebase/` | regole di sicurezza di Firestore e configurazione dell'emulatore |
+| `firebase/` | configurazione dell'emulatore; `firestore.rules` è solo un rimando al file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)) |
 | `backend/` | script Google Apps Script per le email e i promemoria |
 | `test/` | prove automatiche: `node --test test/*.test.js` |

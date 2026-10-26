@@ -1,5 +1,6 @@
 /* Disponibilità Ops — archivio dati su Firebase: Firestore per i dati, Authentication per gli accessi.
- * Chi può leggere e scrivere cosa lo decidono le regole in firebase/firestore.rules. */
+ * Chi può leggere e scrivere cosa lo decidono le regole di Firestore, nel file unico della piattaforma TGI Sport
+ * (UnionePiattaforme/firebase/firestore.rules). */
 (function (DO) {
   'use strict';
 
