@@ -31,7 +31,7 @@ function doPost(e) {
     const r = JSON.parse(e.postData.contents);
     const azioni = {
       notificaInvio, emailRichiesta, emailConvocazioni, notificaRisposta, emailOnsite, notificaOnsite,
-      emailRichiestaEvento, notificaRispostaEvento,
+      emailRichiestaEvento, notificaRispostaEvento, notificaMessaggio, emailMessaggio,
       inviaBackupOra: soloSupervisori(() => {
         const r = giroBackup(new Date(), { forza: true });
         return Object.assign({ destinatari: r.destinatari, eventi: r.eventi }, r.ripetuto ? { ripetuto: true, quando: r.quando } : {});
@@ -205,6 +205,69 @@ function notificaRisposta(r) {
       + esc(nome) + '</b>' + (ev.data ? ' (' + esc(giornoLungo(String(ev.data))) + ')' : '') + '.</p>'
       + (r.motivo ? '<p style="padding:10px 14px;background:#f3f4f6;border-radius:8px">' + esc(String(r.motivo).slice(0, 200)) + '</p>' : '')
       + (imp.urlAdmin ? '<p><a href="' + esc(imp.urlAdmin.replace(/#.*$/, '')) + '#convocazioni" style="color:#1740f0">Trova un sostituto</a></p>' : '') + '</div>',
+  });
+  return { inviata: true };
+}
+
+// ---------------------------------------------------------------- messaggi tra operatori e supervisori
+
+// Di cosa parla un messaggio: l'evento (o il turno remoto) con il giorno, oppure il deployment on-site con il periodo.
+function soggettoMessaggio(tipo, rif, idToken) {
+  const letto = firestore((tipo === 'onsite' ? 'onsite/' : 'eventi/') + encodeURIComponent(String(rif || '')), idToken);
+  if (letto.codice !== 200) return { nome: 'una convocazione', quando: '' };
+  const d = daFirestore(letto.dati);
+  if (tipo === 'onsite') return { nome: 'On-site ' + (d.luogo || '') + (d.titolo ? ' · ' + d.titolo : ''), quando: d.da && d.a ? periodoLeggibile(String(d.da), String(d.a)) : '' };
+  return { nome: eTurno(d) ? 'Turno ' + TURNI_REMOTI[d.tipo] : d.titolo || '', quando: d.data ? giornoLungo(String(d.data)) : '' };
+}
+
+// il messaggio si legge da Firestore con il gettone di chi chiama: l'email parla solo di messaggi veri
+function leggiMessaggio(r) {
+  const letto = firestore('messaggi/' + encodeURIComponent(String(r.id || '')), r.idToken);
+  if (letto.codice !== 200) throw new Error('Accesso non consentito.');
+  return daFirestore(letto.dati);
+}
+
+const testoMessaggio = (t) => esc(String(t || '').slice(0, 500)).replace(/\n/g, '<br>');
+const quandoSoggetto = (s) => (s.quando ? ' (' + esc(s.quando) + ')' : '');
+
+// Un operatore ha scritto ai supervisori: lo sanno anche per email.
+function notificaMessaggio(r) {
+  const op = verificaOperatore(r.idToken);
+  const m = leggiMessaggio(r);
+  if (m.da !== 'operatore' || m.operatoreId !== op.id) throw new Error('Accesso non consentito.');
+  const imp = leggiImpostazioni();
+  if (!imp.emailAttive || !imp.emailSupervisori) return { inviata: false };
+  const s = soggettoMessaggio(m.tipo, m.rif, r.idToken);
+  const link = /^https:\/\//.test(imp.urlAdmin) ? imp.urlAdmin.replace(/#.*$/, '') + '#aggiornamenti' : '';
+  MailApp.sendEmail({
+    to: imp.emailSupervisori,
+    name: CONFIG.MITTENTE,
+    subject: 'Messaggio da ' + op.nome + ' · ' + s.nome,
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p><b>' + esc(op.nome) + '</b> ha scritto su <b>'
+      + esc(s.nome) + '</b>' + quandoSoggetto(s) + ':</p>'
+      + '<p style="padding:10px 14px;background:#f3f4f6;border-radius:8px">' + testoMessaggio(m.testo) + '</p>'
+      + (link ? '<p><a href="' + esc(link) + '" style="color:#1740f0">Rispondi sulla piattaforma</a></p>' : '') + '</div>',
+  });
+  return { inviata: true };
+}
+
+// Un supervisore ha scritto a un operatore: email all'indirizzo che la dashboard conosce.
+function emailMessaggio(r) {
+  verificaSupervisore(r.idToken);
+  const m = leggiMessaggio(r);
+  if (m.da !== 'supervisore') throw new Error('Accesso non consentito.');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(r.email || ''))) return { inviata: false };
+  const s = soggettoMessaggio(m.tipo, m.rif, r.idToken);
+  const sito = /^https:\/\//.test(String(r.urlSito || '')) ? String(r.urlSito) : '';
+  MailApp.sendEmail({
+    to: r.email,
+    name: CONFIG.MITTENTE,
+    subject: 'Nuovo messaggio dai supervisori · ' + s.nome,
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px;color:#15171c;line-height:1.5"><p>Ciao ' + esc(String(r.nome || '').split(' ')[0]) + ',</p>'
+      + '<p><b>' + esc(m.autore || 'Un supervisore') + '</b> ti ha scritto su <b>' + esc(s.nome) + '</b>' + quandoSoggetto(s) + ':</p>'
+      + '<p style="padding:10px 14px;background:#f3f4f6;border-radius:8px">' + testoMessaggio(m.testo) + '</p>'
+      + (sito ? '<p><a href="' + esc(sito) + '" style="display:inline-block;padding:10px 18px;background:#1740f0;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">Rispondi sulla piattaforma</a></p>' : '')
+      + '<p style="color:#8b919c;font-size:12px">Per entrare usa il tuo codice personale.</p></div>',
   });
   return { inviata: true };
 }
