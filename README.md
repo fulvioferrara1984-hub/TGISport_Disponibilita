@@ -54,7 +54,7 @@ Le regole di sicurezza del progetto `tgi-availability` sono **una sola**, condiv
 
 - Una regola nuova o cambiata di Disponibilità Ops, o un supervisore in più, **si scrive in quel file** con la sua prova e **si pubblica da lì**: Firebase → Firestore Database → Regole → incolla quel file → **Pubblica**, oppure, dalla cartella della piattaforma, `npx firebase-tools deploy --only firestore:rules --config firebase/firebase.json --project tgi-availability`.
 - [`firebase/firestore.rules`](firebase/firestore.rules) di questo repository contiene solo un rimando: **non va incollato** (non si compila). Il 2026-10-26 le regole di questo repository, pubblicate al posto di quelle uniche, hanno tolto i permessi a tutta la piattaforma per alcune ore.
-- Gli emulatori in locale ([`firebase/firebase.json`](firebase/firebase.json)) leggono il file unico attraverso il collegamento `firebase/regole-uniche.rules`, che punta alla cartella `UnionePiattaforme` accanto a questa.
+- Gli emulatori in locale ([`firebase/firebase.json`](firebase/firebase.json)) leggono il file unico attraverso il collegamento `firebase/regole-uniche.rules`, che punta alla cartella `UnionePiattaforme` accanto a questa. Il collegamento non è nel repository (GitHub Pages non saprebbe dove portarlo): su un computer nuovo si crea una volta con `ln -s ../../UnionePiattaforme/firebase/firestore.rules firebase/regole-uniche.rules`.
 
 ## Costi
 

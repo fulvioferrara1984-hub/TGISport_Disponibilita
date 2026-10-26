@@ -16,4 +16,6 @@
 // sostituisce niente.
 //
 // Gli emulatori locali (firebase/firebase.json) leggono il file unico attraverso il collegamento
-// firebase/regole-uniche.rules (la CLI di Firebase non accetta percorsi fuori da questa cartella).
+// firebase/regole-uniche.rules (la CLI di Firebase non accetta percorsi fuori da questa cartella). Il collegamento
+// non è nel repository; su un computer nuovo:
+//   ln -s ../../UnionePiattaforme/firebase/firestore.rules firebase/regole-uniche.rules

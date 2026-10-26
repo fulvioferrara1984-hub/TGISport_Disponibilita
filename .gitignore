@@ -14,3 +14,6 @@
 
 # File di sistema macOS
 **/.DS_Store
+
+# collegamento locale al file unico delle regole (UnionePiattaforme), usato dagli emulatori: non va su GitHub Pages
+firebase/regole-uniche.rules
