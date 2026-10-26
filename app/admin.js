@@ -499,10 +499,10 @@
       + (mancano.length && !x.scaduta ? '<p class="nota"><b>Mancano ancora:</b> ' + mancano.map((o) => DO.esc(o.nome) + ' <span class="giorni-mancanti">(' + o.mancanti + ')</span>').join(', ') + '</p>'
         : !x.scaduta ? '<p class="nota st-D-testo">Hanno risposto tutti.</p>' : '')
       + '<div class="richiesta-admin-azioni">'
-      + '<button type="button" class="bottone" data-ric-vedi="' + x.id + '">Vedi nella griglia</button>'
-      + (mancano.length && !x.scaduta ? '<button type="button" class="bottone" data-ric-sollecita="' + x.id + '">Sollecita chi manca</button>' : '')
-      + '<button type="button" class="bottone" data-ric-whatsapp="' + x.id + '">Copia messaggio WhatsApp</button>'
-      + '<button type="button" class="bottone pericolo" data-ric-chiudi="' + x.id + '">Chiudi</button></div></li>';
+      + '<button type="button" class="bottone" data-ric-vedi="' + DO.esc(x.id) + '">Vedi nella griglia</button>'
+      + (mancano.length && !x.scaduta ? '<button type="button" class="bottone" data-ric-sollecita="' + DO.esc(x.id) + '">Sollecita chi manca</button>' : '')
+      + '<button type="button" class="bottone" data-ric-whatsapp="' + DO.esc(x.id) + '">Copia messaggio WhatsApp</button>'
+      + '<button type="button" class="bottone pericolo" data-ric-chiudi="' + DO.esc(x.id) + '">Chiudi</button></div></li>';
   }
 
   function disegnaSintesiRichieste() {
@@ -552,8 +552,8 @@
       return '<li class="feed-voce' + (x.letto ? '' : ' non-letto') + '"><span class="iniziali">' + DO.esc(DO.iniziali(x.nome)) + '</span>'
         + '<div><p class="feed-titolo"><b>' + DO.esc(x.nome) + '</b> ' + (n ? 'ha aggiornato ' + n + (n === 1 ? ' giorno' : ' giorni') : 'ha confermato le disponibilità senza modifiche') + '</p>'
         + '<span class="feed-quando">' + DO.quando(x.quando) + '</span>' + (n ? '<ul class="modifiche">' + modifiche + '</ul>' : '') + '</div>'
-        + '<div class="feed-azioni">' + (n ? '<button type="button" class="bottone" data-vedi="' + x.id + '">Vedi nella griglia</button>' : '')
-        + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
+        + '<div class="feed-azioni">' + (n ? '<button type="button" class="bottone" data-vedi="' + DO.esc(x.id) + '">Vedi nella griglia</button>' : '')
+        + (x.letto ? '' : '<button type="button" class="link" data-letto="' + DO.esc(x.id) + '">Segna come letto</button>') + '</div></li>';
     }).join('');
   }
 
@@ -567,8 +567,8 @@
       + DO.esc(nomeVoce(ev)) + (g ? ' · ' + g.breve + ' ' + g.num + ' ' + g.meseBreve : '') + '</p>'
       + '<span class="feed-quando">' + DO.quando(x.quando) + '</span>'
       + (ev.motivo ? '<ul class="modifiche"><li>' + DO.esc(ev.motivo) + '</li></ul>' : '') + '</div>'
-      + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-evento="' + DO.esc(ev.data || '') + '" data-id="' + x.id + '">Vedi convocazione</button>'
-      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
+      + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-evento="' + DO.esc(ev.data || '') + '" data-id="' + DO.esc(x.id) + '">Vedi convocazione</button>'
+      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + DO.esc(x.id) + '">Segna come letto</button>') + '</div></li>';
   }
 
   function vocePerOnsite(x) {
@@ -578,8 +578,8 @@
       + '<div><p class="feed-titolo"><b>' + DO.esc(x.nome) + '</b> ' + (si ? 'ha accettato l\'on-site' : '<span class="testo-errore">non può per l\'on-site</span>')
       + ' · ' + DO.esc(ev.luogo || '') + periodo + (si && ev.ruolo ? ' (' + DO.esc(ev.ruolo) + ')' : '') + '</p>'
       + '<span class="feed-quando">' + DO.quando(x.quando) + '</span></div>'
-      + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-onsite="' + DO.esc(ev.id || '') + '" data-id="' + x.id + '">Vedi deployment</button>'
-      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
+      + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-onsite="' + DO.esc(ev.id || '') + '" data-id="' + DO.esc(x.id) + '">Vedi deployment</button>'
+      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + DO.esc(x.id) + '">Segna come letto</button>') + '</div></li>';
   }
 
   function vocePerRispostaEvento(x) {
@@ -588,8 +588,8 @@
       + '<div><p class="feed-titolo"><b>' + DO.esc(x.nome) + '</b> ' + (si ? 'è disponibile' : '<span class="testo-errore">non è disponibile</span>') + ' per '
       + DO.esc(nomeVoce(ev)) + (g ? ' (' + g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ')' : '') + '</p>'
       + '<span class="feed-quando">' + DO.quando(x.quando) + '</span></div>'
-      + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-evento="' + DO.esc(ev.data || '') + '" data-id="' + x.id + '">Vedi evento</button>'
-      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
+      + '<div class="feed-azioni"><button type="button" class="bottone" data-vedi-evento="' + DO.esc(ev.data || '') + '" data-id="' + DO.esc(x.id) + '">Vedi evento</button>'
+      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + DO.esc(x.id) + '">Segna come letto</button>') + '</div></li>';
   }
 
   function vocePerMessaggio(x) {
@@ -598,8 +598,8 @@
       + '<div><p class="feed-titolo"><b>' + DO.esc(x.nome) + '</b> ha scritto · ' + DO.esc(ev.titolo || '') + (g ? ' · ' + g.breve + ' ' + g.num + ' ' + g.meseBreve : '') + '</p>'
       + '<span class="feed-quando">' + DO.quando(x.quando) + '</span>'
       + (ev.testo ? '<ul class="modifiche"><li>' + DO.esc(ev.testo).replace(/\n/g, '<br>') + '</li></ul>' : '') + '</div>'
-      + '<div class="feed-azioni"><button type="button" class="bottone" data-rispondi-msg="' + x.id + '">Rispondi</button>'
-      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + x.id + '">Segna come letto</button>') + '</div></li>';
+      + '<div class="feed-azioni"><button type="button" class="bottone" data-rispondi-msg="' + DO.esc(x.id) + '">Rispondi</button>'
+      + (x.letto ? '' : '<button type="button" class="link" data-letto="' + DO.esc(x.id) + '">Segna come letto</button>') + '</div></li>';
   }
 
   // ---------- messaggi con gli operatori ----------
@@ -634,12 +634,10 @@
         if (!autore) throw new Error('Serve il tuo nome per mandare il messaggio.');
         const r = await DO.dati.messaggioSupervisore({ tipo, rif, operatoreId, testo, autore }, { nome: op.nome, email: op.email }, linkSito(),
           M.inviiDellaConversazione(feed, tipo, rif, operatoreId));
-        if (r.senzaEmail) DO.avviso('Messaggio salvato. ' + op.nome + ' non ha un\'email: lo vedrà sulla piattaforma.', 'ok', 7000);
-        else {
-          DO.avviso('Messaggio inviato a ' + op.nome + '.', 'ok');
-          r.inviata.catch((e) => DO.avviso('Messaggio salvato, ma l\'email a ' + op.nome + ' non è partita: ' + e.message, 'errore', 8000));
-        }
         aggiornaNota();
+        if (r.senzaEmail) return 'Messaggio salvato. ' + op.nome + ' non ha un\'email: lo vedrà sulla piattaforma.';
+        r.inviata.catch((e) => DO.avviso('Messaggio salvato, ma l\'email a ' + op.nome + ' non è partita: ' + e.message, 'errore', 8000));
+        return 'Messaggio inviato a ' + op.nome + '.';
       },
     });
     conversazione = { tipo, rif, operatoreId, pannello };

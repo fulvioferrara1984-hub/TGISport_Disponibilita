@@ -184,3 +184,30 @@ test('invio: un solo messaggio con tocchi ripetuti', async () => {
     assert.equal(chiamate, 1);
   } finally { delete global.document; }
 });
+
+test('pannello: esito dell\'invio dentro il pannello (sul telefono gli avvisi della pagina restano sotto)', async () => {
+  const { el } = domFinto();
+  try {
+    let risposta = Promise.reject(new Error('La convocazione è cambiata: ricarica la pagina.'));
+    risposta.catch(() => {});
+    M.apriConversazione({ titolo: 'x', messaggi: [], mio: 'operatore', chiuso: '', invia: () => risposta });
+    el('textarea').value = 'ciao';
+    await el('form').onsubmit({ preventDefault() {} });
+    assert.equal(el('.msg-esito').textContent, 'La convocazione è cambiata: ricarica la pagina.');
+    assert.equal(el('.msg-esito').hidden, false);
+    assert.match(el('.msg-esito').className, /errore/);
+    assert.equal(el('textarea').value, 'ciao');
+    risposta = Promise.resolve('Messaggio inviato ai supervisori.');
+    await el('form').onsubmit({ preventDefault() {} });
+    assert.equal(el('.msg-esito').textContent, 'Messaggio inviato ai supervisori.');
+    assert.match(el('.msg-esito').className, /ok/);
+    assert.equal(el('textarea').value, '');
+  } finally { delete global.document; }
+});
+
+test('messaggi della pagina operatori: quelli mandati da qui non si perdono con i dati arrivati dopo', () => {
+  const server = [msg({ id: 'a' }), msg({ id: 'b', da: 'supervisore' })];
+  const locali = [msg({ id: 'b', da: 'supervisore' }), msg({ id: 'c', testo: 'mandato durante il caricamento' })];
+  assert.deepEqual(M.unisci(server, locali).map((m) => m.id), ['a', 'b', 'c']);
+  assert.deepEqual(M.unisci(server, []).map((m) => m.id), ['a', 'b']);
+});

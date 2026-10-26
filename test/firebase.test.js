@@ -197,3 +197,61 @@ test('dashboard: ascolta anche i messaggi della stagione', async () => {
   assert.ok(collega.ascolti.some((a) => a.rif.path === 'messaggi'));
   assert.ok(!collega.ascolti.some((a) => a.rif.path === 'invii'));
 });
+
+// operatore collegato (account del codice) con un Firebase finto in cui si sceglie come va la scrittura
+function archivioOperatore(commit, operatoreValido = () => true) {
+  const scritte = [], uscite = [];
+  let uscito = false;
+  const { FB } = archivioNuovo({ uid: 'u1', email: 'demo0001@' + DO_DOMINIO, emailVerified: true, getIdToken: async () => 'g' }, {
+    doc: (a, ...p) => (p.length ? { path: p.join('/'), id: p[p.length - 1] } : { path: a.path + '/nuovo-' + a.path, id: 'nuovo-' + a.path }),
+    getDoc: async (rif) => {
+      if (!operatoreValido()) { const e = new Error('negato'); e.code = 'permission-denied'; throw e; }
+      if (rif.path === 'utenti/u1') return { exists: () => true, data: () => ({ operatoreId: 'op1' }) };
+      return { exists: () => true, data: () => ({ nome: 'Marco Rossi', attivo: true }) };
+    },
+    writeBatch: () => ({ set: (r, d) => scritte.push(['set', r.path, d]), update: (r, d) => scritte.push(['update', r.path, d]), commit }),
+    signOut: async () => { uscito = true; },
+  });
+  DO.avviaPagina('operatore', (m) => uscite.push(m));
+  return { FB, scritte, uscite, uscito: () => uscito };
+}
+const DO_DOMINIO = 'operatori.tgi-disponibilita.example.com';
+const evento = { id: 'e1', tipo: 'partita', titolo: 'Milan-Inter', data: '2026-10-24' };
+
+test('messaggio dell\'operatore: messaggio e voce di Aggiornamenti nella stessa scrittura', async () => {
+  let commit = 0;
+  const a = archivioOperatore(async () => { commit++; });
+  assert.equal((await a.FB.utente()).operatore.id, 'op1');
+  const m = await a.FB.scriviMessaggio({ tipo: 'evento', rif: 'e1', testo: ' Porto il PC? ' }, evento);
+  assert.equal(commit, 1);
+  assert.deepEqual(a.scritte.map(([t, p]) => t + ' ' + p), ['set messaggi/nuovo-messaggi', 'set invii/nuovo-invii']);
+  const [, , doc] = a.scritte[0], [, , voce] = a.scritte[1];
+  assert.deepEqual(Object.keys(doc).sort(), ['autore', 'da', 'letto', 'operatoreId', 'quando', 'rif', 'testo', 'tipo']);
+  assert.deepEqual([doc.da, doc.operatoreId, doc.autore, doc.testo], ['operatore', 'op1', 'Marco Rossi', 'Porto il PC?']);
+  assert.deepEqual(Object.keys(voce).sort(), ['evento', 'letto', 'modifiche', 'nome', 'operatoreId', 'quando', 'tipo']);
+  assert.deepEqual([voce.tipo, voce.evento.titolo, voce.evento.testo, voce.modifiche], ['messaggio', 'Milan-Inter', 'Porto il PC?', []]);
+  assert.equal(m.id, 'nuovo-messaggi');
+});
+
+test('messaggio dell\'operatore rifiutato dalle regole: convocazione cambiata (si resta dentro) o accesso tolto (si esce)', async () => {
+  const negato = async () => { const e = new Error('negato'); e.code = 'permission-denied'; throw e; };
+  const cambiata = archivioOperatore(negato);
+  await cambiata.FB.utente();
+  await assert.rejects(cambiata.FB.scriviMessaggio({ tipo: 'evento', rif: 'e1', testo: 'ciao' }, evento), /La convocazione è cambiata: ricarica la pagina\./);
+  assert.equal(cambiata.uscito(), false);
+  let valido = true;
+  const tolto = archivioOperatore(negato, () => valido);
+  await tolto.FB.utente();
+  valido = false;
+  await assert.rejects(tolto.FB.scriviMessaggio({ tipo: 'evento', rif: 'e1', testo: 'ciao' }, evento), /Il tuo accesso non è più valido: contatta i supervisori\./);
+  assert.equal(tolto.uscito(), true);
+});
+
+test('messaggi letti dall\'operatore: solo il campo letto', async () => {
+  const a = archivioOperatore(async () => {});
+  await a.FB.utente();
+  await a.FB.segnaMessaggiLetti(['m1', 'm2']);
+  assert.deepEqual(a.scritte, [['update', 'messaggi/m1', { letto: true }], ['update', 'messaggi/m2', { letto: true }]]);
+  await a.FB.segnaMessaggiLetti([]);
+  assert.equal(a.scritte.length, 2);
+});

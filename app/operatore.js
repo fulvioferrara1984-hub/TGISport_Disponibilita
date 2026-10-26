@@ -261,6 +261,8 @@
 
   // ---------- messaggi con i supervisori (convocazioni e on-site) ----------
   const MSG = DO.messaggi;
+  let aperta = null;        // conversazione nel pannello: { tipo, id, pannello } (si aggiorna quando arrivano i dati dal server)
+  const inviatiQui = [];    // messaggi mandati da questa pagina: non si perdono se i dati del server sono stati letti prima
   const tastoMessaggi = (tipo, x) => '<button type="button" class="link msg-apri" data-messaggi="' + tipo + '" data-id="' + DO.esc(x.id) + '">'
     + MSG.etichetta(MSG.conversazione(messaggi, tipo, x.id, operatore.id).length, MSG.nuoviPerOperatore(messaggi, tipo, x.id)) + '</button>';
   const chipNuovi = (tipo, x) => (MSG.nuoviPerOperatore(messaggi, tipo, x.id) ? '<span class="stato-chip st-blu">Nuovo messaggio</span>' : '');
@@ -269,24 +271,32 @@
     const x = (tipo === 'onsite' ? onsite : convocazioni).find((v) => v.id === id);
     if (!x) return;
     const s = MSG.soggetto(tipo, x), g = DO.giorno(s.data);
-    const elenco = () => MSG.conversazione(messaggi, tipo, id, operatore.id);
-    const ridisegna = () => { salvaCopia(); disegnaConvocazioni(); disegnaOnsite(); };
     const pannello = MSG.apriConversazione({
       titolo: s.titolo, sotto: tipo === 'onsite' ? DO.onsite.periodoBreve(x.da, x.a) : g.nome + ' ' + g.num + ' ' + g.mese,
-      messaggi: elenco(), mio: 'operatore', chiuso: MSG.chiusoPerOperatore(tipo, x, operatore.id),
+      messaggi: MSG.conversazione(messaggi, tipo, id, operatore.id), mio: 'operatore', chiuso: MSG.chiusoPerOperatore(tipo, x, operatore.id),
       invia: async (testo) => {
-        messaggi.push(await DO.dati.scriviMessaggio({ tipo, rif: id, testo }, x));
-        pannello.aggiorna(elenco());
-        ridisegna();
-        DO.avviso('Messaggio inviato ai supervisori.', 'ok');
+        const m = await DO.dati.scriviMessaggio({ tipo, rif: id, testo }, x);
+        messaggi.push(m);
+        inviatiQui.push(m);
+        aggiornaAperta();
+        return 'Messaggio inviato ai supervisori.';
       },
     });
-    // aperta la conversazione, i messaggi dei supervisori sono letti
-    const nuovi = elenco().filter((m) => m.da === 'supervisore' && !m.letto);
-    if (!nuovi.length) return;
+    aperta = { tipo, id, pannello };
+    aggiornaAperta();
+  }
+
+  // conversazione aperta: elenco aggiornato e messaggi dei supervisori letti (anche quelli arrivati col caricamento)
+  function aggiornaAperta() {
+    if (!aperta) return;
+    const elenco = MSG.conversazione(messaggi, aperta.tipo, aperta.id, operatore.id);
+    aperta.pannello.aggiorna(elenco);
+    const nuovi = elenco.filter((m) => m.da === 'supervisore' && !m.letto);
     nuovi.forEach((m) => { m.letto = true; });
-    DO.dati.segnaMessaggiLetti(nuovi.map((m) => m.id)).catch(() => {});
-    ridisegna();
+    if (nuovi.length) DO.dati.segnaMessaggiLetti(nuovi.map((m) => m.id)).catch(() => {});
+    salvaCopia();
+    disegnaConvocazioni();
+    disegnaOnsite();
   }
 
   // deployment accettati (o annullati dopo l'accettazione) ancora in corso o futuri
@@ -734,13 +744,15 @@
       if (conv) r.convocazioni = conv;
       if (ons) r.onsite = ons;
       if (rev) r.richiesteEvento = rev;
-      if (msg) r.messaggi = msg;
+      if (msg) r.messaggi = MSG.unisci(msg, inviatiQui);
       if (op) r.operativo = op;
       const settimana = lun, meseMostrato = mese;
       applica(r);
       if (giaVisibile) { lun = settimana; mese = meseMostrato; } else vaiAlGiornoIniziale();
       disegna();
       salvaCopia();
+      // il pannello aperto con la copia del dispositivo riceve i messaggi arrivati dal server
+      if (aperta && document.getElementById('dlg-messaggi').open) aggiornaAperta();
     } catch (e) {
       if (!giaVisibile) $('giorni').innerHTML = '<li class="griglia-vuota">' + DO.esc(e.message) + '</li>';
       else if (operatore) DO.avviso('Non riesco ad aggiornare i dati: ' + e.message, 'errore');

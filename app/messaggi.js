@@ -55,6 +55,9 @@
   const inviiDellaConversazione = (invii, tipo, rif, operatoreId) =>
     daLeggere(invii).filter((x) => x.evento.tipo === tipo && x.evento.rif === rif && x.operatoreId === operatoreId).map((x) => x.id);
 
+  // elenco arrivato dal server + i messaggi mandati da questa pagina che ancora non ci sono (scritti durante il caricamento)
+  const unisci = (server, locali) => lista(server).concat(lista(locali).filter((m) => !lista(server).some((s) => s.id === m.id)));
+
   // documento di `messaggi` (testo già controllato con testoValido)
   const nuovoMessaggio = ({ tipo, rif, operatoreId, da, autore, testo }, adesso) => ({ operatoreId, tipo, rif, da, autore, testo, quando: adesso, letto: false });
 
@@ -92,7 +95,8 @@
   }
 
   // ---------- pannello della conversazione (pagina operatori e dashboard) ----------
-  // chiuso: testo al posto del campo (sola lettura); invia(testo) → Promise; nota: HTML già protetto sotto il campo.
+  // chiuso: testo al posto del campo (sola lettura); invia(testo) → Promise del testo da mostrare a invio riuscito;
+  // nota: HTML già protetto sotto il campo. Esito e errori restano dentro il pannello (sul telefono copre gli avvisi della pagina).
   // Restituisce aggiorna(messaggi), che ridisegna l'elenco senza toccare ciò che si sta scrivendo.
   let aperture = 0;
   function apriConversazione({ titolo, sotto, messaggi, mio, chiuso, invia, nota }) {
@@ -110,6 +114,7 @@
       + (chiuso ? '<p class="msg-chiuso">' + DO.esc(chiuso) + '</p>'
         : '<label class="campo msg-campo"><span>Messaggio</span><textarea rows="3" maxlength="' + TESTO_MAX + '"></textarea></label><small class="msg-resto" hidden></small>')
       + (nota == null ? '' : '<p class="msg-nota"' + (nota ? '' : ' hidden') + '>' + nota + '</p>')
+      + (chiuso ? '' : '<p class="msg-esito" role="status" hidden></p>')
       + '<div class="dialog-azioni"><button type="button" class="bottone" data-chiudi>Chiudi</button>'
       + (chiuso ? '' : '<button type="submit" class="primario" data-invia>Invia</button>') + '</div></form>';
     const elenco = d.querySelector('.msg-lista'), campo = chiuso ? null : d.querySelector('textarea');
@@ -120,7 +125,8 @@
     };
     aggiorna(messaggi);
     if (campo) {
-      const tasto = d.querySelector('[data-invia]'), resto = d.querySelector('.msg-resto');
+      const tasto = d.querySelector('[data-invia]'), resto = d.querySelector('.msg-resto'), esito = d.querySelector('.msg-esito');
+      const mostra = (testo, tipo) => { esito.textContent = testo || ''; esito.className = 'msg-esito ' + tipo; esito.hidden = !testo; };
       const conta = () => { const n = TESTO_MAX - campo.value.length; resto.hidden = n >= 50; resto.textContent = 'Restano ' + n + ' caratteri'; };
       campo.oninput = conta;
       let inVolo = false;
@@ -130,12 +136,14 @@
         if (inVolo || !t) return;
         inVolo = true;
         tasto.disabled = true;
+        mostra('', '');
         try {
-          await invia(t);
+          const fatto = await invia(t);
           campo.value = '';
           conta();
+          mostra(fatto, 'ok');
         } catch (err) {
-          DO.avviso(err.message, 'errore');
+          mostra(err.message, 'errore');
         } finally {
           inVolo = false;
           tasto.disabled = false;
@@ -150,6 +158,6 @@
 
   DO.messaggi = {
     TESTO_MAX, testoValido, chiave, conversazione, nuoviPerOperatore, perEvento, chiusoPerOperatore, chiusoPerSupervisore, etichetta,
-    segniDaLeggere, inviiDellaConversazione, nuovoMessaggio, voceAggiornamenti, soggetto, htmlConversazione, apriConversazione,
+    segniDaLeggere, inviiDellaConversazione, unisci, nuovoMessaggio, voceAggiornamenti, soggetto, htmlConversazione, apriConversazione,
   };
 })(window.DO = window.DO || {});
