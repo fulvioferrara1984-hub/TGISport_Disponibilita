@@ -123,3 +123,57 @@ test('conversazione in HTML: testo protetto e a capo', () => {
   assert.equal((sup.match(/class="msg msg-mio"/g) || []).length, 1);
   assert.equal(M.htmlConversazione([], 'operatore'), '<p class="msg-vuoto">Nessun messaggio.</p>');
 });
+
+// ---------------------------------------------------------------- pannello della conversazione
+// pagina finta: il dialogo restituisce sempre lo stesso nodo per un selettore, finché non se ne riscrive il contenuto
+function domFinto() {
+  const nodo = (extra) => Object.assign({ value: '', disabled: false, hidden: false, textContent: '', scrollTop: 0, scrollHeight: 100,
+    focus() {}, setAttribute() {}, appendChild() {} }, extra);
+  let cache = {}, html = '';
+  const dialogo = nodo({ open: false, showModal() { this.open = true; }, close() { this.open = false; }, querySelector: (sel) => (cache[sel] = cache[sel] || nodo({ innerHTML: '' })) });
+  Object.defineProperty(dialogo, 'innerHTML', { set(v) { html = v; cache = {}; }, get() { return html; } });
+  global.document = { body: nodo(), getElementById: (id) => (id === 'dlg-messaggi' ? dialogo : null), createElement: () => dialogo };
+  return { dialogo, el: (sel) => dialogo.querySelector(sel) };
+}
+
+test('pannello: aggiorna senza perdere la bozza', () => {
+  const { el } = domFinto();
+  try {
+    const p = M.apriConversazione({ titolo: 'Milan-Inter', sotto: 'Sabato 24 ottobre', messaggi: [msg({ testo: 'primo' })], mio: 'operatore', chiuso: '', invia: async () => {} });
+    assert.ok(el('.msg-lista').innerHTML.includes('primo'));
+    el('textarea').value = 'sto scrivendo';
+    p.aggiorna([msg({ testo: 'primo' }), msg({ testo: 'risposta', da: 'supervisore', autore: 'Giulia' })]);
+    assert.ok(el('.msg-lista').innerHTML.includes('risposta'));
+    assert.equal(el('textarea').value, 'sto scrivendo');
+    // aperto per un'altra conversazione: il vecchio pannello non lo tocca più
+    M.apriConversazione({ titolo: 'Altro', messaggi: [msg({ testo: 'nuova' })], mio: 'operatore', chiuso: '', invia: async () => {} });
+    p.aggiorna([msg({ testo: 'vecchia' })]);
+    assert.ok(el('.msg-lista').innerHTML.includes('nuova'));
+    // sola lettura: niente campo
+    M.apriConversazione({ titolo: 'Annullata', messaggi: [], mio: 'operatore', chiuso: 'Convocazione annullata: non si possono più mandare messaggi.', invia: async () => {} });
+    assert.ok(!/<textarea/.test(document.getElementById('dlg-messaggi').innerHTML));
+    assert.ok(document.getElementById('dlg-messaggi').innerHTML.includes('Convocazione annullata'));
+  } finally { delete global.document; }
+});
+
+test('invio: un solo messaggio con tocchi ripetuti', async () => {
+  const { el } = domFinto();
+  try {
+    let chiamate = 0, fatto = null;
+    M.apriConversazione({ titolo: 'x', messaggi: [], mio: 'operatore', chiuso: '',
+      invia: (t) => { chiamate++; assert.equal(t, 'ciao'); return new Promise((r) => { fatto = r; }); } });
+    el('textarea').value = ' ciao ';
+    const evento = { preventDefault() {} };
+    const primo = el('form').onsubmit(evento);
+    el('form').onsubmit(evento);
+    assert.equal(chiamate, 1);
+    assert.equal(el('[data-invia]').disabled, true);
+    fatto();
+    await primo;
+    assert.equal(el('textarea').value, '');
+    assert.equal(el('[data-invia]').disabled, false);
+    // campo vuoto: nessun invio
+    await el('form').onsubmit(evento);
+    assert.equal(chiamate, 1);
+  } finally { delete global.document; }
+});

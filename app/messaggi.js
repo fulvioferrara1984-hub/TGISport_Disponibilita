@@ -90,8 +90,65 @@
     }).join('') + '</ol>';
   }
 
+  // ---------- pannello della conversazione (pagina operatori e dashboard) ----------
+  // chiuso: testo al posto del campo (sola lettura); invia(testo) → Promise; nota: HTML già protetto sotto il campo.
+  // Restituisce aggiorna(messaggi), che ridisegna l'elenco senza toccare ciò che si sta scrivendo.
+  let aperture = 0;
+  function apriConversazione({ titolo, sotto, messaggi, mio, chiuso, invia, nota }) {
+    let d = document.getElementById('dlg-messaggi');
+    if (!d) { d = document.createElement('dialog'); d.id = 'dlg-messaggi'; d.className = 'dlg-messaggi'; d.setAttribute('aria-labelledby', 'dlg-messaggi-titolo'); document.body.appendChild(d); }
+    // browser senza <dialog> (iPhone prima di iOS 15.4): si scrive con la finestra del sito, che ripiega su quelle del sistema
+    if (typeof d.showModal !== 'function') {
+      if (chiuso) DO.chiedi({ titolo, testo: chiuso, ok: 'OK' });
+      else DO.chiedi({ titolo, testo: sotto, campo: { etichetta: 'Messaggio' }, ok: 'Invia' }).then((t) => t && invia(t)).catch((e) => DO.avviso(e.message, 'errore'));
+      return { aggiorna() {}, chiudi() {} };
+    }
+    const mia = ++aperture;
+    d.innerHTML = '<form method="dialog"><h2 id="dlg-messaggi-titolo">' + DO.esc(titolo) + '</h2>' + (sotto ? '<p class="msg-sotto">' + DO.esc(sotto) + '</p>' : '')
+      + '<div class="msg-lista"></div>'
+      + (chiuso ? '<p class="msg-chiuso">' + DO.esc(chiuso) + '</p>'
+        : '<label class="campo msg-campo"><span>Messaggio</span><textarea rows="3" maxlength="' + TESTO_MAX + '"></textarea></label><small class="msg-resto" hidden></small>')
+      + (nota ? '<p class="msg-nota">' + nota + '</p>' : '')
+      + '<div class="dialog-azioni"><button type="button" class="bottone" data-chiudi>Chiudi</button>'
+      + (chiuso ? '' : '<button type="submit" class="primario" data-invia>Invia</button>') + '</div></form>';
+    const elenco = d.querySelector('.msg-lista'), campo = chiuso ? null : d.querySelector('textarea');
+    const aggiorna = (lista) => {
+      if (mia !== aperture) return;   // nel frattempo il pannello è stato aperto per un'altra conversazione
+      elenco.innerHTML = htmlConversazione(lista, mio);
+      elenco.scrollTop = elenco.scrollHeight;
+    };
+    aggiorna(messaggi);
+    if (campo) {
+      const tasto = d.querySelector('[data-invia]'), resto = d.querySelector('.msg-resto');
+      const conta = () => { const n = TESTO_MAX - campo.value.length; resto.hidden = n >= 50; resto.textContent = 'Restano ' + n + ' caratteri'; };
+      campo.oninput = conta;
+      let inVolo = false;
+      d.querySelector('form').onsubmit = async (e) => {
+        e.preventDefault();
+        const t = testoValido(campo.value);
+        if (inVolo || !t) return;
+        inVolo = true;
+        tasto.disabled = true;
+        try {
+          await invia(t);
+          campo.value = '';
+          conta();
+        } catch (err) {
+          DO.avviso(err.message, 'errore');
+        } finally {
+          inVolo = false;
+          tasto.disabled = false;
+        }
+      };
+    }
+    d.querySelector('[data-chiudi]').onclick = () => d.close();
+    if (!d.open) d.showModal();
+    if (campo) campo.focus();
+    return { aggiorna, chiudi: () => { if (mia === aperture && d.open) d.close(); } };
+  }
+
   DO.messaggi = {
     TESTO_MAX, testoValido, chiave, conversazione, nuoviPerOperatore, perEvento, chiusoPerOperatore, chiusoPerSupervisore, etichetta,
-    segniDaLeggere, inviiDellaConversazione, nuovoMessaggio, voceAggiornamenti, soggetto, htmlConversazione,
+    segniDaLeggere, inviiDellaConversazione, nuovoMessaggio, voceAggiornamenti, soggetto, htmlConversazione, apriConversazione,
   };
 })(window.DO = window.DO || {});

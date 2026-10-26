@@ -282,6 +282,26 @@ button.primario:disabled { background: #b4c0ef; box-shadow: none; cursor: not-al
 .cal-scelta { flex-direction: column; gap: 0; height: auto; min-height: 46px; padding: 6px 14px; }
 .cal-scelta small { font-size: var(--t-12); font-weight: 400; color: var(--inchiostro-2); }
 .cal-nota { margin: 12px 0 0; font-size: var(--t-12); color: var(--inchiostro-2); line-height: 1.5; }
+/* messaggi con i supervisori: tasto nella convocazione e pannello della conversazione */
+.msg-apri { align-self: flex-start; margin-top: 2px; padding: 6px 0; font-size: var(--t-14); }
+dialog.dlg-messaggi { width: min(520px, calc(100vw - 32px)); }
+.dlg-messaggi form { display: flex; flex-direction: column; gap: 10px; }
+.dlg-messaggi h2 { margin: 0; }
+.msg-sotto { margin: -6px 0 0; color: var(--inchiostro-2); font-size: var(--t-14); }
+.msg-lista { max-height: min(52vh, 420px); overflow-y: auto; padding: 4px 2px; }
+.msg-elenco { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 2px; }
+.msg p { margin: 0; font-size: var(--t-14); line-height: 1.45; overflow-wrap: anywhere; }
+.msg-mio { align-self: flex-end; background: var(--accento-tenue); border-bottom-right-radius: 4px; }
+.msg-altro { align-self: flex-start; background: var(--vuoto); border-bottom-left-radius: 4px; }
+.msg-chi { font-size: var(--t-12); font-weight: 600; color: var(--inchiostro-2); }
+.msg-quando { font-size: var(--t-12); color: var(--inchiostro-3); align-self: flex-end; }
+.msg-vuoto, .msg-chiuso { margin: 0; color: var(--inchiostro-2); font-size: var(--t-14); }
+.msg-chiuso { padding: 10px 12px; border-radius: 10px; background: var(--vuoto); }
+.msg-campo { margin: 0; }
+.msg-campo textarea { min-height: 76px; }
+.msg-resto, .msg-nota { margin: -4px 0 0; font-size: var(--t-12); color: var(--inchiostro-2); }
+.dlg-messaggi .dialog-azioni { margin-top: 4px; }
 .convocazione.richiesta-evento .conv-data { background: var(--accento-tenue); color: var(--accento); }
 .convocazione.richiesta-evento.coperta { opacity: .7; }
 .aggiungi-nota:hover { color: var(--accento); }
@@ -814,7 +834,7 @@ dialog.dlg-giorno { width: min(440px, calc(100vw - 32px)); }
   .mese-op { padding: 12px 10px 14px; }
   .mese-intestazione, .mese-griglia { gap: 4px; }
   .mc { padding: 5px; border-radius: 8px; }
-  dialog.dlg-giorno { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+  dialog.dlg-giorno, dialog.dlg-messaggi { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom); }
   .stati button span:last-child { white-space: normal; overflow: visible; }
   /* stato sopra, tasto a tutta larghezza sotto (a 14 px accanto al tasto andrebbe su tre righe) */
   .barra-invio-dentro { flex-wrap: wrap; gap: 8px; }

@@ -17,6 +17,7 @@
   let onsite = [];                // deployment on-site mandati all'operatore
   let giorniOn = {};              // giorni in cui è on-site: data → { luogo, … }
   let richiesteEvento = [];       // richieste di disponibilità per una singola partita o turno
+  let messaggi = [];              // messaggi con i supervisori su convocazioni e on-site (solo i suoi)
   const noteAperte = new Set();   // giorni in cui l'operatore ha chiesto di scrivere una nota
   // vista: settimana (con i giorni in riga) o mese (griglia, un giorno si apre in un pannello); il telefono ricorda la scelta
   let vista = DO.leggi('do-vista-operatore') === 'mese' ? 'mese' : 'settimana';
@@ -258,6 +259,36 @@
     dlg.querySelector('[data-scelta]').focus();
   }
 
+  // ---------- messaggi con i supervisori (convocazioni e on-site) ----------
+  const MSG = DO.messaggi;
+  const tastoMessaggi = (tipo, x) => '<button type="button" class="link msg-apri" data-messaggi="' + tipo + '" data-id="' + DO.esc(x.id) + '">'
+    + MSG.etichetta(MSG.conversazione(messaggi, tipo, x.id, operatore.id).length, MSG.nuoviPerOperatore(messaggi, tipo, x.id)) + '</button>';
+  const chipNuovi = (tipo, x) => (MSG.nuoviPerOperatore(messaggi, tipo, x.id) ? '<span class="stato-chip st-blu">Nuovo messaggio</span>' : '');
+
+  function apriMessaggi(tipo, id) {
+    const x = (tipo === 'onsite' ? onsite : convocazioni).find((v) => v.id === id);
+    if (!x) return;
+    const s = MSG.soggetto(tipo, x), g = DO.giorno(s.data);
+    const elenco = () => MSG.conversazione(messaggi, tipo, id, operatore.id);
+    const ridisegna = () => { salvaCopia(); disegnaConvocazioni(); disegnaOnsite(); };
+    const pannello = MSG.apriConversazione({
+      titolo: s.titolo, sotto: tipo === 'onsite' ? DO.onsite.periodoBreve(x.da, x.a) : g.nome + ' ' + g.num + ' ' + g.mese,
+      messaggi: elenco(), mio: 'operatore', chiuso: MSG.chiusoPerOperatore(tipo, x, operatore.id),
+      invia: async (testo) => {
+        messaggi.push(await DO.dati.scriviMessaggio({ tipo, rif: id, testo }, x));
+        pannello.aggiorna(elenco());
+        ridisegna();
+        DO.avviso('Messaggio inviato ai supervisori.', 'ok');
+      },
+    });
+    // aperta la conversazione, i messaggi dei supervisori sono letti
+    const nuovi = elenco().filter((m) => m.da === 'supervisore' && !m.letto);
+    if (!nuovi.length) return;
+    nuovi.forEach((m) => { m.letto = true; });
+    DO.dati.segnaMessaggiLetti(nuovi.map((m) => m.id)).catch(() => {});
+    ridisegna();
+  }
+
   // deployment accettati (o annullati dopo l'accettazione) ancora in corso o futuri
   const onsiteMiei = () => onsite.filter((d) => d.a >= oggi && ['accettato', 'annullato'].includes(DO.onsite.statoPerOperatore(d, operatore, oggi)));
   const giorniElenco = (d) => '<ul class="onsite-giorni">' + d.giorni.map((x) => {
@@ -272,8 +303,9 @@
       + '<div class="conv-info"><b>On-site · ' + DO.esc(d.luogo) + (d.titolo ? ' · ' + DO.esc(d.titolo) : '') + '</b>'
       + '<span>' + DO.esc(d.sport) + ' · ' + DO.onsite.periodoBreve(d.da, d.a) + ' · posto on-site ' + DO.onsite.ruoloAccettato(d, operatore.id) + '</span>'
       + giorniElenco(d) + (d.note ? '<span class="onsite-nota">' + DO.esc(d.note) + '</span>' : '')
-      + (annullato ? '<small class="conv-spiegazione">Se l\'avevi aggiunto al calendario, cancellalo da lì.</small>' : tastoCalendario('onsite', d.id)) + '</div>'
-      + '<div class="conv-azioni">' + (annullato ? '<span class="stato-chip st-annullato">Annullato dal supervisore</span>'
+      + (annullato ? '<small class="conv-spiegazione">Se l\'avevi aggiunto al calendario, cancellalo da lì.</small>' : tastoCalendario('onsite', d.id))
+      + tastoMessaggi('onsite', d) + '</div>'
+      + '<div class="conv-azioni">' + chipNuovi('onsite', d) + (annullato ? '<span class="stato-chip st-annullato">Annullato dal supervisore</span>'
         : '<span class="stato-chip st-D">Confermato</span>' + tasto('telefona')) + '</div></div>';
   }
 
@@ -302,7 +334,7 @@
       : (c.orario ? 'Evento alle ' + DO.esc(c.orario) + ' · ' : '') + '<span class="ritrovo">Ritrovo ' + inizio + (fine ? ' – fine turno ' + fine : '') + '</span>';
     const { azioni: elenco, spiegazione } = DO.azioniConvocazione(c.stato, nellaFinestra(c.data));
     const etichetta = { annullato: '<span class="stato-chip st-annullato">Annullata</span>', confermato: '<span class="stato-chip st-D">Confermata</span>', rifiutato: '<span class="stato-chip st-A">Non puoi</span>' }[c.stato] || '';
-    const azioni = etichetta + elenco.map((a) => tasto(a, c)).join('');
+    const azioni = chipNuovi('evento', c) + etichetta + elenco.map((a) => tasto(a, c)).join('');
     return '<div class="convocazione' + (c.stato === 'annullato' ? ' annullata' : '') + '">'
       + '<div class="conv-data"><small>' + g.breve + '</small><b>' + g.num + '</b><small>' + g.meseBreve + '</small></div>'
       + '<div class="conv-info"><b>' + DO.esc(sup ? DO.nomeTurno(c.tipo) : c.titolo) + '</b>'
@@ -310,6 +342,7 @@
       + '<span>' + orari + '</span>'
       + (c.stato === 'confermato' ? tastoCalendario('convocazione', c.id) : '')
       + (c.stato === 'annullato' ? '<small class="conv-spiegazione">Se l\'avevi aggiunta al calendario, cancellala da lì.</small>' : '')
+      + tastoMessaggi('evento', c)
       + (spiegazione ? '<small class="conv-spiegazione">' + DO.esc(DO.testoBlocco(operativo.giorniBlocco)) + '</small>' : '') + '</div>'
       + '<div class="conv-azioni">' + azioni + '</div></div>';
   }
@@ -317,6 +350,8 @@
   $('mie-convocazioni').addEventListener('click', async (e) => {
     const cal = e.target.closest('[data-calendario]');
     if (cal) { apriCalendario(cal.dataset.calendario, cal.dataset.id); return; }
+    const msg = e.target.closest('[data-messaggi]');
+    if (msg) { apriMessaggi(msg.dataset.messaggi, msg.dataset.id); return; }
     const b = e.target.closest('[data-rispondi]');
     if (!b) return;
     const c = convocazioni.find((x) => x.id === b.dataset.id), stato = b.dataset.rispondi;
@@ -395,12 +430,14 @@
         + '<div class="conv-info"><b>On-site · ' + DO.esc(d.luogo) + (d.titolo ? ' · ' + DO.esc(d.titolo) : '') + '</b>'
         + '<span>' + DO.esc(d.sport) + ' · ' + DO.onsite.periodoBreve(d.da, d.a) + ' · posto on-site ' + ruolo
         + (stato === 'esaurito' || stato === 'escluso' ? '' : ' · ' + (liberi === 1 ? '1 posto libero' : liberi + ' posti liberi')) + '</span>'
-        + giorniElenco(d) + (d.note ? '<span class="onsite-nota">' + DO.esc(d.note) + '</span>' : '') + '</div>'
-        + '<div class="conv-azioni">' + azioni + '</div></div>';
+        + giorniElenco(d) + (d.note ? '<span class="onsite-nota">' + DO.esc(d.note) + '</span>' : '') + tastoMessaggi('onsite', d) + '</div>'
+        + '<div class="conv-azioni">' + chipNuovi('onsite', d) + azioni + '</div></div>';
     }).join('');
   }
 
   $('richieste-onsite').addEventListener('click', async (e) => {
+    const msg = e.target.closest('[data-messaggi]');
+    if (msg) { apriMessaggi(msg.dataset.messaggi, msg.dataset.id); return; }
     const b = e.target.closest('[data-onsite]');
     if (!b) return;
     const d = onsite.find((x) => x.id === b.dataset.id), accetto = b.dataset.onsite === 'accetta';
@@ -619,7 +656,7 @@
 
   // ---------- avvio ----------
   function salvaCopia() {
-    DO.salvaCopia({ operatore, giorni: salvati, richieste, convocazioni, operativo, onsite, richiesteEvento, oggi, limite });
+    DO.salvaCopia({ operatore, giorni: salvati, richieste, convocazioni, operativo, onsite, richiesteEvento, messaggi, oggi, limite });
   }
 
   function applica(r) {
@@ -632,6 +669,7 @@
     if (r.operativo) operativo = Object.assign({}, DO.OPERATIVO_PREDEFINITO, r.operativo);
     if (r.onsite) onsite = r.onsite;
     if (r.richiesteEvento) richiesteEvento = r.richiesteEvento;
+    if (r.messaggi) messaggi = r.messaggi;
     aggiornaOnsite();
     // la bozza salvata sul dispositivo perde i giorni passati, quelli ormai bloccati e quelli uguali all'inviato
     bozza = DO.leggi(chiaveBozza()) || {};
@@ -685,16 +723,18 @@
       $('giorni').innerHTML = '<li class="caricamento"><span></span></li>';
     }
     try {
-      const [r, conv, op, ons, rev] = await Promise.all([
+      const [r, conv, op, ons, rev, msg] = await Promise.all([
         DO.dati.mieDisponibilita(), DO.dati.mieConvocazioni().catch(() => null),
         // lettura non riuscita: resta il valore già noto (copia sul dispositivo), non quello predefinito
         DO.dati.leggiOperativo().catch(() => null),
         DO.dati.mieiOnsite().catch(() => null),
         DO.dati.mieRichiesteEvento().catch(() => null),
+        DO.dati.mieiMessaggi().catch(() => null),
       ]);
       if (conv) r.convocazioni = conv;
       if (ons) r.onsite = ons;
       if (rev) r.richiesteEvento = rev;
+      if (msg) r.messaggi = msg;
       if (op) r.operativo = op;
       const settimana = lun, meseMostrato = mese;
       applica(r);
