@@ -11,6 +11,7 @@ require('../app/comune.js');
 require('../app/onsite.js');
 require('../app/regole.js');
 require('../app/richieste-evento.js');
+require('../app/messaggi.js');
 require('../app/demo.js');
 const DO = window.DO, D = DO.demo;
 
@@ -394,4 +395,98 @@ test('sola visualizzazione: accesso del collega', async () => {
   await D.aggiungiVisualizzatore('collega@esempio.it');
   assert.deepEqual(await D.accediSupervisore('chiunque@x.it', 'demo', false), { admin: true });
   assert.ok((await statoDemo()).visualizzatori.some((x) => x.email === 'collega@esempio.it'));
+});
+
+// ---------------------------------------------------------------- messaggi
+const comeSupervisoreVero = () => { DO.scrivi('do-demo-sessione-admin', { admin: true }); comeSupervisore(); };
+async function eventiMessaggi() {
+  comeSupervisoreVero();
+  await D.creaEventi([
+    { tipo: 'partita', competizione: 'Serie A', data: tra(5), titolo: 'Msg-Mia', orario: '20:45', operatoreId: 'op-demo1' },
+    { tipo: 'partita', competizione: 'Serie A', data: tra(5), titolo: 'Msg-Altrui', orario: '18:00', operatoreId: 'op-demo2' },
+    { tipo: 'partita', competizione: 'Serie A', data: tra(6), titolo: 'Msg-NonInviata', orario: '18:00', operatoreId: 'op-demo1' },
+    { tipo: 'partita', competizione: 'Serie A', data: tra(7), titolo: 'Msg-Annullata', orario: '18:00', operatoreId: 'op-demo1' },
+  ]);
+  const s = await statoDemo();
+  const ev = (t) => s.eventi.filter((e) => e.titolo === t).pop();
+  await D.aggiornaEvento(ev('Msg-Mia').id, { inviata: true, stato: 'convocato' });
+  await D.aggiornaEvento(ev('Msg-Altrui').id, { inviata: true, stato: 'convocato' });
+  await D.aggiornaEvento(ev('Msg-Annullata').id, { inviata: true, stato: 'annullato' });
+  return { mia: ev('Msg-Mia'), altrui: ev('Msg-Altrui'), nonInviata: ev('Msg-NonInviata'), annullata: ev('Msg-Annullata') };
+}
+
+test('messaggio dell\'operatore: controlli come le regole', async () => {
+  const e = await eventiMessaggi();
+  const mio = await creaOnsite({ destinatari: ['op-demo1', 'op-demo3'] });
+  const altrui = await creaOnsite({ destinatari: ['op-demo3', 'op-demo4'] });
+  const escluso = await creaOnsite({ destinatari: ['op-demo1', 'op-demo3'] });
+  const annullato = await creaOnsite({ destinatari: ['op-demo1', 'op-demo3'] });
+  await D.togliOnsite(escluso, 'op-demo1');
+  await D.statoOnsite(annullato, 'annullata');
+  await comeOperatore('DEMO-0001');
+  const m = await D.scriviMessaggio({ tipo: 'evento', rif: e.mia.id, testo: '  Porto il PC? ' }, e.mia);
+  assert.deepEqual([m.testo, m.da, m.operatoreId, m.autore, m.letto], ['Porto il PC?', 'operatore', 'op-demo1', 'Luca Bianchi', false]);
+  const CAMBIATA = /La convocazione è cambiata: ricarica la pagina\./;
+  for (const x of [e.altrui, e.nonInviata, e.annullata]) await assert.rejects(D.scriviMessaggio({ tipo: 'evento', rif: x.id, testo: 'ciao' }, x), CAMBIATA);
+  await assert.rejects(D.scriviMessaggio({ tipo: 'evento', rif: e.mia.id, testo: '   ' }, e.mia), /Scrivi un messaggio \(al massimo 500 caratteri\)\./);
+  await assert.rejects(D.scriviMessaggio({ tipo: 'evento', rif: e.mia.id, testo: 'x'.repeat(501) }, e.mia), /Scrivi un messaggio/);
+  const ons = (await D.mieiOnsite()).find((d) => d.id === mio);
+  await D.scriviMessaggio({ tipo: 'onsite', rif: mio, testo: 'Hotel?' }, ons);
+  for (const id of [altrui, escluso, annullato]) await assert.rejects(D.scriviMessaggio({ tipo: 'onsite', rif: id, testo: 'ciao' }, { luogo: 'Roma', da: tra(10) }), CAMBIATA);
+  comeSupervisoreVero();
+  const s = await statoDemo();
+  assert.equal(s.messaggi.filter((x) => x.operatoreId === 'op-demo1' && [e.mia.id, mio].includes(x.rif)).length, 2);
+  const voce = s.invii.find((x) => x.tipo === 'messaggio' && x.evento.rif === e.mia.id);
+  assert.deepEqual([voce.operatoreId, voce.letto, voce.evento.tipo, voce.evento.titolo, voce.evento.testo], ['op-demo1', false, 'evento', 'Msg-Mia', 'Porto il PC?']);
+  assert.equal(s.invii.find((x) => x.tipo === 'messaggio' && x.evento.rif === mio).evento.titolo, 'On-site Roma');
+});
+
+test('risposta del supervisore: voci della conversazione segnate come lette, senza email se manca l\'indirizzo', async () => {
+  const e = await eventiMessaggi();
+  await comeOperatore('DEMO-0001');
+  await D.scriviMessaggio({ tipo: 'evento', rif: e.mia.id, testo: 'Domanda' }, e.mia);
+  comeSupervisoreVero();
+  let s = await statoDemo();
+  const voci = DO.messaggi.inviiDellaConversazione(s.invii, 'evento', e.mia.id, 'op-demo1');
+  assert.equal(voci.length, 1);
+  await assert.rejects(D.messaggioSupervisore({ tipo: 'evento', rif: e.mia.id, operatoreId: 'op-demo1', testo: ' ', autore: 'Giulia' }, { nome: 'Luca', email: '' }, '', voci), /Scrivi un messaggio/);
+  const r = await D.messaggioSupervisore({ tipo: 'evento', rif: e.mia.id, operatoreId: 'op-demo1', testo: 'Sì, portalo', autore: 'Giulia' }, { nome: 'Luca Bianchi', email: '' }, 'https://x/', voci);
+  assert.equal(r.senzaEmail, true);
+  assert.ok(r.id);
+  s = await statoDemo();
+  assert.equal(s.invii.find((x) => x.id === voci[0]).letto, true);
+  const risposta = s.messaggi.find((x) => x.id === r.id);
+  assert.deepEqual([risposta.da, risposta.autore, risposta.letto, risposta.operatoreId], ['supervisore', 'Giulia', false, 'op-demo1']);
+  const conEmail = await D.messaggioSupervisore({ tipo: 'evento', rif: e.mia.id, operatoreId: 'op-demo1', testo: 'Altro', autore: 'Giulia' }, { nome: 'Luca Bianchi', email: 'l@x.it' }, 'https://x/', []);
+  assert.equal(conEmail.senzaEmail, false);
+  assert.ok(await conEmail.inviata);
+  // un collega in sola visualizzazione non scrive
+  await D.accediSupervisore('Collega@Esempio.it', 'demo', false);
+  await assert.rejects(D.messaggioSupervisore({ tipo: 'evento', rif: e.mia.id, operatoreId: 'op-demo1', testo: 'No', autore: 'C' }, { nome: '', email: '' }, '', []), /Operazione non consentita\./);
+  comeSupervisoreVero();
+});
+
+test('messaggi letti dall\'operatore', async () => {
+  const e = await eventiMessaggi();
+  await D.messaggioSupervisore({ tipo: 'evento', rif: e.altrui.id, operatoreId: 'op-demo2', testo: 'Per Giulia', autore: 'Sup' }, { nome: '', email: '' }, '', []);
+  await D.messaggioSupervisore({ tipo: 'evento', rif: e.mia.id, operatoreId: 'op-demo1', testo: 'Per Luca', autore: 'Sup' }, { nome: '', email: '' }, '', []);
+  await comeOperatore('DEMO-0001');
+  const miei = await D.mieiMessaggi();
+  assert.ok(miei.length && miei.every((m) => m.operatoreId === 'op-demo1'));
+  const altrui = await (async () => { comeSupervisoreVero(); return (await statoDemo()).messaggi.find((m) => m.testo === 'Per Giulia'); })();
+  await comeOperatore('DEMO-0001');
+  const nuovi = miei.filter((m) => m.da === 'supervisore' && !m.letto).map((m) => m.id);
+  await D.segnaMessaggiLetti(nuovi.concat(altrui.id));
+  assert.ok((await D.mieiMessaggi()).filter((m) => nuovi.includes(m.id)).every((m) => m.letto));
+  comeSupervisoreVero();
+  assert.equal((await statoDemo()).messaggi.find((m) => m.id === altrui.id).letto, false);
+});
+
+test('dashboard: i messaggi arrivano anche alla sola visualizzazione', async () => {
+  await eventiMessaggi();
+  await D.accediSupervisore('Collega@Esempio.it', 'demo', false);
+  const s = await statoDemo();
+  assert.deepEqual(s.invii, []);
+  assert.ok(s.messaggi.length > 0);
+  comeSupervisoreVero();
 });

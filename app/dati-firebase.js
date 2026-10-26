@@ -317,7 +317,7 @@
   // ---------- supervisori ----------
   // Ascolto in tempo reale: alla prima lettura arrivano tutti i dati, poi solo ciò che cambia.
   function ascolta(cb) {
-    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null, operativo: null, onsite: null, compensiOnsite: null, richiesteEvento: null, visualizzatori: null };
+    const stato = { operatori: null, disponibilita: null, invii: null, richieste: null, eventi: null, regole: null, operativo: null, onsite: null, compensiOnsite: null, richiesteEvento: null, visualizzatori: null, messaggi: null };
     // un collega in sola visualizzazione non legge Aggiornamenti, richieste per periodo e l'elenco dei colleghi
     if (accessoSola) Object.assign(stato, { invii: [], richieste: [], visualizzatori: [] });
     // eventi e richieste per evento arrivati dal server (non solo dalla copia sul computer): solo allora la dashboard le allinea
@@ -404,6 +404,19 @@
         dalServer.richiesteEvento = !s.metadata.fromCache;
         pronto();
       }, erroreNuovo('richiesteEvento', [], 'Richieste per evento non disponibili: pubblica le nuove regole di Firestore (vedi README).')),
+      // messaggi della stagione: li leggono anche i colleghi in sola visualizzazione. Una lettura negata (regole non ancora
+      // pubblicate) non fa uscire nessuno: un accesso davvero tolto lo segnalano già le altre letture
+      F.onSnapshot(F.query(F.collection(db, 'messaggi'), F.where('quando', '>=', DO.regole.stagione(DO.oggi()).da)), (s) => {
+        stato.messaggi = s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+        pronto();
+      }, (e) => {
+        if (fermo) return;
+        if (e.code !== 'permission-denied') { errore(e); return; }
+        stato.messaggi = [];
+        pronto();
+        const messaggio = 'Messaggi non disponibili: pubblica le nuove regole di Firestore (vedi README).';
+        if (!accessoSola && !avvisati.has(messaggio)) { avvisati.add(messaggio); DO.avviso(messaggio, 'errore', 12000); }
+      }),
     ];
     return () => { fermo = true; ferma.forEach((f) => f()); };
   }
@@ -935,6 +948,76 @@
     }
   }
 
+  // ---------- messaggi tra operatori e supervisori ----------
+  const CAMBIATA = 'La convocazione è cambiata: ricarica la pagina.';
+  const TESTO_NON_VALIDO = 'Scrivi un messaggio (al massimo 500 caratteri).';
+  const emailValida = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || ''));
+
+  async function mieiMessaggi() {
+    const op = operatoreCorrente || await caricaOperatore();
+    try {
+      const s = await F.getDocs(F.query(F.collection(db, 'messaggi'), F.where('operatoreId', '==', op.id)));
+      return s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+    } catch (e) {
+      // regole non ancora pubblicate: la pagina funziona senza messaggi
+      if (e.code === 'permission-denied') return [];
+      throw traduci(e);
+    }
+  }
+
+  // messaggio dell'operatore + voce di Aggiornamenti nella stessa scrittura; x = evento o deployment mostrato nella pagina
+  async function scriviMessaggio({ tipo, rif, testo }, x) {
+    const M = DO.messaggi, t = M.testoValido(testo);
+    if (!t) throw new Error(TESTO_NON_VALIDO);
+    const op = operatoreCorrente || await caricaOperatore();
+    const adesso = new Date().toISOString(), nuovo = F.doc(F.collection(db, 'messaggi'));
+    const m = M.nuovoMessaggio({ tipo, rif, operatoreId: op.id, da: 'operatore', autore: op.nome, testo: t }, adesso);
+    try {
+      const batch = F.writeBatch(db);
+      batch.set(nuovo, m);
+      batch.set(F.doc(F.collection(db, 'invii')), M.voceAggiornamenti(m, op, M.soggetto(tipo, x), adesso));
+      await batch.commit();
+    } catch (e) {
+      // le regole rifiutano una convocazione non più sua, rimandata o annullata: se l'accesso è ancora valido non si esce
+      if (e && e.code === 'permission-denied') {
+        let valido = true;
+        try { await caricaOperatore(false); } catch (z) { valido = false; }
+        if (valido) throw new Error(CAMBIATA);
+      }
+      return negato(e, 'Il tuo accesso non è più valido: contatta i supervisori.');
+    }
+    email('notificaMessaggio', { id: nuovo.id }).catch((e) => console.warn('Email ai supervisori non inviata:', e.message));
+    return Object.assign({ id: nuovo.id }, m);
+  }
+
+  async function segnaMessaggiLetti(ids) {
+    if (!ids.length) return;
+    try {
+      const batch = F.writeBatch(db);
+      ids.slice(0, 450).forEach((id) => batch.update(F.doc(db, 'messaggi', id), { letto: true }));
+      await batch.commit();
+    } catch (e) {
+      throw traduci(e);
+    }
+  }
+
+  // messaggio di un supervisore; le voci di Aggiornamenti di quella conversazione diventano lette.
+  // L'email all'operatore parte in sottofondo (dentro un oggetto, per non aspettarla)
+  async function messaggioSupervisore({ tipo, rif, operatoreId, testo, autore }, contatto, urlSito, invii) {
+    const M = DO.messaggi, t = M.testoValido(testo);
+    if (!t) throw new Error(TESTO_NON_VALIDO);
+    const nuovo = F.doc(F.collection(db, 'messaggi'));
+    await scrivi(async () => {
+      const batch = F.writeBatch(db);
+      batch.set(nuovo, M.nuovoMessaggio({ tipo, rif, operatoreId, da: 'supervisore', autore, testo: t }, new Date().toISOString()));
+      (invii || []).slice(0, 400).forEach((id) => batch.update(F.doc(db, 'invii', id), { letto: true }));
+      await batch.commit();
+    });
+    const senzaEmail = !emailValida((contatto || {}).email);
+    return { id: nuovo.id, senzaEmail,
+      inviata: senzaEmail ? Promise.resolve({ inviata: false }) : email('emailMessaggio', { id: nuovo.id, email: contatto.email, nome: contatto.nome, urlSito }) };
+  }
+
   DO.firebase = {
     configura, utente, accediOperatore, accediSupervisore, creaSupervisore, recuperaPassword, esci,
     mieDisponibilita, inviaDisponibilita, mieConvocazioni, rispondiConvocazione,
@@ -944,5 +1027,6 @@
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite, ascoltaProgettiOnsite, leggiProgetti, segnaRivisto,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
+    mieiMessaggi, scriviMessaggio, segnaMessaggiLetti, messaggioSupervisore,
   };
 })(window.DO = window.DO || {});

@@ -46,14 +46,14 @@
     eventi.push({ id: 'evc1', tipo: 'partita', competizione: 'Champions League', round: 'League Phase', sport: 'Calcio', data: DO.aggiungi(lun, 2), titolo: 'Feyenoord-Como',
       orario: '18:45', convocazione: '', convocazioneCalcolata: '14:45', operatoreId: 'op-demo2', stato: 'confermato', inviata: true, gettone: '', note: '', daSostituire: false, risposta: '', storico: [] });
     return { operatori, disponibilita, invii, richieste: [], eventi, regole: null, operativo: null, password: 'demo', impostazioni: { emailSupervisori: 'supervisori@esempio.it', emailAttive: true },
-      onsite: [], onsiteRiservato: {}, richiesteEvento: [], visualizzatori: COLLEGHI_DEMO() };
+      onsite: [], onsiteRiservato: {}, richiesteEvento: [], messaggi: [], visualizzatori: COLLEGHI_DEMO() };
   }
 
   let dati = null, ruolo = '', alloScadere = null, utenteDemo = null;
   const ascoltatori = new Set();
 
   function carica() {
-    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.eventi) { dati = Object.assign({ onsite: [], onsiteRiservato: {}, richiesteEvento: [], visualizzatori: COLLEGHI_DEMO() }, d); return; } } catch (e) { /* si riparte */ }
+    try { const d = JSON.parse(localStorage.getItem(CHIAVE)); if (d && d.eventi) { dati = Object.assign({ onsite: [], onsiteRiservato: {}, richiesteEvento: [], messaggi: [], visualizzatori: COLLEGHI_DEMO() }, d); return; } } catch (e) { /* si riparte */ }
     dati = iniziali();
   }
   function salva() {
@@ -180,6 +180,8 @@
       onsite: JSON.parse(JSON.stringify(dati.onsite)),
       compensiOnsite: Object.fromEntries(Object.entries(dati.onsiteRiservato).map(([id, r]) => [id, r.compenso])),
       richiesteEvento: JSON.parse(JSON.stringify(dati.richiesteEvento)),
+      // i messaggi li leggono anche i colleghi in sola visualizzazione
+      messaggi: JSON.parse(JSON.stringify(dati.messaggi)),
     });
     ascoltatori.add(invia);
     setTimeout(invia, 200);
@@ -492,6 +494,54 @@
     salva();
   }
 
+  // ---------- messaggi (come le regole di Firebase) ----------
+  const CAMBIATA = 'La convocazione è cambiata: ricarica la pagina.';
+  const TESTO_NON_VALIDO = 'Scrivi un messaggio (al massimo 500 caratteri).';
+  const idNuovo = (prefisso) => prefisso + Date.now().toString(36) + Math.floor(Math.random() * 1e6);
+
+  async function mieiMessaggi() {
+    await pausa(100);
+    const op = operatoreValido();
+    return copia(dati.messaggi.filter((m) => m.operatoreId === op.id));
+  }
+
+  async function scriviMessaggio({ tipo, rif, testo }) {
+    await pausa(150);
+    const M = DO.messaggi, t = M.testoValido(testo);
+    if (!t) throw new Error(TESTO_NON_VALIDO);
+    const op = operatoreValido();
+    // l'operatore scrive solo sulle sue convocazioni inviate e non annullate, o sui deployment mandati a lui
+    const x = tipo === 'evento' ? dati.eventi.find((e) => e.id === rif) : dati.onsite.find((d) => d.id === rif);
+    const mio = tipo === 'evento' ? !!x && x.operatoreId === op.id && x.inviata === true && x.stato !== 'annullato'
+      : !!x && x.destinatari.includes(op.id) && !(x.esclusi || []).includes(op.id) && x.stato !== 'annullata';
+    if (!mio) throw new Error(CAMBIATA);
+    const adesso = new Date().toISOString();
+    const m = Object.assign({ id: idNuovo('msg') }, M.nuovoMessaggio({ tipo, rif, operatoreId: op.id, da: 'operatore', autore: op.nome, testo: t }, adesso));
+    dati.messaggi.push(m);
+    dati.invii.push(Object.assign({ id: idNuovo('inv') }, M.voceAggiornamenti(m, op, M.soggetto(tipo, x), adesso)));
+    salva();
+    return copia(m);
+  }
+
+  async function segnaMessaggiLetti(ids) {
+    const op = operatoreValido();
+    dati.messaggi.forEach((m) => { if (ids.includes(m.id) && m.operatoreId === op.id && m.da === 'supervisore') m.letto = true; });
+    salva();
+  }
+
+  async function messaggioSupervisore({ tipo, rif, operatoreId, testo, autore }, contatto, urlSito, invii) {
+    await pausa(150);
+    soloSupervisori();
+    const M = DO.messaggi, t = M.testoValido(testo);
+    if (!t) throw new Error(TESTO_NON_VALIDO);
+    const m = Object.assign({ id: idNuovo('msg') }, M.nuovoMessaggio({ tipo, rif, operatoreId, da: 'supervisore', autore, testo: t }, new Date().toISOString()));
+    dati.messaggi.push(m);
+    dati.invii.forEach((x) => { if ((invii || []).includes(x.id)) x.letto = true; });
+    salva();
+    const senzaEmail = !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String((contatto || {}).email || ''));
+    return { id: m.id, senzaEmail, inviata: pausa(400).then(() => ({ inviata: !senzaEmail })) };
+  }
+
   DO.demo = {
     configura, utente, accediOperatore, accediSupervisore, creaSupervisore: soloFirebase, recuperaPassword: soloFirebase, esci,
     mieDisponibilita, inviaDisponibilita, mieConvocazioni, rispondiConvocazione,
@@ -503,6 +553,7 @@
     ascoltaProgettiOnsite: (cb) => { cb([]); return () => {}; }, leggiProgetti: async () => ({}), segnaRivisto,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
+    mieiMessaggi, scriviMessaggio, segnaMessaggiLetti, messaggioSupervisore,
     azzera: () => { try { localStorage.removeItem(CHIAVE); } catch (e) { /* niente */ } },
   };
 })(window.DO = window.DO || {});

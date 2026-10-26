@@ -127,6 +127,35 @@ service cloud.firestore {
         && request.resource.data.modifiche is list;
     }
 
+    // Messaggi tra un operatore e i supervisori su una convocazione ('evento') o un deployment on-site ('onsite').
+    // L'operatore legge solo i suoi e scrive solo sulle sue convocazioni inviate e non annullate, o sui deployment
+    // mandati a lui (non escluso, non annullati); dei messaggi dei supervisori può solo segnare la lettura.
+    function messaggioValido(d) {
+      let campi = ['operatoreId', 'tipo', 'rif', 'da', 'autore', 'testo', 'quando', 'letto'];
+      return d.keys().hasOnly(campi) && d.keys().hasAll(campi)
+        && d.tipo in ['evento', 'onsite'] && d.rif is string && d.operatoreId is string
+        && d.autore is string && d.autore.size() <= 120 && d.quando is string
+        && d.testo is string && d.testo.size() > 0 && d.testo.size() <= 1000 && d.letto == false;
+    }
+    function soggettoMio(d) {
+      let evento = /databases/$(database)/documents/eventi/$(d.rif);
+      let dep = /databases/$(database)/documents/onsite/$(d.rif);
+      return d.tipo == 'evento'
+        ? exists(evento) && get(evento).data.operatoreId == mioOperatore()
+          && get(evento).data.inviata == true && get(evento).data.stato != 'annullato'
+        : exists(dep) && mioOperatore() in get(dep).data.destinatari
+          && !(mioOperatore() in get(dep).data.get('esclusi', [])) && get(dep).data.stato != 'annullata';
+    }
+    match /messaggi/{messaggio} {
+      allow read: if lettore() || (operatore() && resource.data.operatoreId == mioOperatore());
+      allow create: if (supervisore() && messaggioValido(request.resource.data) && request.resource.data.da == 'supervisore')
+        || (operatore() && messaggioValido(request.resource.data) && request.resource.data.da == 'operatore'
+          && request.resource.data.operatoreId == mioOperatore() && soggettoMio(request.resource.data));
+      allow update: if operatore() && resource.data.operatoreId == mioOperatore() && resource.data.da == 'supervisore'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['letto']) && request.resource.data.letto == true;
+      allow delete: if supervisore();
+    }
+
     match /richieste/{richiesta} {
       allow read: if supervisore() || operatore();
       allow write: if supervisore();

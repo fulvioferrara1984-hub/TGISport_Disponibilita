@@ -13,6 +13,7 @@ require('../app/comune.js');
 require('../app/onsite.js');
 require('../app/regole.js');
 require('../app/richieste-evento.js');
+require('../app/messaggi.js');
 require('../app/dati-firebase.js');
 const DO = window.DO, FB = DO.firebase;
 
@@ -158,4 +159,41 @@ test('importazione: disponibilità unite ai giorni presenti, on-site per intero 
     ['onsite/d7', { luogo: 'Torino', giorni: [], destinatari: ['luca'], stato: 'aperta' }, undefined],
     ['onsiteRiservato/d7', { compenso: 250 }, undefined],
   ]);
+});
+
+// ---------------------------------------------------------------- messaggi
+test('risposta del supervisore: messaggio e voci lette nella stessa scrittura', async () => {
+  const scritte = [];
+  let commit = 0;
+  const { FB } = archivioNuovo({ email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' }, {
+    doc: (a, ...p) => (p.length ? { path: p.join('/'), id: p[p.length - 1] } : { path: a.path + '/nuovo1', id: 'nuovo1' }),
+    writeBatch: () => ({ set: (r, d) => scritte.push(['set', r.path, d]), update: (r, d) => scritte.push(['update', r.path, d]), commit: async () => { commit++; } }),
+  });
+  DO.avviaPagina('admin', () => {});
+  assert.deepEqual(await FB.utente(), { admin: true });
+  await assert.rejects(FB.messaggioSupervisore({ tipo: 'evento', rif: 'e1', operatoreId: 'op1', testo: '  ', autore: 'Giulia' }, { nome: 'Luca', email: '' }, '', []),
+    /Scrivi un messaggio \(al massimo 500 caratteri\)\./);
+  const r = await FB.messaggioSupervisore({ tipo: 'evento', rif: 'e1', operatoreId: 'op1', testo: ' Sì, portalo ', autore: 'Giulia' }, { nome: 'Luca', email: '' }, 'https://x/', ['v1', 'v2']);
+  assert.equal(commit, 1);
+  assert.deepEqual([r.id, r.senzaEmail], ['nuovo1', true]);
+  const [tipo, percorso, doc] = scritte[0];
+  assert.deepEqual([tipo, percorso], ['set', 'messaggi/nuovo1']);
+  assert.deepEqual(Object.keys(doc).sort(), ['autore', 'da', 'letto', 'operatoreId', 'quando', 'rif', 'testo', 'tipo']);
+  assert.deepEqual([doc.da, doc.testo, doc.autore, doc.letto], ['supervisore', 'Sì, portalo', 'Giulia', false]);
+  assert.deepEqual(scritte.slice(1), [['update', 'invii/v1', { letto: true }], ['update', 'invii/v2', { letto: true }]]);
+});
+
+test('dashboard: ascolta anche i messaggi della stagione', async () => {
+  const sup = archivioNuovo({ email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' });
+  DO.avviaPagina('admin', () => {});
+  await sup.FB.utente();
+  sup.FB.ascolta(() => {});
+  assert.ok(sup.ascolti.some((a) => a.rif.path === 'messaggi'));
+  // anche un collega in sola visualizzazione: le conversazioni si leggono
+  const collega = archivioNuovo({ email: 'collega@x.it', emailVerified: true, getIdToken: async () => 'g' });
+  DO.avviaPagina('admin', () => {});
+  assert.equal((await collega.FB.utente()).sola, true);
+  collega.FB.ascolta(() => {});
+  assert.ok(collega.ascolti.some((a) => a.rif.path === 'messaggi'));
+  assert.ok(!collega.ascolti.some((a) => a.rif.path === 'invii'));
 });
