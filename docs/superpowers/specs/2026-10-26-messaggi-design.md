@@ -59,7 +59,7 @@ Quando scrive un operatore, nella stessa scrittura si crea anche una voce di Agg
   - Dopo l'invio il messaggio compare nella conversazione e un avviso dice «Messaggio inviato ai supervisori.».
   - Aprendo il pannello i messaggi dei supervisori diventano letti.
 - **Sola lettura:** su una convocazione annullata, su un deployment annullato o se l'operatore è stato escluso, la conversazione si legge ma il campo non c'è: «Convocazione annullata: non si possono più mandare messaggi.» (on-site: «Deployment annullato…» / «Non fai più parte di questo deployment…»).
-- **Aggiornamento:** i messaggi si caricano con le convocazioni e si ricaricano quando la pagina torna in primo piano, come le convocazioni.
+- **Aggiornamento:** i messaggi si caricano insieme alle convocazioni, all'apertura della pagina (come oggi le convocazioni).
 - Gli eventi passati spariscono dalla lista come oggi, con la loro conversazione.
 
 ## 4. Dashboard dei supervisori
