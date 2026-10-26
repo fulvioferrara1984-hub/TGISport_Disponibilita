@@ -2,11 +2,11 @@
 
 Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file Excel delle convocazioni (fogli Convocazioni, Riepilogo, Consultivo, Impostazioni, Assenze). La piattaforma è solo operativa: niente fatture.
 
-- **`index.html` – operatori**: ognuno entra con il proprio codice personale, indica giorno per giorno se è *Disponibile*, *Parziale* (con gli orari) o *Non disponibile* e preme **Invia ai supervisori**. In alto trova **Le tue convocazioni** e le conferma (o dice che non può) con un tasto; quelle confermate e i deployment on-site si aggiungono al calendario del telefono con **📅 Aggiungi al calendario** (Google Calendar o file .ics per iPhone, Outlook e altri; il calendario non si aggiorna da solo: se l'orario cambia, l'evento vecchio si elimina e si aggiunge di nuovo). Non vede compensi né note interne.
+- **`index.html` – operatori**: ognuno entra con il proprio codice personale, indica giorno per giorno se è *Disponibile*, *Parziale* (con gli orari) o *Non disponibile* e preme **Invia ai supervisori**. In alto trova **Le tue convocazioni** e le conferma (o dice che non può) con un tasto; quelle confermate e i deployment on-site si aggiungono al calendario del telefono con **📅 Aggiungi al calendario** (Google Calendar o file .ics per iPhone, Outlook e altri; il calendario non si aggiorna da solo: se l'orario cambia, l'evento vecchio si elimina e si aggiunge di nuovo). Su ogni convocazione e deployment on-site c'è **💬 Scrivi ai supervisori** per fare una domanda o mandare un messaggio; le risposte compaiono lì (*Nuovo messaggio*) e arrivano per email. Non vede compensi né note interne.
 - **`admin.html` – supervisori**:
   - **Convocazioni**: partite e turni Remote TL e Remote Support della settimana; per ogni evento si sceglie l'operatore da un menu che mostra chi è disponibile, parziale, non disponibile o già impegnato; avviso di **doppio turno**; stati *da assegnare → da inviare → in attesa → confermato / rifiutato*, più *da sostituire* e *annullato*; **Invia convocazioni** le rende visibili agli operatori e manda le email.
   - **Disponibilità**: griglia settimanale del team in tempo reale (passando su una casella si leggono nota e impegni del giorno), pannello per ogni giorno, **Richiedi disponibilità** per un periodo.
-  - **Aggiornamenti**: invii delle disponibilità, conferme e rifiuti delle convocazioni, stato delle richieste.
+  - **Aggiornamenti**: invii delle disponibilità, conferme e rifiuti delle convocazioni, messaggi degli operatori (con **Rispondi**), stato delle richieste.
   - **Riepilogo**: eventi coperti (solo i **confermati**) e compensi netti per operatore, competizione e mese; a parte *In attesa di conferma* con il costo previsto (e quanti sono già passati); esportazione in Excel. Una convocazione confermata a voce o per messaggio si segna dalla finestra dell'evento con **Segna come confermata**.
   - **Operatori** (ruolo Remote OP / Remote Support / Remote TL, on-site TL/OP, contratto P.IVA/Coop, codici) e **Impostazioni** (tariffe, competizioni, importazione dal file Excel, email, password).
 
@@ -176,6 +176,15 @@ Ordine **sito → script**, nessuna regola di Firestore da cambiare:
 2. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, i promemoria ignorano i turni Remote Support e le email dei turni usano ancora i nomi vecchi.
 3. **Dashboard**: in **Operatori → Modifica** scegli *Remote Support* per chi fa quei turni; in **Impostazioni → Competizioni e sport** controlla colore, compenso e durata delle righe *Remote TL* e *Remote Support*.
 
+### Messaggi tra operatori e supervisori
+
+Ordine **regole → sito → script**:
+
+1. **Regole**: incolla [`firebase/firestore.rules`](firebase/firestore.rules) in Firebase → Firestore Database → Regole → **Pubblica** (nuova raccolta `messaggi`: ogni operatore legge solo i suoi messaggi e scrive solo sulle sue convocazioni inviate e sui deployment mandati a lui). Prima del sito: senza le regole nuove i messaggi non si leggono né si scrivono.
+2. **Sito** (versione 35), poi ricarica la dashboard su ogni computer dei supervisori.
+3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, i messaggi funzionano ma le email (ai supervisori per i messaggi degli operatori, all'operatore per le risposte) non partono.
+4. **Prova**: un messaggio da un operatore di prova e la risposta di un supervisore, con le due email.
+
 ### Outlook come app di posta
 
 Il tasto **Invia mail** (codice personale di un operatore) apre una nuova email nell'app di posta predefinita del computer, già compilata. Perché sia Outlook:
@@ -230,6 +239,7 @@ Ripetere l'importazione aggiorna gli stessi eventi senza duplicarli. Gli operato
 - **Chiedi disponibilità** (per un solo evento): nella finestra dell'evento (⋯) di una partita o di un turno Remote TL / Remote Support ancora senza operatore (o rifiutato, o da sostituire) → elenco degli operatori che possono fare l'evento (secondo il ruolo) con disponibilità del giorno, altri turni e on-site; già spuntati i disponibili e parziali liberi non ancora interpellati → messaggio facoltativo → *Chiedi a N operatori*. Gli operatori trovano in cima alla loro pagina *Ti chiediamo se sei disponibile* e rispondono *Sì, sono disponibile* o *No* (anche via email con il link). Le risposte compaiono nella finestra dell'evento (*Sì: … · No: … · In attesa: N*, con *(prima della modifica)* se l'evento è cambiato dopo), in **Aggiornamenti** e, per i Sì, per email ai supervisori; nel menu di assegnazione chi ha detto sì sale in cima con *✓ ha detto sì*.
 - **Promemoria**: ogni mattina, se ci sono convocazioni da sistemare nei prossimi giorni, arrivano le email (agli operatori solo le loro convocazioni da confermare, con il numero di reperibilità). Un operatore senza email o disattivato compare nel riepilogo dei supervisori con la nota *(senza email)* o *(disattivato)*.
 - **Colleghi in sola visualizzazione**: **Impostazioni → Accessi in sola visualizzazione** → email → **Aggiungi**, poi **Invia mail** (apre Outlook con il link e le istruzioni). Il collega entra dalla dashboard con *Crea account* e quella email, conferma l'indirizzo e poi entra con la sua password: vede solo Convocazioni, Riepilogo (con gli importi e l'Excel) e Operatori, senza tasti di modifica. **Togli** gli toglie l'accesso subito; se ha la pagina aperta, esce appena la pagina riceve un aggiornamento dei dati (al più tardi quando la ricarica).
+- **Messaggi**: l'operatore tocca **💬 Scrivi ai supervisori** su una convocazione (anche prima di confermare) o su un deployment on-site e scrive (massimo 500 caratteri); un messaggio non conferma e non rinuncia. I supervisori lo trovano in **Aggiornamenti** (*Rispondi*), per email e con 💬 sull'evento in Convocazioni, nel calendario e sugli on-site, finché qualcuno risponde o lo segna come letto. Si risponde anche dalla finestra dell'evento (*Messaggi con …*) e dalla scheda on-site (💬 accanto a ogni persona); il supervisore può scrivere per primo dopo l'invio della convocazione. Al primo messaggio la dashboard chiede il nome del supervisore (lo vedono gli operatori) e lo ricorda sul computer. Su convocazioni e deployment annullati la conversazione si legge soltanto; chi è in sola visualizzazione legge le conversazioni ma non scrive.
 - **Password dimenticata**: nella schermata di accesso, scrivere l'email e premere *Password dimenticata?*: arriva un'email per sceglierne una nuova.
 - **Aggiungere o togliere un supervisore**: modificare l'elenco delle email sia in [`firebase/firestore.rules`](firebase/firestore.rules) (poi ripubblicare le regole in console) sia in `SUPERVISORI` di `app/config.js`. Per togliere l'accesso basta toglierlo dalle regole; l'account si può eliminare da Authentication → Utenti.
 
@@ -260,6 +270,7 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/regole.js` | ritrovo, notturno, gettoni, stagione |
 | `app/calendario.js` | calendario mensile a schermo intero delle Convocazioni |
 | `app/richieste-evento.js` | richieste di disponibilità per un evento: allineamento con l'evento, stato per l'operatore, riepilogo delle risposte |
+| `app/messaggi.js` | messaggi tra operatori e supervisori: conversazioni, segni 💬 e pannello della conversazione (entrambe le pagine) |
 | `app/agenda.js` | «Aggiungi al calendario» della pagina operatori: file .ics e link di Google Calendar |
 | `app/onsite.js`, `app/onsite-admin.js` | deployment on-site: calcoli (giorni, posti, presenze, compensi) e richiesta/scheda nella dashboard |
 | `app/convocazioni.js`, `app/riepilogo.js`, `app/impostazioni.js` | schede Convocazioni, Riepilogo, regole e importazione |
