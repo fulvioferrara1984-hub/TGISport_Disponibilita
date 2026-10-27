@@ -27,6 +27,7 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 | Annullati | non contano mai nei riepiloghi |
 | On-site | richiesta con date, attività per giorno (Travel Day, MD-1, MD…), luogo, sport e posti TL/OP, solo agli operatori abilitati; chi accetta per primo occupa il posto, è on-site in quei giorni (non assegnabile al remoto) e non si ritira dal sito; compenso di trasferta = giorni × tariffa on-site (generale: 150 € al giorno), modificabile, visibile solo ai supervisori |
 | On-site dalla piattaforma | gli eventi on-site della piattaforma TGI Sport con *Staffed by our operators* compaiono in cima a **Convocazioni**: *da richiedere* (con **Richiedi disponibilità**, che apre *+ On-site* già compilato con giorni, attività, partita, luogo e sport) o *da rivedere* con il motivo (giorni cambiati, evento annullato o eliminato, non più on-site, non più con i nostri operatori). Il deployment resta legato all'evento (`progettoId`) e ricorda i giorni che l'evento chiedeva (`giorniRichiesti`): *giorni cambiati* confronta l'evento con quelli, quindi un giorno tolto nel modulo non conta; se l'evento cambia dopo, **Segna come rivisto** chiude l'avviso (oppure si annulla e si rifà la richiesta). La piattaforma ne mostra stato, persone e costo |
+| Building | le partite remote prendono il building dall'evento della piattaforma con lo stesso giorno e le stesse squadre (non i turni Remote TL e Remote Support, non gli on-site): se gli eventi con quelle squadre hanno building diversi vale quello della stessa competizione, altrimenti la partita parte senza building (in rosso, *senza building*, ma si invia). Il building viene copiato sulla convocazione all'invio e compare sulla pagina dell'operatore, nel calendario (luogo del file .ics e di Google Calendar) e nell'email; se nella piattaforma cambia dopo l'invio, la convocazione torna **da inviare** con una voce nello storico e l'avviso, e va rimandata (l'operatore risponde di nuovo) |
 | Disponibilità per evento | dal menu ⋯ di una partita o di un turno Remote TL / Remote Support ancora scoperto: gli operatori scelti rispondono Sì o No per quell'evento (anche dentro la finestra di blocco, fino al giorno stesso); il Sì è solo una segnalazione, l'assegnazione resta del supervisore; la richiesta si chiude da sola quando l'evento ha un operatore e si riapre se viene rifiutato o segnato da sostituire |
 | Promemoria | ogni mattina tra le 8 e le 9 (nuovo tentativo alle 11 se il primo non riesce), per gli eventi remoti da oggi a X giorni dopo (generale: 3): agli operatori le convocazioni ancora da confermare, ai supervisori il riepilogo di ciò che non è coperto (da sostituire, senza operatore, da inviare, in attesa) |
 
@@ -201,6 +202,14 @@ Ordine **regole → sito → script**:
 3. **Script**: nuova versione dello script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, i messaggi funzionano ma le email (ai supervisori per i messaggi degli operatori, all'operatore per le risposte) non partono.
 4. **Prova**: un messaggio da un operatore di prova e la risposta di un supervisore, con le due email.
 
+### Building nelle convocazioni
+
+Ordine **sito → script**, regole di Firestore invariate (la dashboard legge gli eventi della piattaforma, che i supervisori già leggono; nessuna scrittura nelle raccolte della piattaforma):
+
+1. **Sito** (versione 36): subito dopo la pubblicazione **ricarica la dashboard su ogni computer dei supervisori**, anche le schede rimaste aperte in secondo piano: una dashboard della versione precedente non conosce il campo `building` e invierebbe le convocazioni senza building. Alla prima apertura di **Convocazioni** le partite già inviate ricevono il building dall'evento della piattaforma **senza tornare da inviare** (nello storico: *Building dalla piattaforma*); da allora, se il building dell'evento cambia, la convocazione torna **da inviare**.
+2. **Script**: nuova versione dello script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email di convocazione e i promemoria non riportano il building (la pagina dell'operatore sì).
+3. **Prova**: una partita assegnata con le stesse squadre di un evento della piattaforma mostra *building T1* in **Invia convocazioni**, e l'email e la pagina dell'operatore lo riportano.
+
 ### Outlook come app di posta
 
 Il tasto **Invia mail** (codice personale di un operatore) apre una nuova email nell'app di posta predefinita del computer, già compilata. Perché sia Outlook:
@@ -287,6 +296,7 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/calendario.js` | calendario mensile a schermo intero delle Convocazioni |
 | `app/richieste-evento.js` | richieste di disponibilità per un evento: allineamento con l'evento, stato per l'operatore, riepilogo delle risposte |
 | `app/messaggi.js` | messaggi tra operatori e supervisori: conversazioni, segni 💬 e pannello della conversazione (entrambe le pagine) |
+| `app/building.js` | building delle convocazioni remote: abbinamento con gli eventi della piattaforma (funzioni pure: building di una partita, giorni da leggere, convocazioni da rimandare o da completare) |
 | `app/agenda.js` | «Aggiungi al calendario» della pagina operatori: file .ics e link di Google Calendar |
 | `app/onsite.js`, `app/onsite-admin.js` | deployment on-site: calcoli (giorni, posti, presenze, compensi) e richiesta/scheda nella dashboard |
 | `app/convocazioni.js`, `app/riepilogo.js`, `app/impostazioni.js` | schede Convocazioni, Riepilogo, regole e importazione |
