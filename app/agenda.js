@@ -16,15 +16,17 @@
 
   // Evento: { uid, titolo, descrizione, url, tuttoIlGiorno, da, a } con da e a 'aaaa-mm-ggThh:mm' (ora di Roma)
   // oppure, tutto il giorno, 'aaaa-mm-gg' con a = il giorno dopo l'ultimo (come vogliono .ics e Google).
+  // Le partite con building hanno anche luogo ('Building T1'); i turni remoti e gli on-site non ce l'hanno mai.
   function daConvocazione(c, indirizzo) {
     const turno = DO.turnoRemoto(c.tipo), r = ritrovo(c), fine = fineTurno(c), inizio = r || c.orario || '';
+    const luogo = !turno && c.building ? 'Building ' + c.building : '';
     const righe = turno ? [r && (fine ? 'Turno ' + r + ' – ' + fine : 'Inizio turno ' + r)]
       : [c.orario && 'Evento alle ' + c.orario,
         [c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · '),
-        r && 'Ritrovo ' + r + (fine ? ' – fine turno ' + fine : '')];
+        r && 'Ritrovo ' + r + (fine ? ' – fine turno ' + fine : ''), luogo];
     const ev = {
       uid: uid('convocazione', c.id), titolo: 'TGI Sport · ' + (turno ? DO.nomeTurno(c.tipo) : c.titolo),
-      descrizione: righe.concat(chiusura(indirizzo)).filter(Boolean).join('\n'), url: indirizzo,
+      descrizione: righe.concat(chiusura(indirizzo)).filter(Boolean).join('\n'), url: indirizzo, luogo,
     };
     if (!inizio) return Object.assign(ev, { tuttoIlGiorno: true, da: c.data, a: DO.aggiungi(c.data, 1) });
     // ritrovo dopo l'orario della partita: il turno parte il giorno prima (come R.giaIniziato)
@@ -80,7 +82,8 @@
     const righe = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//TGI Sport//Disponibilita Ops//IT', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH']
       .concat(ev.tuttoIlGiorno ? [] : VTIMEZONE,
         ['BEGIN:VEVENT', 'UID:' + ev.uid, 'DTSTAMP:' + adesso.toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '')],
-        quando, ['SUMMARY:' + testoIcs(ev.titolo), 'DESCRIPTION:' + testoIcs(ev.descrizione), 'URL:' + ev.url],
+        quando, ['SUMMARY:' + testoIcs(ev.titolo)], ev.luogo ? ['LOCATION:' + testoIcs(ev.luogo)] : [],
+        ['DESCRIPTION:' + testoIcs(ev.descrizione), 'URL:' + ev.url],
         avviso, ['END:VEVENT', 'END:VCALENDAR']);
     return righe.map(piega).join('\r\n') + '\r\n';
   }
@@ -89,7 +92,7 @@
   function linkGoogle(ev) {
     return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(ev.titolo)
       + '&dates=' + compatta(ev.da) + '/' + compatta(ev.a) + (ev.tuttoIlGiorno ? '' : '&ctz=' + ZONA)
-      + '&details=' + encodeURIComponent(ev.descrizione);
+      + '&details=' + encodeURIComponent(ev.descrizione) + (ev.luogo ? '&location=' + encodeURIComponent(ev.luogo) : '');
   }
 
   const nomeFile = (ev) => 'TGI-Sport-' + ev.da.slice(0, 10) + '.ics';

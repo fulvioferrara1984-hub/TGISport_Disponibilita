@@ -36,6 +36,46 @@ test('calendario: partita confermata, dal ritrovo alla fine turno', () => {
   assert.match(mano.descrizione, /^Evento alle 20:45\nSerie A · Ottavi\nRitrovo 19:00 – fine turno 23:30\n/);
 });
 
+test('calendario: building nel luogo e nella descrizione', () => {
+  const ev = A.daConvocazione(partita({ building: 'T1' }), SITO);
+  assert.equal(ev.luogo, 'Building T1');
+  assert.equal(ev.descrizione, 'Evento alle 20:45\nSerie A · giornata 8\nRitrovo 19:15 – fine turno 23:00\nBuilding T1\nLe tue convocazioni: ' + SITO);
+  const r = righe(A.ics(ev, ADESSO));
+  assert.ok(r.includes('LOCATION:Building T1'));
+  assert.ok(r.indexOf('LOCATION:Building T1') > r.indexOf('SUMMARY:TGI Sport · Milan-Inter'));
+  assert.ok(A.linkGoogle(ev).includes('&location=Building%20T1'));
+  assert.equal(new URL(A.linkGoogle(ev)).searchParams.get('location'), 'Building T1');
+});
+
+test('calendario: senza building niente luogo', () => {
+  // partita senza building (anche vuoto): nessun luogo, descrizione di sempre
+  for (const campi of [{}, { building: '' }]) {
+    const ev = A.daConvocazione(partita(campi), SITO);
+    assert.equal(ev.luogo, '');
+    assert.equal(ev.descrizione, 'Evento alle 20:45\nSerie A · giornata 8\nRitrovo 19:15 – fine turno 23:00\nLe tue convocazioni: ' + SITO);
+    assert.ok(!righe(A.ics(ev, ADESSO)).some((x) => x.startsWith('LOCATION')));
+    assert.ok(!A.linkGoogle(ev).includes('location='));
+  }
+  // turno remoto: il building, anche se c'è, non conta
+  const turno = { id: 't1', data: '2026-10-24', tipo: 'supervisione', titolo: 'Remote TL', competizione: '', round: '', orario: '', convocazione: '22:30', fine: '', building: 'T1' };
+  const ev = A.daConvocazione(turno, SITO);
+  assert.equal(ev.luogo, '');
+  assert.equal(ev.descrizione, 'Inizio turno 22:30\nLe tue convocazioni: ' + SITO);
+  assert.ok(!righe(A.ics(ev, ADESSO)).some((x) => x.startsWith('LOCATION')));
+  assert.ok(!A.linkGoogle(ev).includes('location='));
+  // on-site: mai un luogo
+  const onsite = A.daOnsite(deployment(), 'TL', SITO);
+  assert.equal(onsite.luogo, undefined);
+  assert.ok(!righe(A.ics(onsite, ADESSO)).some((x) => x.startsWith('LOCATION')));
+  assert.ok(!A.linkGoogle(onsite).includes('location='));
+});
+
+test('calendario: building con caratteri speciali', () => {
+  const ev = A.daConvocazione(partita({ building: 'T1, sala; B' }), SITO);
+  assert.ok(righe(A.ics(ev, ADESSO)).includes('LOCATION:Building T1\\, sala\\; B'));
+  assert.equal(new URL(A.linkGoogle(ev)).searchParams.get('location'), 'Building T1, sala; B');
+});
+
 test('calendario: partite di notte come nel resto del sito', () => {
   // ritrovo dopo l'orario della partita: il turno parte il giorno prima
   const notte = A.daConvocazione(partita({ data: '2026-10-25', orario: '00:30', convocazioneCalcolata: '23:00', fineCalcolata: '02:30' }), SITO);

@@ -341,7 +341,8 @@
     const g = DO.giorno(c.data), sup = DO.turnoRemoto(c.tipo);
     const fine = DO.esc(fineTurno(c)), inizio = DO.esc(ritrovo(c) || '—');
     const orari = sup ? (fine ? 'Turno <span class="ritrovo">' + inizio + ' – ' + fine + '</span>' : 'Inizio turno <span class="ritrovo">' + inizio + '</span>')
-      : (c.orario ? 'Evento alle ' + DO.esc(c.orario) + ' · ' : '') + '<span class="ritrovo">Ritrovo ' + inizio + (fine ? ' – fine turno ' + fine : '') + '</span>';
+      : (c.orario ? 'Evento alle ' + DO.esc(c.orario) + ' · ' : '') + '<span class="ritrovo">Ritrovo ' + inizio + (fine ? ' – fine turno ' + fine : '') + '</span>'
+        + (c.building ? ' · <span class="building">Building ' + DO.esc(c.building) + '</span>' : '');
     const { azioni: elenco, spiegazione } = DO.azioniConvocazione(c.stato, nellaFinestra(c.data));
     const etichetta = { annullato: '<span class="stato-chip st-annullato">Annullata</span>', confermato: '<span class="stato-chip st-D">Confermata</span>', rifiutato: '<span class="stato-chip st-A">Non puoi</span>' }[c.stato] || '';
     const azioni = chipNuovi('evento', c) + etichetta + elenco.map((a) => tasto(a, c)).join('');
