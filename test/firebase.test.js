@@ -255,3 +255,149 @@ test('messaggi letti dall\'operatore: solo il campo letto', async () => {
   await a.FB.segnaMessaggiLetti([]);
   assert.equal(a.scritte.length, 2);
 });
+
+// ---------------------------------------------------------------- building dalla piattaforma
+const SUP = { email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' };
+
+test('building: eventi della piattaforma a gruppi di 30 giorni', async () => {
+  const letture = [];
+  const date = Array.from({ length: 31 }, (_, i) => '2026-11-' + String(i + 1).padStart(2, '0'));
+  const { FB } = archivioNuovo(SUP, {
+    where: (...a) => a, query: (c, ...w) => ({ c, w }),
+    getDocs: async (q) => {
+      letture.push(q);
+      const gruppo = q.w[0][2];
+      return { docs: gruppo.slice(0, 1).map((d) => ({ id: 'p' + d.slice(-2), data: () => ({ data: d, squadraA: 'Milan' }) })) };
+    },
+  });
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  const eventi = await FB.leggiProgettiDelleDate(date);
+  assert.deepEqual(letture.map((q) => [q.c.path, q.w[0][0], q.w[0][1], q.w[0][2].length]), [['progetti', 'data', 'in', 30], ['progetti', 'data', 'in', 1]]);
+  assert.deepEqual(letture[0].w[0][2], date.slice(0, 30));
+  assert.deepEqual(letture[1].w[0][2], ['2026-11-31']);
+  assert.deepEqual(eventi, [{ id: 'p01', data: '2026-11-01', squadraA: 'Milan' }, { id: 'p31', data: '2026-11-31', squadraA: 'Milan' }]);
+});
+
+test('building: lettura negata o non riuscita → nessun evento', async () => {
+  let letture = 0;
+  const avvisi = [];
+  const avvisoOriginale = console.warn;
+  console.warn = (...a) => avvisi.push(a.join(' '));
+  try {
+    for (const errore of [Object.assign(new Error('negato'), { code: 'permission-denied' }), new Error('rete')]) {
+      const { FB } = archivioNuovo(SUP, { where: (...a) => a, query: (c, ...w) => ({ c, w }), getDocs: async () => { letture++; throw errore; } });
+      DO.avviaPagina('admin', () => {});
+      await FB.utente();
+      assert.deepEqual(await FB.leggiProgettiDelleDate(['2026-11-01']), []);
+    }
+    assert.equal(letture, 2);
+    // permesso negato in silenzio (regole non ancora pubblicate), ogni altro errore in console
+    assert.equal(avvisi.length, 1);
+    assert.match(avvisi[0], /rete/);
+    const { FB } = archivioNuovo(SUP, { getDocs: async () => { letture++; return { docs: [] }; } });
+    DO.avviaPagina('admin', () => {});
+    await FB.utente();
+    assert.deepEqual(await FB.leggiProgettiDelleDate([]), []);
+    assert.equal(letture, 2);
+  } finally { console.warn = avvisoOriginale; }
+});
+
+// transazione finta su un solo documento: restituisce le scritture fatte
+function transazioneSu(dati) {
+  const scritte = [];
+  return {
+    scritte,
+    extra: {
+      arrayUnion: (...v) => ({ unione: v }),
+      runTransaction: async (db, lavoro) => lavoro({
+        get: async () => ({ exists: () => !!dati, data: () => dati }),
+        update: (rif, campi) => scritte.push([rif.path, campi]),
+      }),
+    },
+  };
+}
+
+test('building cambiato: da rimandare una volta sola', async () => {
+  const letta = transazioneSu({ inviata: true, stato: 'confermato', building: 'T1' });
+  const { FB } = archivioNuovo(SUP, letta.extra);
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  assert.equal(await FB.scriviBuilding('c1', 'T1', 'T3', true), true);
+  assert.equal(letta.scritte.length, 1);
+  const [percorso, campi] = letta.scritte[0];
+  assert.equal(percorso, 'eventi/c1');
+  assert.deepEqual(Object.keys(campi).sort(), ['building', 'inviata', 'risposta', 'stato', 'storico']);
+  assert.deepEqual([campi.building, campi.inviata, campi.stato, campi.risposta], ['T3', false, 'assegnato', '']);
+  assert.equal(campi.storico.unione.length, 1);
+  assert.equal(campi.storico.unione[0].testo, 'Building cambiato nella piattaforma: T1 → T3: convocazione da rimandare');
+  // già rimessa da inviare da un altro supervisore: niente di nuovo
+  const rimessa = transazioneSu({ inviata: false, stato: 'assegnato', building: 'T3' });
+  const { FB: FB2 } = archivioNuovo(SUP, rimessa.extra);
+  DO.avviaPagina('admin', () => {});
+  await FB2.utente();
+  assert.equal(await FB2.scriviBuilding('c1', 'T1', 'T3', true), false);
+  assert.equal(rimessa.scritte.length, 0);
+});
+
+test('inviata prima del building: solo il campo', async () => {
+  const vecchia = transazioneSu({ inviata: true, stato: 'convocato' });
+  const { FB } = archivioNuovo(SUP, vecchia.extra);
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  assert.equal(await FB.scriviBuilding('c1', undefined, 'T1', false), true);
+  const [percorso, campi] = vecchia.scritte[0];
+  assert.equal(percorso, 'eventi/c1');
+  assert.deepEqual(Object.keys(campi).sort(), ['building', 'storico']);
+  assert.equal(campi.building, 'T1');
+  assert.equal(campi.storico.unione[0].testo, 'Building dalla piattaforma: T1');
+  // inviata senza building (campo vuoto, non assente): non si tocca
+  const senza = transazioneSu({ inviata: true, stato: 'convocato', building: '' });
+  const { FB: FB2 } = archivioNuovo(SUP, senza.extra);
+  DO.avviaPagina('admin', () => {});
+  await FB2.utente();
+  assert.equal(await FB2.scriviBuilding('c1', undefined, 'T1', false), false);
+  assert.equal(senza.scritte.length, 0);
+});
+
+test('building: convocazione cambiata nel frattempo (non più inviata, rifiutata, building diverso) → nessuna scrittura', async () => {
+  for (const dati of [
+    { inviata: false, stato: 'assegnato', building: 'T1' },
+    { inviata: true, stato: 'rifiutato', building: 'T1' },
+    { inviata: true, stato: 'confermato', building: 'T2' },
+    null,
+  ]) {
+    const t = transazioneSu(dati);
+    const { FB } = archivioNuovo(SUP, t.extra);
+    DO.avviaPagina('admin', () => {});
+    await FB.utente();
+    assert.equal(await FB.scriviBuilding('c1', 'T1', 'T3', true), false, JSON.stringify(dati));
+    assert.equal(t.scritte.length, 0);
+  }
+});
+
+test('invio: building sulle partite, non sui turni', async () => {
+  const aggiornate = {};
+  const { FB } = archivioNuovo(SUP, {
+    arrayUnion: (...v) => ({ unione: v }),
+    writeBatch: () => ({ update: (rif, campi) => { aggiornate[rif.path] = campi; }, commit: async () => {} }),
+  });
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  await FB.inviaConvocazioni([{ id: 'c1', tipo: 'partita', building: 'T1' }, { id: 'c2', tipo: 'partita' }, { id: 't1', tipo: 'supervisione', building: 'T1' }], [], '');
+  assert.equal(aggiornate['eventi/c1'].building, 'T1');
+  assert.equal(aggiornate['eventi/c2'].building, '');
+  assert.ok(!('building' in aggiornate['eventi/t1']));
+  assert.equal(aggiornate['eventi/t1'].stato, 'convocato');
+});
+
+test('importazione: building conservato solo se c\'è', async () => {
+  const scritte = {};
+  const { FB } = archivioNuovo(SUP, { writeBatch: () => ({ set: (rif, dati) => { scritte[rif.path] = dati; }, commit: async () => {} }) });
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  const base = { tipo: 'partita', data: '2026-11-10', titolo: 'Milan-Inter', operatoreId: 'op1', stato: 'convocato', inviata: true, storico: [] };
+  await FB.importa({ operatori: [], eventi: [Object.assign({ id: 'a', building: 'T3' }, base), Object.assign({ id: 'b' }, base)], disponibilita: [], regole: null });
+  assert.equal(scritte['eventi/a'].building, 'T3');
+  assert.ok(!('building' in scritte['eventi/b']));
+});

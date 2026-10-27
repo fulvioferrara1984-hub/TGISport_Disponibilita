@@ -257,7 +257,7 @@
   }
   async function eliminaEvento(id) { dati.eventi = dati.eventi.filter((x) => x.id !== id); salva(); }
   async function inviaConvocazioni(eventi, contatti) {
-    eventi.forEach((x) => { const e = dati.eventi.find((y) => y.id === x.id); Object.assign(e, { inviata: true, stato: 'convocato', convocazioneCalcolata: x.convocazioneCalcolata, fineCalcolata: x.fineCalcolata || '' }); });
+    eventi.forEach((x) => { const e = dati.eventi.find((y) => y.id === x.id); Object.assign(e, { inviata: true, stato: 'convocato', convocazioneCalcolata: x.convocazioneCalcolata, fineCalcolata: x.fineCalcolata || '' }, DO.turnoRemoto(e.tipo) ? {} : { building: x.building || '' }); });
     salva();
     return { inviate: pausa(600).then(() => ({ email: contatti.filter((c) => c.email).length })) };
   }
@@ -550,7 +550,7 @@
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
     // la demo non ha la piattaforma TGI Sport: nessun evento da coprire
-    ascoltaProgettiOnsite: (cb) => { cb([]); return () => {}; }, leggiProgetti: async () => ({}), segnaRivisto,
+    ascoltaProgettiOnsite: (cb) => { cb([]); return () => {}; }, leggiProgetti: async () => ({}), leggiProgettiDelleDate: async () => [], scriviBuilding: async () => false, segnaRivisto,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
     mieiMessaggi, scriviMessaggio, segnaMessaggiLetti, messaggioSupervisore,

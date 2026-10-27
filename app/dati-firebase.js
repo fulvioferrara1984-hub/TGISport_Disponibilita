@@ -505,7 +505,7 @@
   const voce = (testo) => ({ quando: new Date().toISOString(), testo });
 
   function pulisciEvento(e) {
-    return {
+    const campi = {
       tipo: DO.tipoEvento(e.tipo),
       competizione: String(e.competizione || '').slice(0, 80), round: String(e.round == null ? '' : e.round).slice(0, 40),
       sport: String(e.sport || '').slice(0, 40), data: e.data, titolo: String(e.titolo || '').trim().slice(0, 120),
@@ -515,6 +515,9 @@
       fine: e.fine || '', fineCalcolata: e.fineCalcolata || '',
       gettone: e.gettone === 'maggiorato' ? 'maggiorato' : '', daSostituire: !!e.daSostituire,
     };
+    // assente = convocazione inviata prima del building: il campo si scrive solo se arriva (da un backup)
+    if (e.building !== undefined) campi.building = String(e.building).slice(0, 20);
+    return campi;
   }
 
   function creaEventi(lista) {
@@ -546,10 +549,11 @@
     await scrivi(async () => {
       for (let i = 0; i < eventi.length; i += 400) {
         const batch = F.writeBatch(db);
-        eventi.slice(i, i + 400).forEach((e) => batch.update(F.doc(db, 'eventi', e.id), {
+        // il building (dalla piattaforma) vale solo per le partite; '' = inviata senza building
+        eventi.slice(i, i + 400).forEach((e) => batch.update(F.doc(db, 'eventi', e.id), Object.assign({
           inviata: true, stato: 'convocato', risposta: '', rispostaIl: '', convocazioneCalcolata: e.convocazioneCalcolata || '', fineCalcolata: e.fineCalcolata || '',
           storico: F.arrayUnion(voce('Convocazione inviata')),
-        }));
+        }, DO.turnoRemoto(e.tipo) ? {} : { building: e.building || '' })));
         await batch.commit();
       }
     });
@@ -698,6 +702,44 @@
   async function leggiProgetti(ids) {
     const letti = await Promise.all(ids.map((id) => F.getDoc(F.doc(db, 'progetti', id)).then((d) => [id, d.exists() ? Object.assign({ id }, d.data()) : null], () => null)));
     return Object.fromEntries(letti.filter(Boolean));
+  }
+
+  // Eventi della piattaforma nelle date date, per abbinare il building alle partite: lettura una tantum (mai in ascolto),
+  // a blocchi da 30 date (il limite di «in»). Senza permesso o con qualsiasi errore: nessun evento, e le convocazioni restano come sono.
+  async function leggiProgettiDelleDate(date) {
+    const giorni = Array.from(new Set(date));
+    const blocchi = [];
+    for (let i = 0; i < giorni.length; i += 30) blocchi.push(giorni.slice(i, i + 30));
+    if (!blocchi.length) return [];
+    try {
+      const letti = await Promise.all(blocchi.map((b) => F.getDocs(F.query(F.collection(db, 'progetti'), F.where('data', 'in', b)))));
+      return letti.flatMap((s) => s.docs.map((d) => Object.assign({ id: d.id }, d.data())));
+    } catch (e) {
+      if (!e || e.code !== 'permission-denied') console.warn('Eventi della piattaforma non letti:', e && e.message);
+      return [];
+    }
+  }
+
+  // Building di una convocazione già inviata, riletta in una transazione: si scrive solo se è ancora inviata, convocato/confermato
+  // e con il building che si credeva (vecchio === undefined: campo assente, inviata prima del building).
+  // rimanda: il building è cambiato dopo l'invio, la convocazione torna da inviare e l'operatore dovrà rispondere di nuovo.
+  async function scriviBuilding(id, vecchio, nuovo, rimanda) {
+    const rif = F.doc(db, 'eventi', id);
+    let scritto = false;
+    await scrivi(() => F.runTransaction(db, async (t) => {
+      scritto = false;
+      const d = await t.get(rif);
+      if (!d.exists()) return;
+      const e = d.data();
+      const atteso = vecchio === undefined ? e.building === undefined : e.building === vecchio;
+      if (e.inviata !== true || !['convocato', 'confermato'].includes(e.stato) || !atteso) return;
+      t.update(rif, rimanda
+        ? { building: nuovo, inviata: false, stato: 'assegnato', risposta: '',
+          storico: F.arrayUnion(voce('Building cambiato nella piattaforma: ' + (vecchio || '—') + ' → ' + nuovo + ': convocazione da rimandare')) }
+        : { building: nuovo, storico: F.arrayUnion(voce('Building dalla piattaforma: ' + nuovo)) });
+      scritto = true;
+    }));
+    return scritto;
   }
 
   // «Segna come rivisto»: i giorni dell'evento di adesso diventano quelli richiesti e l'avviso «giorni cambiati» si chiude
@@ -1025,7 +1067,7 @@
     ascolta, segnaLetti, salvaOperatore, nuovoCodice, eliminaOperatore, creaRichiesta, chiudiRichiesta,
     creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa, leggiOperativo, salvaOperativo,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
-    creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite, ascoltaProgettiOnsite, leggiProgetti, segnaRivisto,
+    creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite, ascoltaProgettiOnsite, leggiProgetti, leggiProgettiDelleDate, scriviBuilding, segnaRivisto,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
     mieiMessaggi, scriviMessaggio, segnaMessaggiLetti, messaggioSupervisore,

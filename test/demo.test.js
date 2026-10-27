@@ -361,6 +361,22 @@ test('risposta a un vecchio turno di supervisione: in Aggiornamenti si chiama Re
   assert.deepEqual([voce.evento.titolo, voce.evento.tipo], ['Remote TL', 'supervisione']);
 });
 
+test('building nella demo: salvato all\'invio sulle partite, non sui turni; nessun evento della piattaforma', async () => {
+  comeSupervisore();
+  await D.creaEventi([
+    { tipo: 'partita', competizione: 'Serie A', data: tra(13), titolo: 'Con-Building', orario: '20:45', operatoreId: 'op-demo1' },
+    { tipo: 'support', competizione: 'Serie A', data: tra(13), titolo: 'Turno', convocazione: '10:00', operatoreId: 'op-demo1' },
+  ]);
+  const ev = (await statoDemo()).eventi.filter((x) => x.data === tra(13));
+  const [partita, turno] = ['Con-Building', 'Turno'].map((t) => ev.find((e) => e.titolo === t));
+  await D.inviaConvocazioni([{ id: partita.id, tipo: 'partita', building: 'T1' }, { id: turno.id, tipo: 'support', building: 'T1' }], []);
+  const dopo = (await statoDemo()).eventi;
+  assert.equal(dopo.find((e) => e.id === partita.id).building, 'T1');
+  assert.ok(!('building' in dopo.find((e) => e.id === turno.id)));
+  assert.deepEqual(await D.leggiProgettiDelleDate([tra(13)]), []);
+  assert.equal(await D.scriviBuilding(partita.id, 'T1', 'T3', true), false);
+});
+
 // ---------------------------------------------------------------- accessi in sola visualizzazione
 test('sola visualizzazione: elenco dei colleghi', async () => {
   comeSupervisore();
