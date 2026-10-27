@@ -374,7 +374,7 @@ test('building nella demo: salvato all\'invio sulle partite, non sui turni; ness
   assert.equal(dopo.find((e) => e.id === partita.id).building, 'T1');
   assert.ok(!('building' in dopo.find((e) => e.id === turno.id)));
   assert.deepEqual(await D.leggiProgettiDelleDate([tra(13)]), []);
-  assert.equal(await D.scriviBuilding(partita.id, 'T1', 'T3', true), false);
+  assert.equal(await D.scriviBuilding(partita.id, 'T1', 'T3', true, { data: partita.data, titolo: partita.titolo }), false);
 });
 
 // ---------------------------------------------------------------- accessi in sola visualizzazione

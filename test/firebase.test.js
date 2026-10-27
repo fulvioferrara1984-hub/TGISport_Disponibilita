@@ -279,7 +279,7 @@ test('building: eventi della piattaforma a gruppi di 30 giorni', async () => {
   assert.deepEqual(eventi, [{ id: 'p01', data: '2026-11-01', squadraA: 'Milan' }, { id: 'p31', data: '2026-11-31', squadraA: 'Milan' }]);
 });
 
-test('building: lettura negata o non riuscita → nessun evento', async () => {
+test('building: lettura negata o non riuscita → null (non «nessun evento»), nessuna data → []', async () => {
   let letture = 0;
   const avvisi = [];
   const avvisoOriginale = console.warn;
@@ -289,17 +289,20 @@ test('building: lettura negata o non riuscita → nessun evento', async () => {
       const { FB } = archivioNuovo(SUP, { where: (...a) => a, query: (c, ...w) => ({ c, w }), getDocs: async () => { letture++; throw errore; } });
       DO.avviaPagina('admin', () => {});
       await FB.utente();
-      assert.deepEqual(await FB.leggiProgettiDelleDate(['2026-11-01']), []);
+      assert.equal(await FB.leggiProgettiDelleDate(['2026-11-01']), null);
     }
     assert.equal(letture, 2);
     // permesso negato in silenzio (regole non ancora pubblicate), ogni altro errore in console
     assert.equal(avvisi.length, 1);
     assert.match(avvisi[0], /rete/);
-    const { FB } = archivioNuovo(SUP, { getDocs: async () => { letture++; return { docs: [] }; } });
+    const { FB } = archivioNuovo(SUP, { where: (...a) => a, query: (c, ...w) => ({ c, w }), getDocs: async () => { letture++; return { docs: [] }; } });
     DO.avviaPagina('admin', () => {});
     await FB.utente();
     assert.deepEqual(await FB.leggiProgettiDelleDate([]), []);
     assert.equal(letture, 2);
+    // lettura riuscita ma senza eventi: [] (diverso da una lettura fallita)
+    assert.deepEqual(await FB.leggiProgettiDelleDate(['2026-11-01']), []);
+    assert.equal(letture, 3);
   } finally { console.warn = avvisoOriginale; }
 });
 
@@ -318,12 +321,16 @@ function transazioneSu(dati) {
   };
 }
 
+// convocazione che il supervisore ha davanti: la transazione scrive solo se il documento è ancora quella partita
+const ATTESO = { data: '2026-11-10', titolo: 'Milan-Inter' };
+const partita = (campi) => Object.assign({ data: ATTESO.data, titolo: ATTESO.titolo }, campi);
+
 test('building cambiato: da rimandare una volta sola', async () => {
-  const letta = transazioneSu({ inviata: true, stato: 'confermato', building: 'T1' });
+  const letta = transazioneSu(partita({ inviata: true, stato: 'confermato', building: 'T1' }));
   const { FB } = archivioNuovo(SUP, letta.extra);
   DO.avviaPagina('admin', () => {});
   await FB.utente();
-  assert.equal(await FB.scriviBuilding('c1', 'T1', 'T3', true), true);
+  assert.equal(await FB.scriviBuilding('c1', 'T1', 'T3', true, ATTESO), true);
   assert.equal(letta.scritte.length, 1);
   const [percorso, campi] = letta.scritte[0];
   assert.equal(percorso, 'eventi/c1');
@@ -332,48 +339,73 @@ test('building cambiato: da rimandare una volta sola', async () => {
   assert.equal(campi.storico.unione.length, 1);
   assert.equal(campi.storico.unione[0].testo, 'Building cambiato nella piattaforma: T1 → T3: convocazione da rimandare');
   // già rimessa da inviare da un altro supervisore: niente di nuovo
-  const rimessa = transazioneSu({ inviata: false, stato: 'assegnato', building: 'T3' });
+  const rimessa = transazioneSu(partita({ inviata: false, stato: 'assegnato', building: 'T3' }));
   const { FB: FB2 } = archivioNuovo(SUP, rimessa.extra);
   DO.avviaPagina('admin', () => {});
   await FB2.utente();
-  assert.equal(await FB2.scriviBuilding('c1', 'T1', 'T3', true), false);
+  assert.equal(await FB2.scriviBuilding('c1', 'T1', 'T3', true, ATTESO), false);
   assert.equal(rimessa.scritte.length, 0);
 });
 
 test('inviata prima del building: solo il campo', async () => {
-  const vecchia = transazioneSu({ inviata: true, stato: 'convocato' });
+  const vecchia = transazioneSu(partita({ inviata: true, stato: 'convocato' }));
   const { FB } = archivioNuovo(SUP, vecchia.extra);
   DO.avviaPagina('admin', () => {});
   await FB.utente();
-  assert.equal(await FB.scriviBuilding('c1', undefined, 'T1', false), true);
+  assert.equal(await FB.scriviBuilding('c1', undefined, 'T1', false, ATTESO), true);
   const [percorso, campi] = vecchia.scritte[0];
   assert.equal(percorso, 'eventi/c1');
   assert.deepEqual(Object.keys(campi).sort(), ['building', 'storico']);
   assert.equal(campi.building, 'T1');
   assert.equal(campi.storico.unione[0].testo, 'Building dalla piattaforma: T1');
   // inviata senza building (campo vuoto, non assente): non si tocca
-  const senza = transazioneSu({ inviata: true, stato: 'convocato', building: '' });
+  const senza = transazioneSu(partita({ inviata: true, stato: 'convocato', building: '' }));
   const { FB: FB2 } = archivioNuovo(SUP, senza.extra);
   DO.avviaPagina('admin', () => {});
   await FB2.utente();
-  assert.equal(await FB2.scriviBuilding('c1', undefined, 'T1', false), false);
+  assert.equal(await FB2.scriviBuilding('c1', undefined, 'T1', false, ATTESO), false);
   assert.equal(senza.scritte.length, 0);
 });
 
 test('building: convocazione cambiata nel frattempo (non più inviata, rifiutata, building diverso) → nessuna scrittura', async () => {
   for (const dati of [
-    { inviata: false, stato: 'assegnato', building: 'T1' },
-    { inviata: true, stato: 'rifiutato', building: 'T1' },
-    { inviata: true, stato: 'confermato', building: 'T2' },
+    partita({ inviata: false, stato: 'assegnato', building: 'T1' }),
+    partita({ inviata: true, stato: 'rifiutato', building: 'T1' }),
+    partita({ inviata: true, stato: 'confermato', building: 'T2' }),
     null,
   ]) {
     const t = transazioneSu(dati);
     const { FB } = archivioNuovo(SUP, t.extra);
     DO.avviaPagina('admin', () => {});
     await FB.utente();
-    assert.equal(await FB.scriviBuilding('c1', 'T1', 'T3', true), false, JSON.stringify(dati));
+    assert.equal(await FB.scriviBuilding('c1', 'T1', 'T3', true, ATTESO), false, JSON.stringify(dati));
     assert.equal(t.scritte.length, 0);
   }
+});
+
+test('building: documento di un\'altra partita (titolo o data diversi) o atteso mancante → nessuna scrittura', async () => {
+  for (const [dati, atteso] of [
+    [partita({ inviata: true, stato: 'confermato', building: 'T1', titolo: 'Juventus-Roma' }), ATTESO],
+    [partita({ inviata: true, stato: 'confermato', building: 'T1', data: '2026-11-11' }), ATTESO],
+    [partita({ inviata: true, stato: 'confermato', building: 'T1' }), { data: ATTESO.data, titolo: 'Inter-Milan' }],
+    [partita({ inviata: true, stato: 'confermato', building: 'T1' }), { data: '2026-11-17', titolo: ATTESO.titolo }],
+    [partita({ inviata: true, stato: 'confermato', building: 'T1' }), undefined],
+  ]) {
+    for (const rimanda of [true, false]) {
+      const t = transazioneSu(dati);
+      const { FB } = archivioNuovo(SUP, t.extra);
+      DO.avviaPagina('admin', () => {});
+      await FB.utente();
+      assert.equal(await FB.scriviBuilding('c1', rimanda ? 'T1' : undefined, 'T3', rimanda, atteso), false, JSON.stringify([dati, atteso]));
+      assert.equal(t.scritte.length, 0);
+    }
+  }
+  // stessa partita: scrive
+  const t = transazioneSu(partita({ inviata: true, stato: 'confermato', building: 'T1' }));
+  const { FB } = archivioNuovo(SUP, t.extra);
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  assert.equal(await FB.scriviBuilding('c1', 'T1', 'T3', true, ATTESO), true);
 });
 
 test('invio: building sulle partite, non sui turni', async () => {
@@ -384,9 +416,13 @@ test('invio: building sulle partite, non sui turni', async () => {
   });
   DO.avviaPagina('admin', () => {});
   await FB.utente();
-  await FB.inviaConvocazioni([{ id: 'c1', tipo: 'partita', building: 'T1' }, { id: 'c2', tipo: 'partita' }, { id: 't1', tipo: 'supervisione', building: 'T1' }], [], '');
+  await FB.inviaConvocazioni([{ id: 'c1', tipo: 'partita', building: 'T1' }, { id: 'c2', tipo: 'partita', building: '' }, { id: 'c3', tipo: 'partita' }, { id: 't1', tipo: 'supervisione', building: 'T1' }], [], '');
   assert.equal(aggiornate['eventi/c1'].building, 'T1');
+  // '' = inviata senza building
   assert.equal(aggiornate['eventi/c2'].building, '');
+  // chiave assente (building non letti dalla piattaforma): il campo non si scrive, lo riceverà alla prossima apertura
+  assert.ok(!('building' in aggiornate['eventi/c3']));
+  assert.equal(aggiornate['eventi/c3'].stato, 'convocato');
   assert.ok(!('building' in aggiornate['eventi/t1']));
   assert.equal(aggiornate['eventi/t1'].stato, 'convocato');
 });

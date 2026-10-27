@@ -53,29 +53,36 @@
   // Convocazioni già inviate il cui building nella piattaforma è cambiato (da rimandare) o mancava (da completare):
   // una scrittura per volta, ciascuna in una transazione; un errore non ferma le altre né la pagina.
   // Si guardano solo i giorni appena letti (date): per gli altri la copia in memoria potrebbe essere vecchia. Senza giorni, niente.
-  // Il collega in sola visualizzazione non scrive mai.
+  // Il collega in sola visualizzazione non scrive mai. Non si scrive nemmeno finché le convocazioni vengono dalla copia locale
+  // e non dal server (come l'allineamento delle richieste per evento): una copia vecchia darebbe cambi che non ci sono.
+  // Le partite già iniziate oggi non si rimettono da inviare (stesso controllo della finestra Invia); si completano comunque.
   async function controllaBuilding(date) {
-    if (A.solaLettura || !date.length) return;
-    const oggi = DO.oggi(), eventi = A.eventi.filter((e) => date.includes(e.data));
+    if (A.solaLettura || !A.sincronizzato || !date.length) return;
+    const oggi = DO.oggi(), ora = new Date().toTimeString().slice(0, 5), eventi = A.eventi.filter((e) => date.includes(e.data));
+    const atteso = (e) => ({ data: e.data, titolo: e.titolo });
     for (const x of B.daCompletare(eventi, progetti, oggi)) {
-      try { await DO.dati.scriviBuilding(x.evento.id, undefined, x.nuovo, false); } catch (err) { console.warn('Building non completato:', err && err.message); }
+      try { await DO.dati.scriviBuilding(x.evento.id, undefined, x.nuovo, false, atteso(x.evento)); } catch (err) { console.warn('Building non completato:', err && err.message); }
     }
     let rimesse = 0;
-    for (const x of B.daRimandare(eventi, progetti, oggi)) {
-      try { if (await DO.dati.scriviBuilding(x.evento.id, x.vecchio, x.nuovo, true)) rimesse++; } catch (err) { console.warn('Building non aggiornato:', err && err.message); }
+    for (const x of B.daRimandare(eventi.filter((e) => !R.giaIniziato(e, A.regole, oggi, ora)), progetti, oggi)) {
+      try { if (await DO.dati.scriviBuilding(x.evento.id, x.vecchio, x.nuovo, true, atteso(x.evento))) rimesse++; } catch (err) { console.warn('Building non aggiornato:', err && err.message); }
     }
     if (rimesse) DO.avviso(plurale(rimesse, 'convocazione da rimandare', 'convocazioni da rimandare') + ': building cambiato nella piattaforma.', 'ok', 8000);
   }
 
   async function leggiBuilding(date) {
-    unisciProgetti(date, await DO.dati.leggiProgettiDelleDate(date));
+    const eventiLetti = await DO.dati.leggiProgettiDelleDate(date);
+    // lettura non riuscita (null): non vuol dire che gli eventi non ci sono, quindi niente unione e niente controllo
+    if (eventiLetti === null) return;
+    unisciProgetti(date, eventiLetti);
     await controllaBuilding(date);
     disegna();
   }
 
-  // prima lettura: a scheda visibile e con le convocazioni arrivate (una volta sola, non a ogni aggiornamento dei dati)
+  // prima lettura: a scheda visibile e con le convocazioni arrivate dal server (una volta sola, non a ogni aggiornamento dei dati;
+  // finché vengono dalla copia locale si aspetta il prossimo aggiornamento, senza segnare la lettura come fatta)
   function primaLettura() {
-    if (letti || A.vista !== 'convocazioni' || !A.eventi.length) return;
+    if (letti || A.vista !== 'convocazioni' || !A.eventi.length || !A.sincronizzato) return;
     letti = true;
     leggiBuilding(B.giorniDaLeggere(A.eventi, DO.oggi())).catch((err) => console.warn('Building non letto:', err && err.message));
   }
@@ -653,14 +660,18 @@
   // ---------- invio delle convocazioni ----------
   // Invio: tutte le convocazioni pronte, raggruppate per operatore; si può togliere la spunta a quelle da tenere per dopo.
   let daInviare = [], progettiInvio = [], apreInvio = false;
-  // building che parte con la convocazione: quello trovato adesso nella piattaforma; se non c'è (tolto) resta quello già salvato
-  const buildingInvio = (e) => B.abbina(e, progettiInvio).building || e.building || '';
-  // riga già in HTML (testo con escape): per le partite dice il building che partirà, o «senza building» in rosso
+  // la lettura dei building è fallita all'apertura: le partite partono senza la chiave `building` (il campo resta com'è)
+  let buildingNonLetti = false;
+  // building che parte con la convocazione: quello trovato adesso nella piattaforma; quello già salvato resta solo se l'evento
+  // della piattaforma c'è ma non ha più il building; evento non trovato o ambiguo: '' (e «senza building» in rosso nella finestra)
+  const buildingInvio = (e) => { const a = B.abbina(e, progettiInvio); return a.motivo === '' ? (a.building || e.building || '') : ''; };
+  // riga già in HTML (testo con escape): per le partite dice il building che partirà, o «senza building» in rosso;
+  // se i building non sono stati letti le righe non ne dicono nulla
   const rigaInvio = (e) => {
-    const g = DO.giorno(e.data), b = turno(e) ? '' : buildingInvio(e);
+    const g = DO.giorno(e.data), senza = turno(e) || buildingNonLetti, b = senza ? '' : buildingInvio(e);
     return DO.esc(g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (!turno(e) && e.competizione ? ' · ' + e.competizione : '') + (turno(e) ? ' · dalle ' : ' · ritrovo ') + (R.convocazione(e, A.regole) || '—')
       + (b ? ' · building ' + b : ''))
-      + (!turno(e) && !b ? ' <span class="testo-errore">· senza building</span>' : '');
+      + (!senza && !b ? ' <span class="testo-errore">· senza building</span>' : '');
   };
   function contaScelte() {
     const n = $('evi-elenco').querySelectorAll('input[data-evento]:checked').length;
@@ -686,13 +697,19 @@
     daInviare = A.eventi.filter((e) => e.stato === 'assegnato' && e.data >= DO.oggi()).sort((a, b) => a.data.localeCompare(b.data));
     // building letti adesso, solo per i giorni da inviare: dati freschi per l'invio (e, già che ci sono, il controllo dei cambi)
     const giorni = B.giorniDaLeggere(daInviare, DO.oggi());
-    progettiInvio = await DO.dati.leggiProgettiDelleDate(giorni).catch(() => []);
-    unisciProgetti(giorni, progettiInvio);
-    await controllaBuilding(giorni);
-    disegna();
+    const lettura = await DO.dati.leggiProgettiDelleDate(giorni).catch(() => null);
+    // lettura non riuscita (null): non vuol dire che gli eventi non ci sono; niente unione né controllo, e le partite partono senza building
+    buildingNonLetti = lettura === null;
+    progettiInvio = lettura || [];
+    if (!buildingNonLetti) {
+      unisciProgetti(giorni, progettiInvio);
+      await controllaBuilding(giorni);
+      disegna();
+    }
     const perOp = {};
     daInviare.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });
     $('evi-elenco').innerHTML = '<p style="margin: 0 0 10px;">Le convocazioni compaiono sulla pagina di ciascun operatore, che potrà confermare. Chi ha un\'email la riceve anche per posta. Togli la spunta a quelle da inviare più tardi.</p>'
+      + (buildingNonLetti ? '<p class="avviso-op giallo" style="margin: 0 0 10px;">Building non letti dalla piattaforma: le partite partono senza, lo riceveranno alla prossima apertura senza tornare da inviare.</p>' : '')
       + Object.keys(perOp).map((id) => {
         const o = operatore(id) || {};
         return '<div class="invio-gruppo"><label class="spunta invio-op"><input type="checkbox" data-gruppo="' + id + '" checked><span><b>' + DO.esc(o.nome || '?') + '</b>'
@@ -727,9 +744,10 @@
       .filter((x) => x.ora && x.ora.stato === 'assegnato' && x.ora.operatoreId === x.prima.operatoreId)
       .map((x) => x.ora);
     const cambiati = scelti.size - ancoraValidi.length;
-    // le partite partono con il building trovato adesso nella piattaforma; se non c'è resta quello già salvato, altrimenti ''; i turni remoti non ne hanno
+    // le partite partono con il building trovato adesso nella piattaforma (regola di buildingInvio); i turni remoti non ne hanno;
+    // se i building non sono stati letti la chiave non c'è e il campo non si scrive
     const eventi = ancoraValidi.map((e) => Object.assign({}, e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) },
-      turno(e) ? {} : { building: buildingInvio(e) }));
+      turno(e) || buildingNonLetti ? {} : { building: buildingInvio(e) }));
     if (cambiati) DO.avviso(cambiati + (cambiati === 1 ? ' convocazione è cambiata' : ' convocazioni sono cambiate') + ' mentre la finestra era aperta e non è stata inviata: controlla e riprova.', 'errore', 8000);
     if (!eventi.length) { b.disabled = false; $('dlg-invia').close(); return; }
     eventi.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });

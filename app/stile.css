@@ -721,6 +721,7 @@ dialog.dlg-giorno { width: min(440px, calc(100vw - 32px)); }
 .conv-info b { font-weight: 650; font-size: var(--t-16); }
 .conv-info span { color: var(--inchiostro-2); font-size: var(--t-14); }
 .conv-info .ritrovo { color: var(--inchiostro); font-weight: 600; }
+.conv-info .building { font-weight: 600; }
 .conv-azioni { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .conv-azioni .primario { height: 36px; }
 .giorno-convocato { display: inline-block; margin-top: 4px; padding: 1px 7px; border-radius: 10px; background: var(--ok-tenue); color: var(--ok); font-size: var(--t-12); font-weight: 600; }

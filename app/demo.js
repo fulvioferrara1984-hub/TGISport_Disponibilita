@@ -550,7 +550,7 @@
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
     // la demo non ha la piattaforma TGI Sport: nessun evento da coprire
-    ascoltaProgettiOnsite: (cb) => { cb([]); return () => {}; }, leggiProgetti: async () => ({}), leggiProgettiDelleDate: async () => [], scriviBuilding: async () => false, segnaRivisto,
+    ascoltaProgettiOnsite: (cb) => { cb([]); return () => {}; }, leggiProgetti: async () => ({}), leggiProgettiDelleDate: async () => [], scriviBuilding: async (id, vecchio, nuovo, rimanda, atteso) => false, segnaRivisto,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
     mieiMessaggi, scriviMessaggio, segnaMessaggiLetti, messaggioSupervisore,

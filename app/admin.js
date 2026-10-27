@@ -11,6 +11,7 @@
   let operatori = [], disp = {}, feed = [], richieste = [], nonLettiOps = new Set(), eventi = [], regole = DO.regole.complete(null);
   let onsite = [], compensiOnsite = {};   // deployment on-site e compensi (solo supervisori)
   let richiesteEvento = [];               // richieste di disponibilità per un singolo evento
+  let sincronizzato = false;              // eventi e regole arrivati dal server (la prima copia può venire dalla cache locale)
   let solaLettura = false, visualizzatori = [];   // collega in sola visualizzazione; elenco dei colleghi (supervisori)
   let messaggi = [], segniMessaggi = new Set();   // messaggi con gli operatori; eventi e deployment con un messaggio da leggere
   let conversazione = null;                        // conversazione aperta nel pannello: { tipo, rif, operatoreId, pannello }
@@ -66,6 +67,7 @@
     richiesteEvento = stato.richiesteEvento || [];
     visualizzatori = stato.visualizzatori || [];
     messaggi = stato.messaggi || [];
+    sincronizzato = !!stato.sincronizzato;
     segniMessaggi = DO.messaggi.segniDaLeggere(feed);
     // la dashboard di un collega non scrive mai: niente allineamento delle richieste per evento
     if (stato.sincronizzato && !solaLettura) allineaRichiesteEvento(richiesteEvento, eventi, regole, oggi);
@@ -101,6 +103,8 @@
     get visualizzatori() { return visualizzatori; },
     get messaggi() { return messaggi; },
     get segniMessaggi() { return segniMessaggi; },
+    // true quando eventi, richieste per evento e regole sono arrivati dal server (non dalla copia locale)
+    get sincronizzato() { return sincronizzato; },
     apriMessaggi: (tipo, rif, operatoreId) => apriMessaggi(tipo, rif, operatoreId),
     linkDashboard: () => new URL('admin.html', location.href).href,
     get vista() { return vista; },

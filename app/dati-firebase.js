@@ -549,11 +549,12 @@
     await scrivi(async () => {
       for (let i = 0; i < eventi.length; i += 400) {
         const batch = F.writeBatch(db);
-        // il building (dalla piattaforma) vale solo per le partite; '' = inviata senza building
+        // il building (dalla piattaforma) vale solo per le partite e solo se l'evento ha la chiave: '' = inviata senza building,
+        // chiave assente = building non letti dalla piattaforma, il campo resta assente e arriverà alla prossima apertura
         eventi.slice(i, i + 400).forEach((e) => batch.update(F.doc(db, 'eventi', e.id), Object.assign({
           inviata: true, stato: 'convocato', risposta: '', rispostaIl: '', convocazioneCalcolata: e.convocazioneCalcolata || '', fineCalcolata: e.fineCalcolata || '',
           storico: F.arrayUnion(voce('Convocazione inviata')),
-        }, DO.turnoRemoto(e.tipo) ? {} : { building: e.building || '' })));
+        }, DO.turnoRemoto(e.tipo) || !('building' in e) ? {} : { building: e.building || '' })));
         await batch.commit();
       }
     });
@@ -705,7 +706,8 @@
   }
 
   // Eventi della piattaforma nelle date date, per abbinare il building alle partite: lettura una tantum (mai in ascolto),
-  // a blocchi da 30 date (il limite di «in»). Senza permesso o con qualsiasi errore: nessun evento, e le convocazioni restano come sono.
+  // a blocchi da 30 date (il limite di «in»). Senza permesso o con qualsiasi errore: null (lettura non riuscita, diversa da «nessun evento»:
+  // chi chiama non deve concluderne che gli eventi non ci sono) e le convocazioni restano come sono. Nessuna data o nessun evento: [].
   async function leggiProgettiDelleDate(date) {
     const giorni = Array.from(new Set(date));
     const blocchi = [];
@@ -716,14 +718,16 @@
       return letti.flatMap((s) => s.docs.map((d) => Object.assign({ id: d.id }, d.data())));
     } catch (e) {
       if (!e || e.code !== 'permission-denied') console.warn('Eventi della piattaforma non letti:', e && e.message);
-      return [];
+      return null;
     }
   }
 
   // Building di una convocazione già inviata, riletta in una transazione: si scrive solo se è ancora inviata, convocato/confermato
   // e con il building che si credeva (vecchio === undefined: campo assente, inviata prima del building).
   // rimanda: il building è cambiato dopo l'invio, la convocazione torna da inviare e l'operatore dovrà rispondere di nuovo.
-  async function scriviBuilding(id, vecchio, nuovo, rimanda) {
+  // atteso: { data, titolo } della convocazione che il supervisore ha davanti; se il documento è un'altra partita (spostata o rinominata
+  // nel frattempo) non si scrive.
+  async function scriviBuilding(id, vecchio, nuovo, rimanda, atteso) {
     const rif = F.doc(db, 'eventi', id);
     let scritto = false;
     await scrivi(() => F.runTransaction(db, async (t) => {
@@ -731,8 +735,9 @@
       const d = await t.get(rif);
       if (!d.exists()) return;
       const e = d.data();
-      const atteso = vecchio === undefined ? e.building === undefined : e.building === vecchio;
-      if (e.inviata !== true || !['convocato', 'confermato'].includes(e.stato) || !atteso) return;
+      const stessoBuilding = vecchio === undefined ? e.building === undefined : e.building === vecchio;
+      const stessaPartita = !!atteso && e.data === atteso.data && e.titolo === atteso.titolo;
+      if (e.inviata !== true || !['convocato', 'confermato'].includes(e.stato) || !stessoBuilding || !stessaPartita) return;
       t.update(rif, rimanda
         ? { building: nuovo, inviata: false, stato: 'assegnato', risposta: '',
           storico: F.arrayUnion(voce('Building cambiato nella piattaforma: ' + (vecchio || '—') + ' → ' + nuovo + ': convocazione da rimandare')) }
