@@ -24,16 +24,13 @@
     const candidati = lista(progetti).filter((p) => p && p.data === conv.data && p.stato !== 'CANCELLED' && p.modalita !== 'FLYKIT'
       && normalizza(p.squadraA) + normalizza(p.squadraB) === titolo);
     if (!candidati.length) return risultato('', 'non trovato');
-    const diversi = (eventi) => Array.from(new Set(eventi.map((p) => testo(p.building)).filter(Boolean)));
-    const tutti = diversi(candidati);
+    const tutti = Array.from(new Set(candidati.map((p) => testo(p.building)).filter(Boolean)));
     if (!tutti.length) return risultato('', '');
     if (tutti.length === 1) return risultato(tutti[0], '');
+    // building diversi: vale quello dell'unico candidato con la stessa competizione (una competizione vuota non conta)
     const competizione = normalizza(conv.competizione);
-    if (competizione) {
-      const stessa = diversi(candidati.filter((p) => normalizza(p.competizione) === competizione));
-      if (stessa.length === 1) return risultato(stessa[0], '');
-    }
-    return risultato('', 'ambiguo');
+    const stessa = competizione ? candidati.filter((p) => normalizza(p.competizione) === competizione) : [];
+    return stessa.length === 1 ? risultato(testo(stessa[0].building), '') : risultato('', 'ambiguo');
   }
 
   // Giorni (da oggi in poi, ordinati, senza doppioni) dei quali leggere i progetti: partite assegnate, convocate o confermate.

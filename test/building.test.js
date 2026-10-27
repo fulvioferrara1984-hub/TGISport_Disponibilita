@@ -67,9 +67,15 @@ test('abbina: più eventi', () => {
   // due eventi con la stessa competizione e building diversi: la competizione non scioglie
   const stessa = [p({ id: 'p1', building: 'T1' }), p({ id: 'p2', building: 'T3' }), p({ id: 'p3', building: 'EXT', competizione: 'COPPA ITALIA' })];
   assert.deepEqual(B.abbina(c(), stessa), { building: '', motivo: 'ambiguo' });
-  // due eventi della stessa competizione con lo stesso building bastano a sciogliere
+  // la competizione scioglie solo se un solo evento la ha: due della stessa competizione, anche con lo stesso building, restano ambigui
   const doppio = [p({ id: 'p1', building: 'T1' }), p({ id: 'p2', building: 'T1' }), p({ id: 'p3', building: 'T3', competizione: 'COPPA ITALIA' })];
-  assert.deepEqual(B.abbina(c(), doppio), { building: 'T1', motivo: '' });
+  assert.deepEqual(B.abbina(c(), doppio), { building: '', motivo: 'ambiguo' });
+  // idem se uno dei due della stessa competizione non ha il building
+  const mezzo = [p({ id: 'p1', building: 'T1' }), p({ id: 'p2', building: '' }), p({ id: 'p3', building: 'T3', competizione: 'COPPA ITALIA' })];
+  assert.deepEqual(B.abbina(c(), mezzo), { building: '', motivo: 'ambiguo' });
+  // l'unico evento della competizione vale così com'è, anche senza building
+  const unico = [p({ id: 'p1', building: '' }), p({ id: 'p2', building: 'T3', competizione: 'COPPA ITALIA' }), p({ id: 'p3', building: 'T1', competizione: 'COPPA ITALIA' })];
+  assert.deepEqual(B.abbina(c({ competizione: 'Serie A' }), unico), { building: '', motivo: '' });
   // gli eventi annullati non fanno ambiguità
   assert.deepEqual(B.abbina(c(), [p({ id: 'p1' }), p({ id: 'p2', building: 'T3', stato: 'CANCELLED' })]), { building: 'T1', motivo: '' });
 });
