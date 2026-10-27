@@ -579,6 +579,7 @@ button.primario.pericolo:hover { background: #a32520; }
 .ev-ora b { font-size: var(--t-20); font-weight: 700; line-height: 1.05; margin-bottom: 1px; }
 .ev-ora small { color: var(--inchiostro-3); font-size: var(--t-12); }
 .ev-ora .notte { color: #5b34c7; font-weight: 600; }
+.ev-ora .ev-building { font-weight: 600; letter-spacing: .02em; }
 .ev-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ev-info b { font-weight: 650; font-size: var(--t-16); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ev-info small { color: var(--inchiostro-3); font-size: var(--t-12); }

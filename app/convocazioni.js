@@ -34,6 +34,52 @@
   const Q = DO.richiesteEvento;
   const richiestaDi = (id) => A.richiesteEvento.find((r) => r.id === id) || null;
 
+  // ---------- building (dalla piattaforma) ----------
+  // Eventi della piattaforma letti una volta (mai in ascolto): alla prima apertura della scheda per i giorni delle partite
+  // già assegnate, e a ogni apertura di «Invia convocazioni» per i soli giorni da inviare. Servono ad abbinare il building alle partite.
+  const B = DO.building;
+  let progetti = [];
+  let letti = false;
+
+  // gli eventi appena letti sostituiscono quelli già noti con lo stesso id
+  function unisciProgetti(nuovi) {
+    const perId = new Map(progetti.map((p) => [p.id, p]));
+    nuovi.forEach((p) => perId.set(p.id, p));
+    progetti = [...perId.values()];
+  }
+
+  // Building della partita: quello salvato se è già stata inviata, altrimenti quello che l'abbinamento trova adesso. Turni remoti: mai.
+  const buildingDi = (e) => (turno(e) ? '' : e.inviata ? e.building || '' : B.abbina(e, progetti).building);
+
+  // Convocazioni già inviate il cui building nella piattaforma è cambiato (da rimandare) o mancava (da completare):
+  // una scrittura per volta, ciascuna in una transazione; un errore non ferma le altre né la pagina.
+  // Il collega in sola visualizzazione non scrive mai.
+  async function controllaBuilding() {
+    if (A.solaLettura) return;
+    const oggi = DO.oggi();
+    for (const x of B.daCompletare(A.eventi, progetti, oggi)) {
+      try { await DO.dati.scriviBuilding(x.evento.id, undefined, x.nuovo, false); } catch (err) { console.warn('Building non completato:', err && err.message); }
+    }
+    let rimesse = 0;
+    for (const x of B.daRimandare(A.eventi, progetti, oggi)) {
+      try { if (await DO.dati.scriviBuilding(x.evento.id, x.vecchio, x.nuovo, true)) rimesse++; } catch (err) { console.warn('Building non aggiornato:', err && err.message); }
+    }
+    if (rimesse) DO.avviso(plurale(rimesse, 'convocazione da rimandare', 'convocazioni da rimandare') + ': building cambiato nella piattaforma.', 'ok', 8000);
+  }
+
+  async function leggiBuilding(date) {
+    unisciProgetti(await DO.dati.leggiProgettiDelleDate(date));
+    await controllaBuilding();
+    disegna();
+  }
+
+  // prima lettura: a scheda visibile e con le convocazioni arrivate (una volta sola, non a ogni aggiornamento dei dati)
+  function primaLettura() {
+    if (letti || A.vista !== 'convocazioni' || !A.eventi.length) return;
+    letti = true;
+    leggiBuilding(B.giorniDaLeggere(A.eventi, DO.oggi())).catch((err) => console.warn('Building non letto:', err && err.message));
+  }
+
   // ---------- disegno ----------
   function filtroStato(e) {
     const f = $('ev-filtro-stato').value;
@@ -99,6 +145,7 @@
   function riga(e) {
     const st = STATI[e.stato] || STATI['da-assegnare'];
     const conv = DO.esc(R.convocazione(e, A.regole)), fine = DO.esc(R.fine(e, A.regole)), notte = R.notturno(e, A.regole), annullato = e.stato === 'annullato';
+    const buildingRiga = buildingDi(e);
     const tag = [];
     if (turno(e)) tag.push('<span class="tag tag-sup">' + R.nomeTipo(e.tipo) + '</span>');
     // compenso come nel calcolo dei gettoni: il maggiorato vale su tutto, poi quello della competizione
@@ -113,7 +160,7 @@
     }
     return '<div class="ev-riga' + (annullato ? ' annullato' : '') + (turno(e) ? ' sup' : '') + '" data-id="' + e.id + '" style="--comp: ' + R.coloreCompetizione(R.competizioneDi(e), A.regole) + '">'
       + '<div class="ev-ora">' + (turno(e) ? '<b>' + (conv || '—') + '</b><small>' + (fine ? 'fine ' + fine : 'inizio turno') + '</small>'
-        : '<b>' + DO.esc(e.orario || '—') + '</b><small>ritrovo ' + (conv || '—') + '</small>' + (fine ? '<small>fine ' + fine + '</small>' : ''))
+        : '<b>' + DO.esc(e.orario || '—') + '</b><small>ritrovo ' + (conv || '—') + '</small>' + (buildingRiga ? '<small class="ev-building">' + DO.esc(buildingRiga) + '</small>' : '') + (fine ? '<small>fine ' + fine + '</small>' : ''))
         + (notte ? '<small class="notte">notturno</small>' : '') + '</div>'
       + '<div class="ev-info"><b>' + DO.esc(titolo(e)) + '</b>'
         + (turno(e) ? '' : '<small>' + DO.esc([e.competizione, e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(' · ')) + '</small>')
@@ -283,6 +330,7 @@
     $('evd-fine').value = A.solaLettura ? R.fine(e, A.regole) : e.fine || '';
     $('evd-sport').value = e.sport || '';
     $('evd-note').value = e.note || '';
+    disegnaBuildingEvento();
     $('evd-maggiorato').checked = e.gettone === 'maggiorato';
     $('evd-sostituire').checked = !!e.daSostituire;
     $('evd-annulla-evento').textContent = e.stato === 'annullato' ? 'Ripristina evento' : 'Annulla evento';
@@ -295,6 +343,13 @@
     disegnaRichiestaEvento();
     disegnaMessaggiEvento();
     $('dlg-evento').showModal();
+  }
+
+  // «Building T1 (dalla piattaforma)», in sola lettura; senza building (o nei turni remoti) la riga non compare
+  function disegnaBuildingEvento() {
+    const e = eventoAttuale(), b = e ? buildingDi(e) : '';
+    $('evd-building').textContent = b ? 'Building ' + b + ' (dalla piattaforma)' : '';
+    $('evd-building').hidden = !b;
   }
 
   // ---------- messaggi con l'operatore dell'evento ----------
@@ -597,10 +652,13 @@
 
   // ---------- invio delle convocazioni ----------
   // Invio: tutte le convocazioni pronte, raggruppate per operatore; si può togliere la spunta a quelle da tenere per dopo.
-  let daInviare = [];
+  let daInviare = [], progettiInvio = [], apreInvio = false;
+  // riga già in HTML (testo con escape): per le partite dice il building che partirà, o «senza building» in rosso
   const rigaInvio = (e) => {
-    const g = DO.giorno(e.data);
-    return g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (!turno(e) && e.competizione ? ' · ' + e.competizione : '') + (turno(e) ? ' · dalle ' : ' · ritrovo ') + (R.convocazione(e, A.regole) || '—');
+    const g = DO.giorno(e.data), b = turno(e) ? '' : B.abbina(e, progettiInvio).building;
+    return DO.esc(g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (!turno(e) && e.competizione ? ' · ' + e.competizione : '') + (turno(e) ? ' · dalle ' : ' · ritrovo ') + (R.convocazione(e, A.regole) || '—')
+      + (b ? ' · building ' + b : ''))
+      + (!turno(e) && !b ? ' <span class="testo-errore">· senza building</span>' : '');
   };
   function contaScelte() {
     const n = $('evi-elenco').querySelectorAll('input[data-evento]:checked').length;
@@ -613,8 +671,22 @@
       g.indeterminate = scelti > 0 && scelti < suoi.length;
     });
   }
-  $('ev-invia').addEventListener('click', () => {
+  $('ev-invia').addEventListener('click', async () => {
+    if (apreInvio) return;
+    apreInvio = true;
+    try {
+      await apriInvio();
+    } finally {
+      apreInvio = false;
+    }
+  });
+  async function apriInvio() {
     daInviare = A.eventi.filter((e) => e.stato === 'assegnato' && e.data >= DO.oggi()).sort((a, b) => a.data.localeCompare(b.data));
+    // building letti adesso, solo per i giorni da inviare: dati freschi per l'invio (e, già che ci sono, il controllo dei cambi)
+    progettiInvio = await DO.dati.leggiProgettiDelleDate(B.giorniDaLeggere(daInviare, DO.oggi())).catch(() => []);
+    unisciProgetti(progettiInvio);
+    await controllaBuilding();
+    disegna();
     const perOp = {};
     daInviare.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });
     $('evi-elenco').innerHTML = '<p style="margin: 0 0 10px;">Le convocazioni compaiono sulla pagina di ciascun operatore, che potrà confermare. Chi ha un\'email la riceve anche per posta. Togli la spunta a quelle da inviare più tardi.</p>'
@@ -626,12 +698,12 @@
           + '<ul class="elenco-invio">' + perOp[id].map((e) => {
             const iniziato = R.giaIniziato(e, A.regole, DO.oggi(), new Date().toTimeString().slice(0, 5));
             return '<li><label class="spunta"><input type="checkbox" data-evento="' + e.id + '" data-op="' + id + '"' + (iniziato ? '' : ' checked') + '><span>'
-              + DO.esc(rigaInvio(e)) + (iniziato ? ' <span class="testo-errore">· già iniziato</span>' : '') + '</span></label></li>';
+              + rigaInvio(e) + (iniziato ? ' <span class="testo-errore">· già iniziato</span>' : '') + '</span></label></li>';
           }).join('') + '</ul></div>';
       }).join('');
     contaScelte();
     $('dlg-invia').showModal();
-  });
+  }
   $('evi-elenco').addEventListener('change', (e) => {
     if (e.target.dataset.gruppo) {
       $('evi-elenco').querySelectorAll('input[data-evento][data-op="' + e.target.dataset.gruppo + '"]').forEach((x) => { x.checked = e.target.checked; });
@@ -652,14 +724,16 @@
       .filter((x) => x.ora && x.ora.stato === 'assegnato' && x.ora.operatoreId === x.prima.operatoreId)
       .map((x) => x.ora);
     const cambiati = scelti.size - ancoraValidi.length;
-    const eventi = ancoraValidi.map((e) => Object.assign({}, e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) }));
+    // le partite partono con il building trovato adesso nella piattaforma ('' se non c'è); i turni remoti non ne hanno
+    const eventi = ancoraValidi.map((e) => Object.assign({}, e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) },
+      turno(e) ? {} : { building: B.abbina(e, progettiInvio).building }));
     if (cambiati) DO.avviso(cambiati + (cambiati === 1 ? ' convocazione è cambiata' : ' convocazioni sono cambiate') + ' mentre la finestra era aperta e non è stata inviata: controlla e riprova.', 'errore', 8000);
     if (!eventi.length) { b.disabled = false; $('dlg-invia').close(); return; }
     eventi.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });
     const contatti = Object.keys(perOp).map((id) => {
       const o = operatore(id) || {};
       return { nome: o.nome || '', email: o.email || '', eventi: perOp[id].map((e) => ({
-        data: e.data, titolo: titolo(e), tipo: e.tipo, competizione: turno(e) ? '' : e.competizione || '', round: turno(e) ? '' : e.round || '', orario: e.orario || '', convocazione: e.convocazioneCalcolata, fine: e.fineCalcolata,
+        data: e.data, titolo: titolo(e), tipo: e.tipo, competizione: turno(e) ? '' : e.competizione || '', round: turno(e) ? '' : e.round || '', orario: e.orario || '', convocazione: e.convocazioneCalcolata, fine: e.fineCalcolata, building: e.building || '',
       })) };
     });
     try {
@@ -676,8 +750,8 @@
   });
 
   A.registra({
-    aggiorna: () => { disegna(); if ($('dlg-evento').open && inModifica) { disegnaRichiestaEvento(); disegnaMessaggiEvento(); } },
-    mostra: (nome) => { if (nome === 'convocazioni') disegna(); },
+    aggiorna: () => { disegna(); if ($('dlg-evento').open && inModifica) { disegnaRichiestaEvento(); disegnaMessaggiEvento(); disegnaBuildingEvento(); } primaLettura(); },
+    mostra: (nome) => { if (nome === 'convocazioni') { disegna(); primaLettura(); } },
     // arrivando da un altro punto (calendario, Aggiornamenti) si toglie ogni filtro: l'evento cercato deve vedersi
     vaiA: (data) => { if (data) inizio = DO.martedi(data); $('ev-filtro-stato').value = ''; $('ev-filtro-comp').value = ''; disegna(); },
   });
