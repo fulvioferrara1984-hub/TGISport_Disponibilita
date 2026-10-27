@@ -41,11 +41,10 @@
   let progetti = [];
   let letti = false;
 
-  // gli eventi appena letti sostituiscono quelli già noti con lo stesso id
-  function unisciProgetti(nuovi) {
-    const perId = new Map(progetti.map((p) => [p.id, p]));
-    nuovi.forEach((p) => perId.set(p.id, p));
-    progetti = [...perId.values()];
+  // la lettura sostituisce per giorno: degli eventi già noti nei giorni appena letti non resta nulla (anche quelli spostati o eliminati
+  // nella piattaforma), poi si aggiungono quelli letti adesso; i giorni non riletti restano come sono
+  function unisciProgetti(date, nuovi) {
+    progetti = progetti.filter((p) => !date.includes(p.data)).concat(nuovi);
   }
 
   // Building della partita: quello salvato se è già stata inviata, altrimenti quello che l'abbinamento trova adesso. Turni remoti: mai.
@@ -53,23 +52,24 @@
 
   // Convocazioni già inviate il cui building nella piattaforma è cambiato (da rimandare) o mancava (da completare):
   // una scrittura per volta, ciascuna in una transazione; un errore non ferma le altre né la pagina.
+  // Si guardano solo i giorni appena letti (date): per gli altri la copia in memoria potrebbe essere vecchia. Senza giorni, niente.
   // Il collega in sola visualizzazione non scrive mai.
-  async function controllaBuilding() {
-    if (A.solaLettura) return;
-    const oggi = DO.oggi();
-    for (const x of B.daCompletare(A.eventi, progetti, oggi)) {
+  async function controllaBuilding(date) {
+    if (A.solaLettura || !date.length) return;
+    const oggi = DO.oggi(), eventi = A.eventi.filter((e) => date.includes(e.data));
+    for (const x of B.daCompletare(eventi, progetti, oggi)) {
       try { await DO.dati.scriviBuilding(x.evento.id, undefined, x.nuovo, false); } catch (err) { console.warn('Building non completato:', err && err.message); }
     }
     let rimesse = 0;
-    for (const x of B.daRimandare(A.eventi, progetti, oggi)) {
+    for (const x of B.daRimandare(eventi, progetti, oggi)) {
       try { if (await DO.dati.scriviBuilding(x.evento.id, x.vecchio, x.nuovo, true)) rimesse++; } catch (err) { console.warn('Building non aggiornato:', err && err.message); }
     }
     if (rimesse) DO.avviso(plurale(rimesse, 'convocazione da rimandare', 'convocazioni da rimandare') + ': building cambiato nella piattaforma.', 'ok', 8000);
   }
 
   async function leggiBuilding(date) {
-    unisciProgetti(await DO.dati.leggiProgettiDelleDate(date));
-    await controllaBuilding();
+    unisciProgetti(date, await DO.dati.leggiProgettiDelleDate(date));
+    await controllaBuilding(date);
     disegna();
   }
 
@@ -653,9 +653,11 @@
   // ---------- invio delle convocazioni ----------
   // Invio: tutte le convocazioni pronte, raggruppate per operatore; si può togliere la spunta a quelle da tenere per dopo.
   let daInviare = [], progettiInvio = [], apreInvio = false;
+  // building che parte con la convocazione: quello trovato adesso nella piattaforma; se non c'è (tolto) resta quello già salvato
+  const buildingInvio = (e) => B.abbina(e, progettiInvio).building || e.building || '';
   // riga già in HTML (testo con escape): per le partite dice il building che partirà, o «senza building» in rosso
   const rigaInvio = (e) => {
-    const g = DO.giorno(e.data), b = turno(e) ? '' : B.abbina(e, progettiInvio).building;
+    const g = DO.giorno(e.data), b = turno(e) ? '' : buildingInvio(e);
     return DO.esc(g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (!turno(e) && e.competizione ? ' · ' + e.competizione : '') + (turno(e) ? ' · dalle ' : ' · ritrovo ') + (R.convocazione(e, A.regole) || '—')
       + (b ? ' · building ' + b : ''))
       + (!turno(e) && !b ? ' <span class="testo-errore">· senza building</span>' : '');
@@ -683,9 +685,10 @@
   async function apriInvio() {
     daInviare = A.eventi.filter((e) => e.stato === 'assegnato' && e.data >= DO.oggi()).sort((a, b) => a.data.localeCompare(b.data));
     // building letti adesso, solo per i giorni da inviare: dati freschi per l'invio (e, già che ci sono, il controllo dei cambi)
-    progettiInvio = await DO.dati.leggiProgettiDelleDate(B.giorniDaLeggere(daInviare, DO.oggi())).catch(() => []);
-    unisciProgetti(progettiInvio);
-    await controllaBuilding();
+    const giorni = B.giorniDaLeggere(daInviare, DO.oggi());
+    progettiInvio = await DO.dati.leggiProgettiDelleDate(giorni).catch(() => []);
+    unisciProgetti(giorni, progettiInvio);
+    await controllaBuilding(giorni);
     disegna();
     const perOp = {};
     daInviare.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });
@@ -724,9 +727,9 @@
       .filter((x) => x.ora && x.ora.stato === 'assegnato' && x.ora.operatoreId === x.prima.operatoreId)
       .map((x) => x.ora);
     const cambiati = scelti.size - ancoraValidi.length;
-    // le partite partono con il building trovato adesso nella piattaforma ('' se non c'è); i turni remoti non ne hanno
+    // le partite partono con il building trovato adesso nella piattaforma; se non c'è resta quello già salvato, altrimenti ''; i turni remoti non ne hanno
     const eventi = ancoraValidi.map((e) => Object.assign({}, e, { convocazioneCalcolata: R.convocazione(e, A.regole), fineCalcolata: R.fine(e, A.regole) },
-      turno(e) ? {} : { building: B.abbina(e, progettiInvio).building }));
+      turno(e) ? {} : { building: buildingInvio(e) }));
     if (cambiati) DO.avviso(cambiati + (cambiati === 1 ? ' convocazione è cambiata' : ' convocazioni sono cambiate') + ' mentre la finestra era aperta e non è stata inviata: controlla e riprova.', 'errore', 8000);
     if (!eventi.length) { b.disabled = false; $('dlg-invia').close(); return; }
     eventi.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });
