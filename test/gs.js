@@ -1,11 +1,15 @@
-// Lo script di Google (backend/Codice.gs) caricato in un contesto vm, con le funzioni di Google simulate.
-// Usato dalle prove dei promemoria e delle email on-site.
+// Lo script di Google caricato in un contesto vm, con le funzioni di Google simulate.
+// Lo script è uno solo e sta nella piattaforma (backend/Codice.gs di questo repository è solo un rimando), con le
+// sue prove: qui serve all'importazione, che deve rileggere il file di backup scritto dallo script.
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const zlib = require('node:zlib');
 
-const CODICE = fs.readFileSync(path.join(__dirname, '../backend/Codice.gs'), 'utf8');
+// la cartella UnionePiattaforme accanto a questa, come per le regole (firebase/regole-uniche.rules)
+const SCRIPT = path.join(__dirname, '../../UnionePiattaforme/backend/Codice.gs');
+if (!fs.existsSync(SCRIPT)) throw new Error('Script non trovato: ' + SCRIPT + ' (serve la cartella UnionePiattaforme accanto a questa)');
+const CODICE = fs.readFileSync(SCRIPT, 'utf8');
 
 // Utilities.formatDate di Google, per i soli formati usati dallo script
 function formatta(data, fuso, formato) {

@@ -44,7 +44,7 @@ Pagine su GitHub Pages ──► Firebase (Firestore + Authentication)   dati e 
 
 - **Firestore** contiene operatori, disponibilità, invii e richieste. Le **regole di sicurezza** (nel file unico della piattaforma TGI Sport, vedi [*Regole di Firestore*](#regole-di-firestore)) decidono chi vede cosa: un operatore legge e scrive solo i propri dati, i supervisori tutto.
 - **Authentication**: ogni supervisore ha il proprio account (email TGI Sport + password, indirizzo confermato via email); ogni codice operatore è un account a sé (nella console si vedono solo impronte, non i codici).
-- **Apps Script** ([`backend/Codice.gs`](backend/Codice.gs)) spedisce le email ai supervisori e agli operatori. Nessuno lo aspetta: la pagina risponde subito e l'email parte dopo. Ogni mattina manda anche i **promemoria**: per farlo legge Firestore da solo, in sola lettura, con l'account Google che possiede lo script (Editor del progetto Firebase).
+- **Apps Script** (lo script unico `UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)) spedisce le email ai supervisori e agli operatori. Nessuno lo aspetta: la pagina risponde subito e l'email parte dopo. Ogni mattina manda anche i **promemoria**: per farlo legge Firestore da solo, in sola lettura, con l'account Google che possiede lo script (Editor del progetto Firebase).
 
 Nel repository pubblico non ci sono dati né password. La configurazione in `app/config.js` non è segreta: la protezione sta nelle regole.
 
@@ -55,6 +55,14 @@ Le regole di sicurezza del progetto `tgi-availability` sono **una sola**, condiv
 - Una regola nuova o cambiata di Disponibilità Ops, o un supervisore in più, **si scrive in quel file** con la sua prova e **si pubblica da lì**: Firebase → Firestore Database → Regole → incolla quel file → **Pubblica**, oppure, dalla cartella della piattaforma, `npx firebase-tools deploy --only firestore:rules --config firebase/firebase.json --project tgi-availability`.
 - [`firebase/firestore.rules`](firebase/firestore.rules) di questo repository contiene solo un rimando: **non va incollato** (non si compila). Il 2026-10-26 le regole di questo repository, pubblicate al posto di quelle uniche, hanno tolto i permessi a tutta la piattaforma per alcune ore.
 - Gli emulatori in locale ([`firebase/firebase.json`](firebase/firebase.json)) leggono il file unico attraverso il collegamento `firebase/regole-uniche.rules`, che punta alla cartella `UnionePiattaforme` accanto a questa. Il collegamento non è nel repository (GitHub Pages non saprebbe dove portarlo): su un computer nuovo si crea una volta con `ln -s ../../UnionePiattaforme/firebase/firestore.rules firebase/regole-uniche.rules`.
+
+## Script delle email
+
+Anche lo script Google Apps Script è **uno solo**: un solo deployment, con lo stesso URL in `app/config.js` e nella piattaforma TGI Sport. Sta nel repository della piattaforma, con il suo manifest: `~/Documents/Claude/Code/UnionePiattaforme/backend/Codice.gs` e `backend/appsscript.json` (repository privato `TGISport_Piattaforma`, stesso percorso). Contiene tutte le email di Disponibilità Ops (disponibilità, convocazioni, promemoria, on-site, richieste per evento, messaggi, backup) e quelle della piattaforma, con le prove in `test/script/` della piattaforma.
+
+- Un'email nuova o cambiata di Disponibilità Ops **si scrive in quel file** con la sua prova e **si pubblica da lì**: editor di Apps Script → incolla quel file → salva → **Gestisci deployment → ✏️ → Nuova versione**.
+- [`backend/Codice.gs`](backend/Codice.gs) di questo repository contiene solo un rimando: **non va incollato** (ha apposta una riga che non si compila, così l'editor non lo salva). Fino al 2026-10-27 c'erano due copie dello script con lo stesso deployment: quella di Disponibilità aveva le email dei messaggi, quella della piattaforma i passi del workflow e i file su Dropbox, e ogni copia incollata toglieva le funzioni dell'altra.
+- `test/importazione.test.js` controlla che il file di backup scritto dallo script si rilegga con l'importazione: legge lo script dalla cartella `UnionePiattaforme` accanto a questa.
 
 ## Costi
 
@@ -92,7 +100,7 @@ window.DO_CONFIG = {
 
 ### Aggiornamenti successivi
 
-Quando cambiano le regole di Firestore (nel file unico, vedi [*Regole di Firestore*](#regole-di-firestore)) o [`backend/Codice.gs`](backend/Codice.gs), l'ordine è **sito → regole → script**:
+Quando cambiano le regole di Firestore (nel file unico, vedi [*Regole di Firestore*](#regole-di-firestore)) o lo script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)), l'ordine è **sito → regole → script**:
 
 1. **sito** (push su `main`): la pagina nuova funziona anche con le regole vecchie;
 2. **regole**, quando il sito nuovo è online (GitHub Pages lo pubblica in un paio di minuti; i telefoni possono tenere la pagina vecchia fino a 10 minuti): pubblicarle prima disconnetterebbe chi ha ancora la pagina vecchia;
@@ -107,7 +115,7 @@ Come pubblicarli:
 
 ### 3. Script per le email
 
-Nell'editor di Apps Script: sostituisci il codice con [`backend/Codice.gs`](backend/Codice.gs), metti l'ID del progetto Firebase in `FIREBASE_PROJECT_ID`, aggiorna il manifest con [`backend/appsscript.json`](backend/appsscript.json) (Impostazioni progetto → *Mostra il file manifest*). Poi **Esegui il deployment → Gestisci deployment → ✏️ → Versione: Nuova versione → Esegui il deployment** e accetta le nuove autorizzazioni. L'URL resta lo stesso.
+Nell'editor di Apps Script: sostituisci il codice con lo script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)), metti l'ID del progetto Firebase in `FIREBASE_PROJECT_ID`, aggiorna il manifest con `UnionePiattaforme/backend/appsscript.json` (Impostazioni progetto → *Mostra il file manifest*). Poi **Esegui il deployment → Gestisci deployment → ✏️ → Versione: Nuova versione → Esegui il deployment** e accetta le nuove autorizzazioni. L'URL resta lo stesso.
 
 L'app web va pubblicata con *Esegui come: Me* e *Chi ha accesso: Chiunque*: le richieste vengono comunque rifiutate se chi chiama non è un supervisore o un operatore attivo.
 
@@ -116,7 +124,7 @@ L'app web va pubblicata con *Esegui come: Me* e *Chi ha accesso: Chiunque*: le r
 Da fare una volta, nell'ordine:
 
 1. **Firebase**: l'account Google che possiede lo script deve poter leggere i dati. [Console Firebase](https://console.firebase.google.com/) → progetto **tgi-availability** → ⚙️ accanto a *Panoramica del progetto* → **Impostazioni progetto** → scheda **Utenti e autorizzazioni** → **Aggiungi membro** → email dell'account dello script → ruolo **Editor** → **Aggiungi membro**. Se script e Firebase sono dello stesso account, niente da fare.
-2. **Script**: incolla [`backend/Codice.gs`](backend/Codice.gs) e il manifest [`backend/appsscript.json`](backend/appsscript.json), salva, scegli **attivaPromemoria** nel menu delle funzioni accanto a *Debug* e premi **Esegui**; accetta le autorizzazioni nuove (dati di Firestore e attivatori). Nel registro devono comparire:
+2. **Script**: incolla lo script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)) e il manifest `UnionePiattaforme/backend/appsscript.json`, salva, scegli **attivaPromemoria** nel menu delle funzioni accanto a *Debug* e premi **Esegui**; accetta le autorizzazioni nuove (dati di Firestore e attivatori). Nel registro devono comparire:
    - `Firebase: lettura riuscita.`
    - `Anteprima di oggi, nessuna email spedita: …` (chi riceverebbe un promemoria oggi)
    - `Invio giornaliero attivo tra le 8 e le 9 (nuovo tentativo alle 11) · promemoria accesi, 3 giorni prima …`
@@ -133,7 +141,7 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 
 1. **Sito**: finché le regole nuove non sono pubblicate la pagina operatori non mostra le richieste on-site (senza errori) e la dashboard avvisa *On-site non disponibile: pubblica le nuove regole di Firestore*.
 2. **Regole**: pubblica il file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)). Le regole controllano posti, ruolo on-site, richiesta aperta e primo giorno: due operatori non possono prendere lo stesso ultimo posto.
-3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste on-site non partono e la dashboard lo segnala dopo l'invio.
+3. **Script**: nuova versione dello script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste on-site non partono e la dashboard lo segnala dopo l'invio.
 4. **Dashboard**: in **Operatori → Modifica** imposta *On-site: TL / OP* per chi può andare in trasferta, e controlla la **Tariffa on-site** in Impostazioni.
 
 ### Backup settimanale
@@ -141,7 +149,7 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 Ordine **sito → script**, nessuna regola di Firestore da cambiare e nessuna nuova autorizzazione:
 
 1. **Sito**: pubblicazione normale; in **Impostazioni → Notifiche email** compaiono la casella *Backup settimanale*, la riga *Ultimo backup* e il tasto *Invia un backup adesso* (spenti finché lo script non è aggiornato).
-2. **Script**: incolla [`backend/Codice.gs`](backend/Codice.gs), salva, poi **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione**.
+2. **Script**: incolla lo script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)), salva, poi **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione**.
 3. **Attivazione** (una volta): nell'editor scegli **attivaPromemoria** e premi **Esegui**. Nel registro compare anche `Backup ogni venerdì tra le 18 e le 19 · backup acceso`.
 4. **Prova**: in dashboard premi **Invia un backup adesso** e controlla che l'email arrivi con il file Excel allegato.
 
@@ -150,7 +158,7 @@ Dalla versione 27 del sito lo script (nuova versione da pubblicare come sopra, s
 Dalla versione 28 il backup contiene anche le **disponibilità** degli operatori e i dati per **ripristinare gli on-site**, e una copia di ogni file resta su **Google Drive**:
 
 1. **Sito**: pubblicazione normale.
-2. **Script**: incolla [`backend/Codice.gs`](backend/Codice.gs) **e** [`backend/appsscript.json`](backend/appsscript.json) (Impostazioni del progetto → *Mostra il file manifest «appsscript.json»* nell'editor), salva.
+2. **Script**: incolla lo script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)) **e** `UnionePiattaforme/backend/appsscript.json` (Impostazioni del progetto → *Mostra il file manifest «appsscript.json»* nell'editor), salva.
 3. **Servizio Drive** (una volta): nell'editor, accanto a **Servizi** premi **+**, scegli **Drive API** (versione v3) e **Aggiungi**: il progetto automatico dello script non si apre dalla console di Google, ma così il servizio si accende da solo (il manifest del repository lo tiene già acceso).
 4. **Autorizzazione Drive** (una volta): nell'editor scegli **autorizzaDrive** e premi **Esegui**; Google chiede il permesso di vedere e gestire **solo i file creati dallo script** (non il resto del Drive). Nel registro compare `Cartella «Backup Disponibilità Ops» pronta su Drive: …` con il link. Fallo **subito dopo aver salvato il manifest**: finché il permesso non è dato, anche le esecuzioni automatiche dello script (promemoria compresi) possono fermarsi. Se il registro dice *Drive API has not been used in project … or it is disabled*, manca il passo 3: aggiungi **Drive API** dai Servizi e riesegui *autorizzaDrive* dopo un paio di minuti.
 5. **Esegui il deployment → Gestisci deployment → ✏️ → Nuova versione**.
@@ -173,7 +181,7 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 1. **Sito**: finché le regole nuove non sono pubblicate la pagina operatori non mostra le richieste per evento (senza errori), la dashboard avvisa *Richieste per evento non disponibili: pubblica le nuove regole di Firestore* e il tasto *Chiedi disponibilità* risponde *Pubblica le nuove regole di Firestore (vedi README).*
 2. **Regole**: pubblica il file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)). Le regole lasciano a ciascun operatore solo la propria risposta, con la richiesta aperta e fino al giorno dell'evento.
 3. **Indice** (una volta): Firebase → Firestore Database → **Indici** → *Composito* → **Crea indice**: raccolta `richiesteEvento`, campi `destinatari` *Array contains* ed `evento.data` *Crescente*, ambito *Raccolta* → **Crea** (pronto in pochi minuti). Senza l'indice la pagina operatori funziona lo stesso, ma legge anche le richieste passate.
-4. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste per evento non partono e la dashboard lo segnala dopo l'invio.
+4. **Script**: nuova versione dello script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, le email delle richieste per evento non partono e la dashboard lo segnala dopo l'invio.
 5. **Dashboard**: ricaricala su ogni computer dei supervisori.
 
 ### Turni Remote TL e Remote Support
@@ -181,7 +189,7 @@ Ordine come per ogni aggiornamento, **sito → regole → script**:
 Ordine **sito → script**, nessuna regola di Firestore da cambiare:
 
 1. **Sito**: subito dopo la pubblicazione **ricarica (o chiudi) la dashboard su ogni computer dei supervisori**, anche le schede rimaste aperte in secondo piano: una dashboard della versione precedente toglierebbe il ruolo Remote Support a chi modifica e riscriverebbe le richieste per evento dei turni. Le pagine in primo piano mostrano anche *È uscita una nuova versione del sito*: premere **Ricarica**.
-2. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, i promemoria ignorano i turni Remote Support e le email dei turni usano ancora i nomi vecchi.
+2. **Script**: nuova versione dello script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, i promemoria ignorano i turni Remote Support e le email dei turni usano ancora i nomi vecchi.
 3. **Dashboard**: in **Operatori → Modifica** scegli *Remote Support* per chi fa quei turni; in **Impostazioni → Competizioni e sport** controlla colore, compenso e durata delle righe *Remote TL* e *Remote Support*.
 
 ### Messaggi tra operatori e supervisori
@@ -190,7 +198,7 @@ Ordine **regole → sito → script**:
 
 1. **Regole**: pubblica il file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)) (nuova raccolta `messaggi`: ogni operatore legge solo i suoi messaggi e scrive solo sulle sue convocazioni inviate e sui deployment mandati a lui). Prima del sito: senza le regole nuove i messaggi non si leggono né si scrivono.
 2. **Sito** (versione 35), poi ricarica la dashboard su ogni computer dei supervisori.
-3. **Script**: nuova versione di [`backend/Codice.gs`](backend/Codice.gs) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, i messaggi funzionano ma le email (ai supervisori per i messaggi degli operatori, all'operatore per le risposte) non partono.
+3. **Script**: nuova versione dello script unico (`UnionePiattaforme/backend/Codice.gs`, vedi [*Script delle email*](#script-delle-email)) (*Gestisci deployment → ✏️ → Nuova versione*). Prima, i messaggi funzionano ma le email (ai supervisori per i messaggi degli operatori, all'operatore per le risposte) non partono.
 4. **Prova**: un messaggio da un operatore di prova e la risposta di un supervisore, con le due email.
 
 ### Outlook come app di posta
@@ -286,5 +294,5 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/stile.css`, `Logo/`, favicon | identità TGI Sport: colori del logo, Montserrat con cinque grandezze (12, 14, 16, 20, 28 px) uguali su computer e telefono |
 | `app/font/` | carattere Montserrat incluso nel sito (nessuna richiesta a Google Fonts), licenza in `OFL.txt` |
 | `firebase/` | configurazione dell'emulatore; `firestore.rules` è solo un rimando al file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)) |
-| `backend/` | script Google Apps Script per le email e i promemoria |
-| `test/` | prove automatiche: `node --test test/*.test.js` |
+| `backend/` | `Codice.gs` è solo un rimando allo script unico delle email e dei promemoria (vedi [*Script delle email*](#script-delle-email)) |
+| `test/` | prove automatiche: `node --test test/*.test.js` (le prove dello script stanno nella piattaforma) |
