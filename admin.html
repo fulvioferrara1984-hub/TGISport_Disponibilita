@@ -9,11 +9,13 @@
   <link rel="apple-touch-icon" href="app/favicon-180.png">
   <link rel="preload" href="app/font/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="app/stile.css?v=36">
+  <script src="app/tema.js?v=36"></script>
 </head>
 <body>
   <header class="testata con-schede">
     <div class="marchio">
-      <img class="marchio-logo" src="Logo/TGI-Sport_black.png" alt="TGI Sport" onerror="this.remove()">
+      <img class="marchio-logo logo-scuro" src="Logo/TGI-Sport_white.png" alt="TGI Sport" onerror="this.remove()">
+      <img class="marchio-logo logo-chiaro" src="Logo/TGI-Sport_black.png" alt="TGI Sport" onerror="this.remove()">
       <span class="marchio-nome">Disponibilità<span class="marchio-ruolo" id="marchio-ruolo">Supervisori</span></span>
     </div>
     <nav class="schede" role="tablist" aria-label="Sezioni" id="schede" hidden>
@@ -31,7 +33,8 @@
   <!-- Accesso con la password dei supervisori -->
   <div class="accesso" id="accesso" hidden>
     <form class="accesso-scheda" id="accesso-form" autocomplete="on">
-      <img class="accesso-logo" src="Logo/TGI-Sport_black.png" alt="TGI Sport" onerror="this.remove()">
+      <img class="accesso-logo logo-scuro" src="Logo/TGI-Sport_white.png" alt="TGI Sport" onerror="this.remove()">
+      <img class="accesso-logo logo-chiaro" src="Logo/TGI-Sport_black.png" alt="TGI Sport" onerror="this.remove()">
       <h1 id="accesso-titolo">Dashboard supervisori</h1>
       <p id="accesso-testo">Entra con la tua email TGI Sport e la tua password.</p>
       <label class="campo"><span>Email</span><input type="email" id="accesso-email" autocomplete="username" required></label>
@@ -46,6 +49,7 @@
         <button type="button" class="link" id="accesso-recupera">Password dimenticata?</button>
       </div>
       <p class="nota" id="accesso-demo" hidden>Demo: una email qualsiasi e la password <code>demo</code> (con <code>collega@esempio.it</code> entri in sola visualizzazione).</p>
+      <button type="button" class="link accesso-tema" data-interruttore-tema></button>
     </form>
   </div>
 

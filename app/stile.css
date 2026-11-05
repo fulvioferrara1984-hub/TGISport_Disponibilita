@@ -1048,3 +1048,8 @@ body.con-calendario { overflow: hidden; }
 @supports (color: color-mix(in srgb, red, blue)) {
   .ev-riga, .cal-voce { --comp-vista: color-mix(in srgb, var(--comp, transparent) var(--schiarisci), var(--su-accento)); }
 }
+
+/* ---------- tema: logo e interruttore ---------- */
+:root[data-tema="chiaro"] .logo-scuro, :root:not([data-tema="chiaro"]) .logo-chiaro { display: none; }
+.ic-tema { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.accesso-tema { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px auto 0; font-size: var(--t-14); }
