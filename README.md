@@ -301,7 +301,9 @@ Con l'emulatore di Firebase (serve Java): `npx firebase-tools emulators:start --
 | `app/onsite.js`, `app/onsite-admin.js` | deployment on-site: calcoli (giorni, posti, presenze, compensi) e richiesta/scheda nella dashboard |
 | `app/convocazioni.js`, `app/riepilogo.js`, `app/impostazioni.js` | schede Convocazioni, Riepilogo, regole e importazione |
 | `app/config.js` | collegamento a Firebase e allo script delle email |
-| `app/stile.css`, `Logo/`, favicon | identità TGI Sport: colori del logo, Montserrat con cinque grandezze (12, 14, 16, 20, 28 px) uguali su computer e telefono |
+| `app/stile.css`, `Logo/`, favicon | grafica allineata alla piattaforma TGI Sport: tema scuro di partenza e tema chiaro sulle stesse variabili, con gli stessi valori della piattaforma (contrasto e colori provati da `test/stile.test.js`), Montserrat con cinque grandezze (12, 14, 16, 20, 28 px) uguali su computer e telefono; il logo bianco è copiato dalla piattaforma |
+| `app/tema.js` | tema scuro o chiaro: la scelta resta nel browser (`localStorage`, chiave `do-tema`), mai su Firestore, e vale per quel dispositivo |
+| `app/menu.js` | menu laterale dei supervisori: voce attiva, barra della pagina, chi è entrato e cassetto sotto i 1024 px |
 | `app/font/` | carattere Montserrat incluso nel sito (nessuna richiesta a Google Fonts), licenza in `OFL.txt` |
 | `firebase/` | configurazione dell'emulatore; `firestore.rules` è solo un rimando al file unico delle regole (vedi [*Regole di Firestore*](#regole-di-firestore)) |
 | `backend/` | `Codice.gs` è solo un rimando allo script unico delle email e dei promemoria (vedi [*Script delle email*](#script-delle-email)) |
