@@ -55,6 +55,9 @@
     const b = e.target.closest('[data-vista]');
     if (b) { mostra(b.dataset.vista); cassetto.chiudi(); }
   });
+  const numeriRossi = [$('badge-conv'), $('badge')];
+  const aggiornaAvvisi = () => DO.menu.avvisi($('apri-menu'), numeriRossi);
+  numeriRossi.forEach((n) => new MutationObserver(aggiornaAvvisi).observe(n, { childList: true }));
 
   // ---------- chi è entrato e data di oggi nella barra ----------
   let emailSessione = '';
@@ -307,7 +310,7 @@
     $('pannello-conv').hidden = !d;
     disegnaGriglia();
     disegnaPannello();
-    if (d && window.innerWidth <= 1080) $('pannello-conv').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (d) DO.menu.portaSeSotto($('pannello-conv'), getComputedStyle);
   }
   function chiudiPannello() {
     if (!giornoSel) return;
@@ -945,6 +948,7 @@
     aggiornaChi();
     aggiornaData();
     document.querySelectorAll('#schede [data-vista]').forEach((b) => { b.hidden = solaLettura && !VISTE_SOLA.includes(b.dataset.vista); });
+    aggiornaAvvisi();
     $('pagina').hidden = false;
     document.body.classList.add('entrato');
     $('btn-esci').hidden = false;

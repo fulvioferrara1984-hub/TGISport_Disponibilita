@@ -124,3 +124,59 @@ test('cassetto: chiuso, Esc non fa nulla', () => {
   tasto({ key: 'Escape' });
   assert.equal(apri.fuoco, 1);
 });
+
+// Revisione finale: il pannello si raggiunge secondo dove lo mette il CSS, senza ripeterne la larghezza
+const adminJs = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'app', 'admin.js'), 'utf8');
+
+test('pannello: se il CSS lo manda sotto la griglia, ci si porta', () => {
+  const pannello = elemento({ scorsi: 0, scrollIntoView() { this.scorsi += 1; } });
+  M.portaSeSotto(pannello, () => ({ position: 'static' }));
+  assert.equal(pannello.scorsi, 1);
+});
+
+test('pannello: se sta accanto alla griglia, la pagina non si muove', () => {
+  const pannello = elemento({ scorsi: 0, scrollIntoView() { this.scorsi += 1; } });
+  M.portaSeSotto(pannello, () => ({ position: 'sticky' }));
+  assert.equal(pannello.scorsi, 0);
+});
+
+test('admin.js: aprendo il pannello non ripete una larghezza del foglio di stile', () => {
+  const apri = adminJs.slice(adminJs.indexOf('function apriPannello'), adminJs.indexOf('function chiudiPannello'));
+  assert.doesNotMatch(apri, /innerWidth/);
+  assert.match(apri, /DO\.menu\.portaSeSotto\(/);
+});
+
+// Revisione finale: sotto i 1024 px i numeri rossi stanno nel cassetto chiuso, ☰ deve dire che ci sono
+function tastoMenu() {
+  const a = elemento();
+  const classi = new Set();
+  a.classList = { toggle: (c, si) => { if (si) classi.add(c); else classi.delete(c); }, contains: (c) => classi.has(c) };
+  return a;
+}
+const numero = (testo, voceNascosta = false) => ({ textContent: testo, parentElement: { hidden: voceNascosta } });
+
+test('avvisi su ☰: un numero rosso accende il pallino e lo dice a chi non vede', () => {
+  const a = tastoMenu();
+  M.avvisi(a, [numero(''), numero('2')]);
+  assert.ok(a.classList.contains('con-avvisi'));
+  assert.equal(a.attributi['aria-label'], 'Apri il menu: ci sono novità');
+});
+
+test('avvisi su ☰: senza numeri il pallino si spegne', () => {
+  const a = tastoMenu();
+  M.avvisi(a, [numero('2'), numero('')]);
+  M.avvisi(a, [numero(''), numero('')]);
+  assert.ok(!a.classList.contains('con-avvisi'));
+  assert.equal(a.attributi['aria-label'], 'Apri il menu');
+});
+
+test('avvisi su ☰: il numero di una voce nascosta non conta', () => {
+  const a = tastoMenu();
+  M.avvisi(a, [numero(''), numero('2', true)]);
+  assert.ok(!a.classList.contains('con-avvisi'));
+});
+
+test('admin.js: il pallino segue i due numeri rossi', () => {
+  assert.match(adminJs, /DO\.menu\.avvisi\(\$\('apri-menu'\)/);
+  assert.match(adminJs, /new MutationObserver/);
+});

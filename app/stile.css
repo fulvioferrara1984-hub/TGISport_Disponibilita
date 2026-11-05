@@ -826,6 +826,14 @@ dialog.dlg-giorno { width: min(440px, calc(100vw - 32px)); }
 @media (min-width: 761px) and (max-width: 1180px) {
   .ev-riga { grid-template-columns: 86px minmax(0, 1.2fr) minmax(180px, 1fr) 142px 34px; gap: 10px; }
 }
+/* Operatori accanto al menu: i tasti in colonna, altrimenti «Elimina» resta fuori dal riquadro senza che si veda; sotto i 761 px ogni riga è una scheda */
+@media (min-width: 761px) and (max-width: 1240px) {
+  .tabella-operatori td, .tabella-operatori th { padding-left: 10px; padding-right: 10px; }
+  .tabella-operatori td .valore { overflow-wrap: anywhere; }
+  .tabella-operatori .etichetta { white-space: nowrap; }
+  .tabella-operatori td.azioni { white-space: normal; width: 1%; }
+  .tabella-operatori td.azioni .bottone { width: 100%; margin: 2px 0; white-space: nowrap; }
+}
 @media (max-width: 760px) {
   .solo-desktop { display: none !important; }
   /* campi da compilare a 16 px: sotto, l'iPhone ingrandisce la pagina quando si tocca il campo */
@@ -1065,6 +1073,9 @@ body.con-calendario { overflow: hidden; }
 .percorso b { color: var(--inchiostro); font-weight: 600; }
 .barra-data { color: var(--inchiostro-2); white-space: nowrap; }
 .velo-lato { position: fixed; inset: 0; z-index: 30; background: var(--velo); }
+/* il cassetto chiuso nasconde i numeri rossi: il pallino su ☰ dice che ci sono */
+.apri-menu { position: relative; }
+.apri-menu.con-avvisi::after { content: ""; position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--errore); box-shadow: 0 0 0 2px var(--sfondo); }
 /* prima dell'accesso menu e barra non si vedono */
 body:not(.entrato) .lato, body:not(.entrato) .barra-pagina { display: none; }
 @media (min-width: 1024px) {

@@ -143,7 +143,7 @@ Le voci restano i bottoni `#schede [data-vista]` e `mostra()` resta l'unico punt
 - il cassetto si apre sopra la pagina, largo `min(280px, 85vw)`, con il velo dietro;
 - si chiude scegliendo una voce, toccando il velo o con Esc;
 - aperto, il fuoco va sulla prima voce; chiuso con Esc o con il velo, torna su ☰;
-- chiuso, è fuori dallo schermo e fuori dal tasto Tab.
+- chiuso, è fuori dallo schermo e fuori dal tasto Tab; se c'è un numero rosso, ☰ porta un pallino rosso e la sua etichetta lo dice.
 
 **Prima dell'accesso** menu e barra non si vedono, come oggi le schede: restano nascosti finché `entra()` non ha riconosciuto l'utente.
 

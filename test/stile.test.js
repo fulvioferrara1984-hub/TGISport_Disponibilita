@@ -154,3 +154,32 @@ test('le celle ferme hanno un fondo pieno', () => {
     assert.match(t['--intestazione-tabella'], /^#[0-9a-f]{6}$/i);
   }
 });
+
+// Revisione finale: i due difetti nati dal menu laterale
+test('☰ porta un pallino del colore dei numeri rossi', () => {
+  const regola = css.match(/\.apri-menu\.con-avvisi::after\s*\{([^}]*)\}/);
+  assert.ok(regola, 'manca la regola del pallino');
+  assert.match(regola[1], /background:\s*var\(--errore\)/);
+});
+
+test('Operatori accanto al menu: i tasti vanno in colonna', () => {
+  const inizio = css.indexOf('@media (min-width: 761px) and (max-width: 1240px)');
+  assert.ok(inizio >= 0, 'manca la fascia 761-1240 px');
+  const fascia = css.slice(inizio, css.indexOf('\n}', inizio));
+  assert.match(fascia, /\.tabella-operatori td\.azioni\s*\{[^}]*white-space:\s*normal/);
+  assert.match(fascia, /\.tabella-operatori td\.azioni \.bottone\s*\{[^}]*width:\s*100%/);
+});
+
+test('Operatori accanto al menu: un indirizzo lungo va a capo invece di allargare la tabella', () => {
+  const inizio = css.indexOf('@media (min-width: 761px) and (max-width: 1240px)');
+  const fascia = css.slice(inizio, css.indexOf('\n}', inizio));
+  assert.match(fascia, /\.tabella-operatori td \.valore\s*\{[^}]*overflow-wrap:\s*anywhere/);
+});
+
+test('Operatori accanto al menu: «Attivo» non si spezza e i tasti restano su una riga', () => {
+  const inizio = css.indexOf('@media (min-width: 761px) and (max-width: 1240px)');
+  const fascia = css.slice(inizio, css.indexOf('\n}', inizio));
+  assert.match(fascia, /\.tabella-operatori \.etichetta\s*\{[^}]*white-space:\s*nowrap/);
+  assert.match(fascia, /\.tabella-operatori td\.azioni \.bottone\s*\{[^}]*white-space:\s*nowrap/);
+  assert.match(fascia, /\.tabella-operatori td\.azioni\s*\{[^}]*width:\s*1%/);
+});

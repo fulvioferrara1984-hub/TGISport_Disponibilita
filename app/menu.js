@@ -60,5 +60,17 @@
     return { apri: apriCassetto, chiudi, chiudiTorna, aperto: () => aperto };
   }
 
-  DO.menu = { ETICHETTE, dataEstesa, chi, segna, cassetto };
+  // Il pannello sta accanto alla griglia finché è «sticky»: quando il foglio di stile lo manda sotto, ci si porta.
+  function portaSeSotto(pannello, stile) {
+    if (stile(pannello).position === 'static') pannello.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Sotto i 1024 px i numeri rossi stanno nel cassetto chiuso: ☰ dice che ci sono. Quelli di una voce nascosta non contano.
+  function avvisi(apri, numeri) {
+    const ci = numeri.some((n) => n.textContent !== '' && !n.parentElement.hidden);
+    apri.classList.toggle('con-avvisi', ci);
+    apri.setAttribute('aria-label', ci ? 'Apri il menu: ci sono novità' : 'Apri il menu');
+  }
+
+  DO.menu = { ETICHETTE, dataEstesa, chi, segna, cassetto, portaSeSotto, avvisi };
 })(window.DO);
