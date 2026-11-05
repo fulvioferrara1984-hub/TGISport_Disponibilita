@@ -80,7 +80,7 @@
     const s = DO.leggi(chiaveSessione());
     if (!s) return null;
     if (ruolo === 'admin') {
-      if (!s.sola) return { admin: true };
+      if (!s.sola) return s.email ? { admin: true, email: s.email } : { admin: true };
       carica();
       if (!inElenco(s.email)) { DO.scrivi(chiaveSessione(), null); return null; }
       return { admin: true, sola: true, email: s.email };
@@ -110,7 +110,7 @@
     // nella demo un'email qualsiasi entra da supervisore; quelle dell'elenco in sola visualizzazione
     const e = DO.normalizzaEmail(email);
     const sola = DO.tipoAccesso({ email: e, verificata: true, supervisori: SUPERVISORI(), inElenco: inElenco(e) }) === 'sola';
-    const accesso = sola ? { admin: true, sola: true, email: e } : { admin: true };
+    const accesso = sola ? { admin: true, sola: true, email: e } : { admin: true, email: e };
     DO.scrivi(chiaveSessione(), accesso, ricorda);
     DO.ricorda(ricorda);
     return accesso;

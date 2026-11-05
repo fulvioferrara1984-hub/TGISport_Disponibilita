@@ -97,7 +97,7 @@ test('modifica di un deployment: posti controllati sui dati letti nella transazi
     }),
   });
   DO.avviaPagina('admin', () => {});
-  assert.deepEqual(await FB.utente(), { admin: true });
+  assert.deepEqual(await FB.utente(), { admin: true, email: 'sup@x.it' });
   await assert.rejects(FB.modificaOnsite('d1', { posti: { TL: 1, OP: 1 } }, {}), /I posti non possono essere meno di chi ha già accettato\./);
   assert.equal(scritte.length, 0);
 });
@@ -170,7 +170,7 @@ test('risposta del supervisore: messaggio e voci lette nella stessa scrittura', 
     writeBatch: () => ({ set: (r, d) => scritte.push(['set', r.path, d]), update: (r, d) => scritte.push(['update', r.path, d]), commit: async () => { commit++; } }),
   });
   DO.avviaPagina('admin', () => {});
-  assert.deepEqual(await FB.utente(), { admin: true });
+  assert.deepEqual(await FB.utente(), { admin: true, email: 'sup@x.it' });
   await assert.rejects(FB.messaggioSupervisore({ tipo: 'evento', rif: 'e1', operatoreId: 'op1', testo: '  ', autore: 'Giulia' }, { nome: 'Luca', email: '' }, '', []),
     /Scrivi un messaggio \(al massimo 500 caratteri\)\./);
   const r = await FB.messaggioSupervisore({ tipo: 'evento', rif: 'e1', operatoreId: 'op1', testo: ' Sì, portalo ', autore: 'Giulia' }, { nome: 'Luca', email: '' }, 'https://x/', ['v1', 'v2']);

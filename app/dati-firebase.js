@@ -189,7 +189,7 @@
     }
     const tipo = DO.tipoAccesso({ email, verificata: u.emailVerified, supervisori: DO.CONFIG.SUPERVISORI, inElenco });
     accessoSola = tipo === 'sola';
-    return tipo === 'supervisore' ? { admin: true } : tipo === 'sola' ? { admin: true, sola: true, email } : null;
+    return tipo === 'supervisore' ? { admin: true, email } : tipo === 'sola' ? { admin: true, sola: true, email } : null;
   }
 
   // Si entra solo dopo aver confermato l'indirizzo: nessuno può spacciarsi per un supervisore

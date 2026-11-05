@@ -409,7 +409,7 @@ test('sola visualizzazione: accesso del collega', async () => {
   // rimesso per le altre prove; un'email qualsiasi entra da supervisore come sempre nella demo
   DO.scrivi('do-demo-sessione-admin', { admin: true });
   await D.aggiungiVisualizzatore('collega@esempio.it');
-  assert.deepEqual(await D.accediSupervisore('chiunque@x.it', 'demo', false), { admin: true });
+  assert.deepEqual(await D.accediSupervisore('chiunque@x.it', 'demo', false), { admin: true, email: 'chiunque@x.it' });
   assert.ok((await statoDemo()).visualizzatori.some((x) => x.email === 'collega@esempio.it'));
 });
 

@@ -119,7 +119,7 @@ La scelta resta nel browser del dispositivo (`localStorage`, chiave `do-tema`), 
 
 ## Pagina dei supervisori
 
-`admin.html` passa da testata con schede a due colonne: `.guscio` con `aside.lato` e `.colonna`. Le classi `.lato`, `.voce-menu`, `.sezione-menu`, `.piede-lato`, `.avatar`, `.colonna`, `.barra-pagina`, `.percorso`, `.oggi` e `.velo-lato` riprendono le regole della piattaforma.
+`admin.html` passa da testata con schede a due colonne: `.guscio` con `aside.lato` e `.colonna`. Le classi `.lato`, `.voce-menu`, `.sezione-menu`, `.piede-lato`, `.avatar`, `.colonna`, `.barra-pagina`, `.percorso`, `.barra-data` (nella piattaforma `.oggi`, che qui esiste già) e `.velo-lato` riprendono le regole della piattaforma.
 
 **Menu laterale**, da 1024 px in su, fisso a sinistra e largo 248 px:
 

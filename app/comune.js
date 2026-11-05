@@ -350,7 +350,7 @@
     const b = document.createElement('div');
     b.className = 'demo-banner';
     b.innerHTML = '<b>Modalità demo</b>: dati di prova salvati solo in questo browser. Per usare il sito con il team, collega Firebase (vedi README).';
-    document.querySelector('.testata').after(b);
+    document.querySelector('.barra-pagina, .testata').after(b);
   }
 
   Object.assign(DO, {

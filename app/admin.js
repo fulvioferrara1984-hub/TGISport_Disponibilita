@@ -42,7 +42,7 @@
     if (solaLettura && !VISTE_SOLA.includes(nome)) nome = 'convocazioni';
     vista = nome;
     nascondiPopup();
-    document.querySelectorAll('#schede [data-vista]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.vista === nome)));
+    DO.menu.segna(document.querySelectorAll('#schede [data-vista]'), nome, $('percorso-voce'));
     VISTE.forEach((v) => { $('vista-' + v).hidden = v !== nome; });
     history.replaceState(null, '', nome === VISTE[0] ? location.pathname : '#' + nome);
     if (nome === 'operatori') disegnaOperatori();
@@ -50,7 +50,22 @@
     moduli.forEach((m) => m.mostra && m.mostra(nome));
   }
   const VISTE = ['convocazioni', 'griglia', 'aggiornamenti', 'riepilogo', 'operatori', 'impostazioni'];
-  $('schede').addEventListener('click', (e) => { const b = e.target.closest('[data-vista]'); if (b) mostra(b.dataset.vista); });
+  const cassetto = DO.menu.cassetto({ lato: $('menu-laterale'), velo: $('velo-lato'), apri: $('apri-menu'), documento: document });
+  $('schede').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-vista]');
+    if (b) { mostra(b.dataset.vista); cassetto.chiudi(); }
+  });
+
+  // ---------- chi è entrato e data di oggi nella barra ----------
+  let emailSessione = '';
+  function aggiornaChi() {
+    const chi = DO.menu.chi(DO.leggi('do-nome-supervisore'), emailSessione);
+    $('chi-nome').textContent = chi;
+    $('chi-nome').hidden = !chi;
+    $('chi-avatar').textContent = (chi || $('marchio-ruolo').textContent).charAt(0).toUpperCase();
+  }
+  function aggiornaData() { $('barra-data').textContent = DO.menu.dataEstesa(DO.oggi()); }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) aggiornaData(); });
 
   // ---------- dati in tempo reale ----------
   function aggiorna(stato) {
@@ -612,7 +627,7 @@
     const attuale = DO.leggi('do-nome-supervisore') || '';
     if (attuale && !cambia) return attuale;
     const scritto = String(prompt('Il tuo nome (lo vedono gli operatori)', attuale) || '').trim().slice(0, 60);
-    if (scritto) DO.scrivi('do-nome-supervisore', scritto, true);
+    if (scritto) { DO.scrivi('do-nome-supervisore', scritto, true); aggiornaChi(); }
     return scritto || (cambia ? attuale : '');
   }
   const notaNome = () => (DO.leggi('do-nome-supervisore') ? 'Scrivi come <b>' + DO.esc(DO.leggi('do-nome-supervisore')) + '</b> · <button type="button" class="link" data-cambia-nome>cambia</button>' : '');
@@ -900,7 +915,7 @@
   // ---------- accesso ----------
   async function entra() {
     $('pagina').hidden = true;
-    $('schede').hidden = true;
+    document.body.classList.remove('entrato');
     $('btn-esci').hidden = true;
     $('accesso-demo').hidden = !DO.inDemo;
     let u = null;
@@ -925,10 +940,13 @@
     solaLettura = !!(u && u.sola);
     document.title = (solaLettura ? 'Sola visualizzazione' : 'Supervisori') + ' · Disponibilità TGI Sport';
     document.body.classList.toggle('sola-lettura', solaLettura);
-    $('marchio-ruolo').textContent = solaLettura ? 'Sola visualizzazione' : 'Supervisori';
+    $('marchio-ruolo').textContent = solaLettura ? 'Sola visualizzazione' : 'Supervisore';
+    emailSessione = (u && u.email) || '';
+    aggiornaChi();
+    aggiornaData();
     document.querySelectorAll('#schede [data-vista]').forEach((b) => { b.hidden = solaLettura && !VISTE_SOLA.includes(b.dataset.vista); });
     $('pagina').hidden = false;
-    $('schede').hidden = false;
+    document.body.classList.add('entrato');
     $('btn-esci').hidden = false;
     aggiornaBottoneNotifiche();
     const iniziale = location.hash.slice(1);
