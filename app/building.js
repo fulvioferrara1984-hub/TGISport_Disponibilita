@@ -16,9 +16,14 @@
 
   const risultato = (building, motivo) => ({ building, motivo });
 
-  // Building dell'evento della piattaforma che corrisponde alla partita: stesso giorno e stesse squadre.
+  // Building dell'evento della piattaforma che corrisponde alla partita. Con `progettoId` l'unico candidato è quell'evento
+  // (qualunque siano giorno, stato e nomi; non letto = non trovato, senza ripiego sulle squadre). Senza: stesso giorno e stesse squadre.
   // La competizione serve solo a scegliere tra eventi con building diversi (i nomi nelle due app non coincidono).
   function abbina(conv, progetti) {
+    if (conv && conv.progettoId) {
+      const evento = lista(progetti).find((p) => p && p.id === conv.progettoId);
+      return evento ? risultato(testo(evento.building), '') : risultato('', 'non trovato');
+    }
     const titolo = normalizza(conv && conv.titolo);
     if (!titolo) return risultato('', 'non trovato');
     const candidati = lista(progetti).filter((p) => p && p.data === conv.data && p.stato !== 'CANCELLED' && p.modalita !== 'FLYKIT'
