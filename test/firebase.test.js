@@ -521,6 +521,14 @@ test('aggiornamento dalla piattaforma: scrive solo se la partita è come il giro
     assert.equal(await FB.aggiornaDallaPiattaforma('e1', atteso, campi, 'nota'), false, nome);
     assert.equal(arc.scritte.length, 0, nome);
   }
+  // atteso senza progettoId mentre nel frattempo la partita è stata collegata a un altro evento
+  const collegata = archivioTransazioni({ 'eventi/e1': Object.assign({}, visto, { progettoId: 'p2' }) });
+  const { FB: FC } = archivioNuovo(SUP, collegata.extra);
+  DO.avviaPagina('admin', () => {});
+  await FC.utente();
+  const { progettoId, ...senzaProgetto } = atteso;
+  assert.equal(await FC.aggiornaDallaPiattaforma('e1', senzaProgetto, campi, 'nota'), false);
+  assert.equal(collegata.scritte.length, 0);
   const assente = archivioTransazioni({});
   const { FB: FA } = archivioNuovo(SUP, assente.extra);
   DO.avviaPagina('admin', () => {});

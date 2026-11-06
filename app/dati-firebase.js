@@ -796,7 +796,7 @@
   }
 
   // Collegamento, allineamento, annullamento, ripristino, scollegamento: in una transazione che rilegge la partita e scrive solo se
-  // è ancora come il giro l'ha vista (atteso: progettoId, data, titolo, orario, inviata, stato; se uno è cambiato nel frattempo,
+  // è ancora come il giro l'ha vista (atteso: progettoId, data, titolo, orario, inviata, stato, sempre tutti e sei: una chiave mancante vale ''/false/undefined; se uno è cambiato nel frattempo,
   // per esempio il supervisore ha salvato la finestra dell'evento, non si scrive). true = scritta.
   async function aggiornaDallaPiattaforma(id, atteso, campi, nota) {
     const rif = F.doc(db, 'eventi', id);
@@ -806,10 +806,11 @@
       const d = await t.get(rif);
       if (!d.exists()) return;
       const e = d.data();
-      const uguale = Object.keys(atteso || {}).every((k) => {
-        if (k === 'progettoId') return (e.progettoId || '') === (atteso.progettoId || '');
-        if (k === 'inviata') return !!e.inviata === !!atteso.inviata;
-        return e[k] === atteso[k];
+      const uguale = ['progettoId', 'data', 'titolo', 'orario', 'inviata', 'stato'].every((k) => {
+        const a = atteso || {};
+        if (k === 'progettoId') return (e.progettoId || '') === (a.progettoId || '');
+        if (k === 'inviata') return !!e.inviata === !!a.inviata;
+        return e[k] === a[k];
       });
       if (!uguale) return;
       t.update(rif, Object.assign({}, campi, { storico: F.arrayUnion(voce(nota)) }));
