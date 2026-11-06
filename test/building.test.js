@@ -154,7 +154,7 @@ test('abbina: partita collegata a un evento non letto', () => {
 });
 
 test('abbina: collegata, evento senza building', () => {
-  assert.deepEqual(B.abbina(c({ progettoId: 'p1' }), [p({ building: '' })]), { building: '', motivo: '' });
+  assert.deepEqual(B.abbina(c({ progettoId: 'p1', titolo: 'Altro-Match', data: '2026-11-09' }), [p({ building: '' })]), { building: '', motivo: '' });
 });
 
 test('abbina: collegata, evento annullato o FLYKIT vale comunque', () => {
