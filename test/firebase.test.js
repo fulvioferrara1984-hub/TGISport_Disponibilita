@@ -470,3 +470,141 @@ test('importazione: building conservato solo se c\'è', async () => {
   assert.equal(scritte['eventi/a'].building, 'T3');
   assert.ok(!('building' in scritte['eventi/b']));
 });
+
+// transazione finta su un archivio in memoria: { docs, scritte }
+function archivioTransazioni(docs) {
+  const scritte = [];
+  const rif = (r) => r.path;
+  return {
+    scritte, docs,
+    extra: {
+      arrayUnion: (...v) => ({ unione: v }),
+      runTransaction: async (db, lavoro) => lavoro({
+        get: async (r) => ({ exists: () => rif(r) in docs, data: () => docs[rif(r)] }),
+        set: (r, dati) => { scritte.push({ tipo: 'set', path: rif(r), dati }); docs[rif(r)] = dati; },
+        update: (r, dati) => { scritte.push({ tipo: 'update', path: rif(r), dati }); },
+      }),
+    },
+  };
+}
+
+test('partita dalla piattaforma: due creazioni dello stesso evento → un solo documento', async () => {
+  const arc = archivioTransazioni({});
+  const { FB } = archivioNuovo(SUP, arc.extra);
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  const campi = { tipo: 'partita', competizione: 'Ligue 1', data: '2026-11-18', titolo: 'A – B', orario: '18:00', progettoId: 'p1' };
+  assert.equal(await FB.creaPartitaPiattaforma('p1', campi, 'Creata dalla piattaforma (2627-SA-042)'), true);
+  assert.equal(arc.scritte.length, 1);
+  const d = arc.scritte[0];
+  assert.equal(d.path, 'eventi/p-p1');
+  assert.equal(d.dati.stato, 'da-assegnare');
+  assert.equal(d.dati.progettoId, 'p1');
+  assert.deepEqual([d.dati.operatoreId, d.dati.inviata, d.dati.risposta, d.dati.rispostaIl], ['', false, '', '']);
+  assert.equal(d.dati.storico[0].testo, 'Creata dalla piattaforma (2627-SA-042)');
+  assert.ok(d.dati.creato);
+  assert.equal(await FB.creaPartitaPiattaforma('p1', campi, 'Creata dalla piattaforma (2627-SA-042)'), false);
+  assert.equal(arc.scritte.length, 1);
+});
+
+test('partita dalla piattaforma: il progettoId viene dall\'argomento, anche se i campi non lo hanno', async () => {
+  const arc = archivioTransazioni({});
+  const { FB } = archivioNuovo(SUP, arc.extra);
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  assert.equal(await FB.creaPartitaPiattaforma('p9', { tipo: 'partita', competizione: 'Ligue 1', data: '2026-11-18', titolo: 'A – B', orario: '18:00' }, 'Creata'), true);
+  assert.equal(arc.scritte[0].path, 'eventi/p-p9');
+  assert.equal(arc.scritte[0].dati.progettoId, 'p9');
+});
+
+test('aggiornamento dalla piattaforma: scrive solo se la partita è come il giro l\'ha vista', async () => {
+  const visto = { data: '2026-11-18', titolo: 'A – B', orario: '18:00', inviata: false, stato: 'da-assegnare' };
+  const atteso = Object.assign({ progettoId: '' }, visto);
+  const campi = { orario: '19:00', progettoId: 'p1' };
+  const cambi = { progettoId: { progettoId: 'p9' }, orario: { orario: '20:00' }, inviata: { inviata: true }, stato: { stato: 'assegnato' },
+    data: { data: '2026-11-19' }, titolo: { titolo: 'C – D' } };
+  for (const [nome, cambio] of Object.entries(cambi)) {
+    const arc = archivioTransazioni({ 'eventi/e1': Object.assign({}, visto, cambio) });
+    const { FB } = archivioNuovo(SUP, arc.extra);
+    DO.avviaPagina('admin', () => {});
+    await FB.utente();
+    assert.equal(await FB.aggiornaDallaPiattaforma('e1', atteso, campi, 'nota'), false, nome);
+    assert.equal(arc.scritte.length, 0, nome);
+  }
+  // atteso senza progettoId mentre nel frattempo la partita è stata collegata a un altro evento
+  const collegata = archivioTransazioni({ 'eventi/e1': Object.assign({}, visto, { progettoId: 'p2' }) });
+  const { FB: FC } = archivioNuovo(SUP, collegata.extra);
+  DO.avviaPagina('admin', () => {});
+  await FC.utente();
+  const { progettoId, ...senzaProgetto } = atteso;
+  assert.equal(await FC.aggiornaDallaPiattaforma('e1', senzaProgetto, campi, 'nota'), false);
+  assert.equal(collegata.scritte.length, 0);
+  const assente = archivioTransazioni({});
+  const { FB: FA } = archivioNuovo(SUP, assente.extra);
+  DO.avviaPagina('admin', () => {});
+  await FA.utente();
+  assert.equal(await FA.aggiornaDallaPiattaforma('e1', atteso, campi, 'nota'), false);
+  assert.equal(assente.scritte.length, 0);
+  // uguale (progettoId e inviata assenti sul documento contano come '' e false)
+  const arc = archivioTransazioni({ 'eventi/e1': Object.assign({}, visto) });
+  delete arc.docs['eventi/e1'].inviata;
+  const { FB } = archivioNuovo(SUP, arc.extra);
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  assert.equal(await FB.aggiornaDallaPiattaforma('e1', atteso, campi, 'Collegata alla piattaforma (2627-SA-042)'), true);
+  assert.equal(arc.scritte.length, 1);
+  assert.equal(arc.scritte[0].tipo, 'update');
+  assert.equal(arc.scritte[0].path, 'eventi/e1');
+  assert.equal(arc.scritte[0].dati.orario, '19:00');
+  assert.equal(arc.scritte[0].dati.progettoId, 'p1');
+  assert.equal(arc.scritte[0].dati.storico.unione[0].testo, 'Collegata alla piattaforma (2627-SA-042)');
+});
+
+test('eventi della finestra: lettura non riuscita → null, permesso negato → null in silenzio', async () => {
+  const avvisi = [];
+  const avviso = console.warn;
+  console.warn = (...a) => avvisi.push(a);
+  try {
+    const { FB } = archivioNuovo(SUP, { getDocs: async () => { throw Object.assign(new Error('offline'), { code: 'unavailable' }); } });
+    DO.avviaPagina('admin', () => {});
+    await FB.utente();
+    assert.equal(await FB.leggiProgettiFinestra('2026-11-06', '2026-12-06'), null);
+    assert.equal(avvisi.length, 1);
+    const { FB: FN } = archivioNuovo(SUP, { getDocs: async () => { throw Object.assign(new Error('negato'), { code: 'permission-denied' }); } });
+    DO.avviaPagina('admin', () => {});
+    await FN.utente();
+    assert.equal(await FN.leggiProgettiFinestra('2026-11-06', '2026-12-06'), null);
+    assert.equal(avvisi.length, 1);
+    const { FB: FO } = archivioNuovo(SUP, { getDocs: async () => ({ docs: [{ id: 'p1', data: () => ({ data: '2026-11-18' }) }] }) });
+    DO.avviaPagina('admin', () => {});
+    await FO.utente();
+    assert.deepEqual(await FO.leggiProgettiFinestra('2026-11-06', '2026-12-06'), [{ id: 'p1', data: '2026-11-18' }]);
+  } finally { console.warn = avviso; }
+});
+
+test('competizioni della piattaforma: documento assente → [], errore → null', async () => {
+  const { FB } = archivioNuovo(SUP, { getDoc: async (rif) => ({ exists: () => rif.path === 'visualizzatori/collega@x.it', data: () => ({}) }) });
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  assert.deepEqual(await FB.leggiCompetizioniPiattaforma(), []);
+  const { FB: FP } = archivioNuovo(SUP, { getDoc: async (rif) => ({ exists: () => true, data: () => ({ competizioni: [{ nome: 'L1', nomeDisponibilita: 'Ligue 1', x: 1 }, { nome: 'Cup' }] }) }) });
+  DO.avviaPagina('admin', () => {});
+  await FP.utente();
+  assert.deepEqual(await FP.leggiCompetizioniPiattaforma(), [{ nome: 'L1', nomeDisponibilita: 'Ligue 1' }, { nome: 'Cup', nomeDisponibilita: '' }]);
+  const { FB: FE } = archivioNuovo(SUP, { getDoc: async () => { throw Object.assign(new Error('offline'), { code: 'unavailable' }); } });
+  DO.avviaPagina('admin', () => {});
+  await FE.utente().catch(() => {});
+  assert.equal(await FE.leggiCompetizioniPiattaforma(), null);
+});
+
+test('pulisciEvento conserva progettoId', async () => {
+  const scritte = {};
+  const { FB } = archivioNuovo(SUP, { writeBatch: () => ({ set: (rif, dati) => { scritte[rif.path] = dati; }, commit: async () => {} }) });
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  const base = { tipo: 'partita', data: '2026-11-10', titolo: 'Milan-Inter', operatoreId: 'op1', stato: 'convocato', inviata: true, storico: [] };
+  await FB.importa({ operatori: [], eventi: [Object.assign({ id: 'a', progettoId: 'p1' }, base), Object.assign({ id: 'b' }, base), Object.assign({ id: 'c', progettoId: 'x'.repeat(50) }, base)], disponibilita: [], regole: null });
+  assert.equal(scritte['eventi/a'].progettoId, 'p1');
+  assert.ok(!('progettoId' in scritte['eventi/b']));
+  assert.equal(scritte['eventi/c'].progettoId.length, 40);
+});

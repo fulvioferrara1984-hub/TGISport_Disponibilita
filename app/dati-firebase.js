@@ -517,6 +517,8 @@
     };
     // assente = convocazione inviata prima del building: il campo si scrive solo se arriva (da un backup)
     if (e.building !== undefined) campi.building = String(e.building).slice(0, 20);
+    // ID dell'evento della piattaforma a cui la partita è legata: assente = partita non collegata
+    if (e.progettoId) campi.progettoId = String(e.progettoId).slice(0, 40);
     return campi;
   }
 
@@ -745,6 +747,73 @@
         ? { building: nuovo, inviata: false, stato: 'assegnato', risposta: '',
           storico: F.arrayUnion(voce('Building cambiato nella piattaforma: ' + (vecchio || '—') + ' → ' + nuovo + ': convocazione da rimandare')) }
         : { building: nuovo, storico: F.arrayUnion(voce('Building dalla piattaforma: ' + nuovo)) });
+      scritto = true;
+    }));
+    return scritto;
+  }
+
+  // ---------- partite remote dalla piattaforma (letture una tantum, scritture in transazione) ----------
+  // Eventi della piattaforma con data tra da e a (inclusi), tutti i tipi e stati: lettura una tantum, mai in ascolto.
+  // Lettura non riuscita o senza permesso: null (diverso da [] = nessun evento: chi chiama non deve concluderne che gli eventi non ci sono).
+  async function leggiProgettiFinestra(da, a) {
+    try {
+      const s = await F.getDocs(F.query(F.collection(db, 'progetti'), F.where('data', '>=', da), F.where('data', '<=', a)));
+      return s.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+    } catch (e) {
+      if (!e || e.code !== 'permission-denied') console.warn('Eventi della piattaforma non letti:', e && e.message);
+      return null;
+    }
+  }
+
+  // Competizioni della piattaforma (configurazione/eventi): documento assente → []; errore → null
+  async function leggiCompetizioniPiattaforma() {
+    try {
+      const d = await F.getDoc(F.doc(db, 'configurazione', 'eventi'));
+      if (!d.exists()) return [];
+      const lista = (d.data() || {}).competizioni;
+      return (Array.isArray(lista) ? lista : []).map((c) => ({ nome: String((c && c.nome) || ''), nomeDisponibilita: String((c && c.nomeDisponibilita) || '') }));
+    } catch (e) {
+      if (!e || e.code !== 'permission-denied') console.warn('Competizioni della piattaforma non lette:', e && e.message);
+      return null;
+    }
+  }
+
+  // Crea eventi/p-{progettoId} in una transazione, solo se non esiste (due dashboard aperte insieme non fanno doppioni).
+  // campi: dati della partita già pronti (pulisciEvento); nota: prima voce dello storico. true = creata.
+  async function creaPartitaPiattaforma(progettoId, campi, nota) {
+    const rif = F.doc(db, 'eventi', 'p-' + progettoId);
+    let scritto = false;
+    await scrivi(() => F.runTransaction(db, async (t) => {
+      scritto = false;
+      if ((await t.get(rif)).exists()) return;
+      t.set(rif, Object.assign(pulisciEvento(Object.assign({}, campi, { progettoId })), {
+        operatoreId: '', stato: 'da-assegnare', inviata: false, risposta: '', rispostaIl: '',
+        storico: [voce(nota)], creato: new Date().toISOString(),
+      }));
+      scritto = true;
+    }));
+    return scritto;
+  }
+
+  // Collegamento, allineamento, annullamento, ripristino, scollegamento: in una transazione che rilegge la partita e scrive solo se
+  // è ancora come il giro l'ha vista (atteso: progettoId, data, titolo, orario, inviata, stato, sempre tutti e sei: una chiave mancante vale ''/false/undefined; se uno è cambiato nel frattempo,
+  // per esempio il supervisore ha salvato la finestra dell'evento, non si scrive). true = scritta.
+  async function aggiornaDallaPiattaforma(id, atteso, campi, nota) {
+    const rif = F.doc(db, 'eventi', id);
+    let scritto = false;
+    await scrivi(() => F.runTransaction(db, async (t) => {
+      scritto = false;
+      const d = await t.get(rif);
+      if (!d.exists()) return;
+      const e = d.data();
+      const uguale = ['progettoId', 'data', 'titolo', 'orario', 'inviata', 'stato'].every((k) => {
+        const a = atteso || {};
+        if (k === 'progettoId') return (e.progettoId || '') === (a.progettoId || '');
+        if (k === 'inviata') return !!e.inviata === !!a.inviata;
+        return e[k] === a[k];
+      });
+      if (!uguale) return;
+      t.update(rif, Object.assign({}, campi, { storico: F.arrayUnion(voce(nota)) }));
       scritto = true;
     }));
     return scritto;
@@ -1076,6 +1145,7 @@
     creaEventi, aggiornaEvento, eliminaEvento, inviaConvocazioni, salvaRegole, importa, leggiOperativo, salvaOperativo,
     leggiImpostazioni, salvaImpostazioni, cambiaPassword,
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite, ascoltaProgettiOnsite, leggiProgetti, leggiProgettiDelleDate, scriviBuilding, segnaRivisto,
+    leggiProgettiFinestra, leggiCompetizioniPiattaforma, creaPartitaPiattaforma, aggiornaDallaPiattaforma,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
     mieiMessaggi, scriviMessaggio, segnaMessaggiLetti, messaggioSupervisore,

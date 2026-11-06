@@ -143,3 +143,21 @@ test('daCompletare: convocazioni inviate prima della funzione', () => {
   niente((() => { const y = c({ tipo: 'supervisione' }); delete y.building; return y; })());
   assert.deepEqual(B.daCompletare(undefined, undefined, OGGI), []);
 });
+
+test('abbina: partita collegata, nomi diversi', () => {
+  assert.deepEqual(B.abbina(c({ titolo: 'Rennais-Olympiacos', progettoId: 'p1' }),
+    [p({ squadraA: 'STADE RENNAIS', squadraB: 'OLYMPIACOS', building: 'T3' })]), { building: 'T3', motivo: '' });
+});
+
+test('abbina: partita collegata a un evento non letto', () => {
+  assert.deepEqual(B.abbina(c({ progettoId: 'p9' }), [p({ id: 'p1' })]), { building: '', motivo: 'non trovato' });
+});
+
+test('abbina: collegata, evento senza building', () => {
+  assert.deepEqual(B.abbina(c({ progettoId: 'p1', titolo: 'Altro-Match', data: '2026-11-09' }), [p({ building: '' })]), { building: '', motivo: '' });
+});
+
+test('abbina: collegata, evento annullato o FLYKIT vale comunque', () => {
+  assert.deepEqual(B.abbina(c({ progettoId: 'p1' }), [p({ stato: 'CANCELLED', building: 'T2' })]), { building: 'T2', motivo: '' });
+  assert.deepEqual(B.abbina(c({ progettoId: 'p1' }), [p({ modalita: 'FLYKIT', building: 'T2' })]), { building: 'T2', motivo: '' });
+});
