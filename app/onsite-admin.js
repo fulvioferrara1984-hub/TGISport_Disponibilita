@@ -16,6 +16,7 @@
   const legati = O.cacheLegati(RIPROVA_LEGATI); // eventi dei deployment legati non più in elenco: id → evento | null (letti una volta)
   let riprova = null;             // il ridisegno che ritenta le letture non riuscite
   let ascolto = null;
+  let ascoltoInterrotto = false;  // l'ascolto degli eventi della piattaforma si è chiuso per un errore: si riapre dopo un minuto
 
   const nomeOp = (id) => (A.operatori.find((o) => o.id === id) || {}).nome || 'operatore rimosso';
   const abilitati = () => A.operatori.filter((o) => o.attivo && (o.onsite === 'TL' || o.onsite === 'OP'))
@@ -316,12 +317,15 @@
       });
     }
     const r = O.righePiattaforma(eventi, A.onsite || [], DO.oggi());
-    box.hidden = !r.daRichiedere.length && !r.daRivedere.length;
+    box.hidden = !r.daRichiedere.length && !r.daRivedere.length && !ascoltoInterrotto;
     if (box.hidden) return;
     const md = (e) => ((e.staffOnsite && e.staffOnsite.giorni) || []).find((g) => g.attivita === 'MD') || { data: e.data };
     const periodoEvento = (e) => { const g = (e.staffOnsite && e.staffOnsite.giorni) || []; return g.length ? O.periodoBreve(g[0].data, g[g.length - 1].data) : '—'; };
     const riga = (testo, etichetta, tasto) => '<li>' + testo + ' <span class="tag-piattaforma">' + DO.esc(etichetta) + '</span>' + tasto + '</li>';
-    box.innerHTML = '<div class="scheda-testa"><h2>On-site dalla piattaforma</h2></div><ul class="righe-piattaforma">'
+    box.innerHTML = '<div class="scheda-testa"><h2>On-site dalla piattaforma</h2></div>'
+      // l'elenco resta quello dell'ultima lettura riuscita: il riquadro non sparisce come se non ci fosse niente da richiedere
+      + (ascoltoInterrotto ? '<p class="nota testo-errore">Eventi della piattaforma non aggiornati (errore di lettura): riprovo tra un minuto.</p>' : '')
+      + '<ul class="righe-piattaforma">'
       + r.daRichiedere.map((e) => {
         const p = O.daProgetto(e), g = p.giorni;
         return riga('<b>' + giornoBreve(md(e).data) + '</b> ' + DO.esc(p.titolo) + ' · ' + DO.esc(p.luogo) + ' · ' + DO.esc(O.periodoBreve(g[0].data, g[g.length - 1].data)),
@@ -350,9 +354,19 @@
     }
   });
 
+  // un errore chiude l'ascolto: il riquadro lo dice e l'ascolto si riapre dopo un minuto (ascolto resta valorizzato, così
+  // gli aggiornamenti della dashboard intanto non lo riaprono a ogni giro)
+  function ascoltaPiattaforma() {
+    ascolto = DO.dati.ascoltaProgettiOnsite((lista) => { segnati = lista; ascoltoInterrotto = false; disegnaPiattaforma(); }, () => {
+      ascoltoInterrotto = true;
+      disegnaPiattaforma();
+      setTimeout(ascoltaPiattaforma, 60000);
+    });
+  }
+
   A.registra({ aggiorna: () => {
     if ($('dlg-onsite-scheda').open) disegnaScheda();
-    if (!ascolto) ascolto = DO.dati.ascoltaProgettiOnsite((lista) => { segnati = lista; disegnaPiattaforma(); });
+    if (!ascolto) ascoltaPiattaforma();
     disegnaPiattaforma();
   } });
   DO.onsiteAdmin = { apri };

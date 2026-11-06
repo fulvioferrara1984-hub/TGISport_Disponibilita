@@ -690,12 +690,14 @@
   }
 
   // ---------- on-site dalla piattaforma TGI Sport (sola lettura di progetti) ----------
-  // eventi on-site coperti dai nostri operatori, da oggi in poi; senza permesso (regole non ancora pubblicate) nessun riquadro
-  function ascoltaProgettiOnsite(cb) {
+  // eventi on-site coperti dai nostri operatori, da oggi in poi; senza permesso (regole non ancora pubblicate) nessun riquadro.
+  // Ogni altro errore chiude l'ascolto e arriva a errore (senza errore: elenco vuoto, come senza permesso)
+  function ascoltaProgettiOnsite(cb, errore) {
     const q = F.query(F.collection(db, 'progetti'), F.where('staffOnsite.attivo', '==', true), F.where('data', '>=', DO.oggi()));
     return F.onSnapshot(q, (s) => cb(s.docs.map((d) => Object.assign({ id: d.id }, d.data()))), (e) => {
-      if (e.code !== 'permission-denied') console.warn('Eventi della piattaforma non letti:', e.message);
-      cb([]);
+      if (e.code === 'permission-denied') { cb([]); return; }
+      console.warn('Eventi della piattaforma non letti:', e.message);
+      if (errore) errore(e); else cb([]);
     });
   }
 
