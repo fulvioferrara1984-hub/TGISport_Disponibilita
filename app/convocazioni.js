@@ -88,12 +88,13 @@
       if (nelleFinestra !== null) { const g = giorniFinestra(); unisciProgetti(g, nelleFinestra); letti.push(...g); }
       if (oltre !== null && extra.length) { unisciProgetti(extra, oltre); letti.push(...extra); }
       await controllaBuilding(letti);
+      let scritte = {};
       if (nelleFinestra !== null) {
-        try { await DO.partiteAdmin.esegui(nelleFinestra); } catch (err) { console.warn('Partite dalla piattaforma non controllate:', err && err.message); }
+        try { scritte = (await DO.partiteAdmin.esegui(nelleFinestra)) || {}; } catch (err) { console.warn('Partite dalla piattaforma non controllate:', err && err.message); }
       }
       ultimaLettura = Date.now();
       disegna();
-      return { finestra: nelleFinestra !== null, extra: oltre !== null, giorniExtra: extra };
+      return { finestra: nelleFinestra !== null, extra: oltre !== null, giorniExtra: extra, scritte };
     } finally {
       inLettura = false;
     }
@@ -733,8 +734,9 @@
   async function apriInvio() {
     // piattaforma letta adesso, prima di calcolare le partite da inviare: KO (il giro può aggiornarli) e building freschi per l'invio
     const previste = A.eventi.filter((e) => e.stato === 'assegnato' && e.data >= DO.oggi());
-    const lettura = await letturaPiattaforma(B.giorniDaLeggere(previste, DO.oggi())).catch(() => ({ finestra: false, extra: false, giorniExtra: [] }));
-    daInviare = A.eventi.filter((e) => e.stato === 'assegnato' && e.data >= DO.oggi()).sort((a, b) => a.data.localeCompare(b.data));
+    const lettura = await letturaPiattaforma(B.giorniDaLeggere(previste, DO.oggi())).catch(() => ({ finestra: false, extra: false, giorniExtra: [], scritte: {} }));
+    // le scritte del giro appena fatto non sono ancora arrivate dall'ascolto: si sovrappongono qui (KO, ritrovo, partite tornate da inviare o annullate)
+    daInviare = DO.partitePiattaforma.conScritte(A.eventi, lettura.scritte).filter((e) => e.stato === 'assegnato' && e.data >= DO.oggi()).sort((a, b) => a.data.localeCompare(b.data));
     const giorni = B.giorniDaLeggere(daInviare, DO.oggi());
     // building non letti: la lettura è fallita per uno dei giorni da inviare (finestra per quelli dentro, giorni extra per quelli fuori)
     const fuori = oltreFinestra(giorni);

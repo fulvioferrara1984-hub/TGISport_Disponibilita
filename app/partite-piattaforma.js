@@ -186,5 +186,8 @@
     return az;
   }
 
-  DO.partitePiattaforma = { GIORNI, finestra, nomeCompetizione, titoloPiattaforma, partitaDa, allineamento, collegamento, daRileggere, atteso, puoScrivere, testoAvviso, giro, NOTE };
+  // Partite in memoria con sopra i campi appena scritti dal giro (scritte: { id: campi }), senza aspettare l'ascolto
+  const conScritte = (eventi, scritte) => eventi.map((e) => (scritte && scritte[e.id] ? Object.assign({}, e, scritte[e.id]) : e));
+
+  DO.partitePiattaforma = { GIORNI, finestra, nomeCompetizione, titoloPiattaforma, partitaDa, allineamento, collegamento, daRileggere, atteso, puoScrivere, testoAvviso, giro, conScritte, NOTE };
 })(window.DO = window.DO || {});

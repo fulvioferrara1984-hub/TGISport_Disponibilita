@@ -300,3 +300,12 @@ test('puoScrivere', () => {
   assert.equal(P.puoScrivere({ solaLettura: false, sincronizzato: false }), false);
   assert.equal(P.puoScrivere({}), false);
 });
+
+test('conScritte: sovrappone i campi scritti dal giro alle partite in memoria, senza toccare le altre', () => {
+  const eventi = [{ id: 'a', orario: '20:45', stato: 'assegnato' }, { id: 'b', orario: '15:00' }];
+  const v = P.conScritte(eventi, { a: { orario: '21:00', convocazioneCalcolata: '17:00' }, z: { orario: '10:00' } });
+  assert.deepEqual(v, [{ id: 'a', orario: '21:00', stato: 'assegnato', convocazioneCalcolata: '17:00' }, { id: 'b', orario: '15:00' }]);
+  assert.equal(eventi[0].orario, '20:45');
+  assert.equal(P.conScritte(eventi, {})[1], eventi[1]);
+  assert.deepEqual(P.conScritte(eventi, undefined), eventi);
+});

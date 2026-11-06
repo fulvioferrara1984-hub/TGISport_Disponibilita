@@ -60,6 +60,24 @@ for (const [nome, opzioni] of [['sola visualizzazione', { solaLettura: true }], 
   });
 }
 
+test('esegui: restituisce i campi scritti per ogni partita aggiornata (l\'invio non aspetta l\'ascolto)', async () => {
+  const { finestra } = prepara();
+  const scritte = await DO.partiteAdmin.esegui(finestra);
+  assert.deepEqual(Object.keys(scritte).sort(), ['ann', 'coll', 'libera']);
+  assert.deepEqual(scritte.ann, { stato: 'annullato' });
+  assert.equal(scritte.coll.orario, '20:45');
+  assert.equal(scritte.libera.progettoId, 'p1');
+});
+
+test('esegui: nessun campo restituito per le scritture rifiutate, in sola visualizzazione o senza giro', async () => {
+  let { finestra } = prepara({ risposta: false });
+  assert.deepEqual(await DO.partiteAdmin.esegui(finestra), {});
+  ({ finestra } = prepara({ solaLettura: true }));
+  assert.deepEqual(await DO.partiteAdmin.esegui(finestra), {});
+  prepara();
+  assert.deepEqual(await DO.partiteAdmin.esegui(null), {});
+});
+
 test('esegui: una risposta false della transazione non conta e non è un errore', async () => {
   const { scritture, avvisi, finestra } = prepara({ risposta: false });
   await DO.partiteAdmin.esegui(finestra);

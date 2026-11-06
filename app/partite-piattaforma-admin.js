@@ -11,12 +11,15 @@
   const giornoBreve = (d) => { const g = DO.giorno(d); return g.breve.toLowerCase() + ' ' + String(d).slice(8, 10) + '/' + String(d).slice(5, 7); };
 
   // Esegue le azioni del giro una dopo l'altra. progettiFinestra: eventi della piattaforma letti per la finestra (mai null).
+  // Restituisce i campi scritti davvero ({ id: campi }): chi calcola subito dopo (Invia convocazioni) li sovrappone ad A.eventi,
+  // perché la transazione finisce prima che l'ascolto delle partite porti la modifica.
   async function esegui(progettiFinestra) {
     const A = DO.admin, P = DO.partitePiattaforma, D = DO.dati;
-    if (!Array.isArray(progettiFinestra)) return;
+    const scritte = {};
+    if (!Array.isArray(progettiFinestra)) return scritte;
     // competizioni non lette (null): senza i nomi il giro potrebbe dare «sconosciuta» a competizioni che non lo sono, quindi non parte
     const comp = await Promise.resolve().then(() => D.leggiCompetizioniPiattaforma()).catch(() => null);
-    if (comp === null || comp === undefined) return;
+    if (comp === null || comp === undefined) return scritte;
     const oggi = DO.oggi(), ora = new Date().toTimeString().slice(0, 5);
     // partite collegate il cui evento non è nella finestra (spostato più avanti, eliminato): si rileggono per ID; un ID assente non è stato letto
     const ids = P.daRileggere(A.eventi, progettiFinestra, oggi);
@@ -33,14 +36,16 @@
         try { if (await scrivi()) [].concat(typeof chiave === 'function' ? chiave() : chiave).forEach((k) => { n[k]++; }); } catch (err) { n.nonRiuscite++; console.warn('Partita dalla piattaforma non scritta:', err && err.message); }
       };
       for (const x of az.crea) await passo('create', () => D.creaPartitaPiattaforma(x.evento.id, x.campi, P.NOTE.creata(x.evento.codice)));
-      for (const x of az.collega) await passo(() => (x.rimanda ? ['collegate', 'rimandate'] : 'collegate'), () => D.aggiornaDallaPiattaforma(x.partita.id, P.atteso(x.partita), x.campi, x.nota));
-      for (const x of az.allinea) await passo(() => (x.rimanda ? 'rimandate' : 'aggiornate'), () => D.aggiornaDallaPiattaforma(x.partita.id, P.atteso(x.partita), x.campi, x.nota));
-      for (const x of az.annulla) await passo('annullate', () => D.aggiornaDallaPiattaforma(x.partita.id, P.atteso(x.partita), { stato: 'annullato' }, x.nota));
-      for (const x of az.ripristina) await passo('ripristinate', () => D.aggiornaDallaPiattaforma(x.partita.id, P.atteso(x.partita), x.campi, x.nota));
+      const aggiorna = async (x, campi) => { const ok = await D.aggiornaDallaPiattaforma(x.partita.id, P.atteso(x.partita), campi, x.nota); if (ok) scritte[x.partita.id] = campi; return ok; };
+      for (const x of az.collega) await passo(() => (x.rimanda ? ['collegate', 'rimandate'] : 'collegate'), () => aggiorna(x, x.campi));
+      for (const x of az.allinea) await passo(() => (x.rimanda ? 'rimandate' : 'aggiornate'), () => aggiorna(x, x.campi));
+      for (const x of az.annulla) await passo('annullate', () => aggiorna(x, { stato: 'annullato' }));
+      for (const x of az.ripristina) await passo('ripristinate', () => aggiorna(x, x.campi));
     }
     const testo = P.testoAvviso(n);
     if (testo) DO.avviso(testo, 'ok', 8000);
     disegna();
+    return scritte;
   }
 
   // ---------- riquadro ----------
