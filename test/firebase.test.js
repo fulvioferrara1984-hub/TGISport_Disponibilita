@@ -256,6 +256,39 @@ test('messaggi letti dall\'operatore: solo il campo letto', async () => {
   assert.equal(a.scritte.length, 2);
 });
 
+// ---------------------------------------------------------------- on-site dalla piattaforma
+test('eventi legati: letti → evento, eliminati → null, non riusciti assenti (la dashboard li ritenta)', async () => {
+  const { FB } = archivioNuovo({ email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' }, {
+    getDoc: async (rif) => {
+      if (rif.path === 'progetti/rete') throw new Error('rete');
+      return { exists: () => rif.path === 'progetti/p1', data: () => ({ data: '2026-11-04' }) };
+    },
+  });
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  assert.deepEqual(await FB.leggiProgetti(['p1', 'via', 'rete']), { p1: { id: 'p1', data: '2026-11-04' }, via: null });
+});
+
+test('eventi on-site: permesso negato → nessun riquadro, in silenzio; un altro errore → errore, non un elenco vuoto', async () => {
+  const avvisi = [];
+  const avvisoOriginale = console.warn;
+  console.warn = (...a) => avvisi.push(a.join(' '));
+  try {
+    const { FB, ascolti } = archivioNuovo({ email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' });
+    DO.avviaPagina('admin', () => {});
+    await FB.utente();
+    const viste = [], errori = [];
+    const ascolta = () => { FB.ascoltaProgettiOnsite((l) => viste.push(l), (e) => errori.push(e.message)); return ascolti[ascolti.length - 1]; };
+    // regole non ancora pubblicate: come prima, elenco vuoto e niente in console
+    ascolta().errore(Object.assign(new Error('negato'), { code: 'permission-denied' }));
+    assert.deepEqual([viste, errori, avvisi], [[[]], [], []]);
+    // ogni altro errore (rete, indice): chi ascolta lo sa, il riquadro non sparisce come se non ci fosse niente da richiedere
+    ascolta().errore(Object.assign(new Error('indice mancante'), { code: 'failed-precondition' }));
+    assert.deepEqual([viste, errori], [[[]], ['indice mancante']]);
+    assert.equal(avvisi.length, 1);
+  } finally { console.warn = avvisoOriginale; }
+});
+
 // ---------------------------------------------------------------- building dalla piattaforma
 const SUP = { email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' };
 

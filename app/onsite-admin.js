@@ -12,9 +12,11 @@
   let preset = {};                // giorni precompilati da un evento della piattaforma: data → { attivita, partita }
   let progettoScelto = {};        // evento della piattaforma da cui nasce la richiesta: { progettoId, giorniRichiesti } del deployment
   let segnati = [];               // eventi della piattaforma con i nostri operatori, da oggi in poi (in tempo reale)
-  const legati = {};              // eventi dei deployment legati non più in elenco: id → evento | null (letti una volta)
-  const inLettura = new Set();
+  const RIPROVA_LEGATI = 60000;   // una lettura non riuscita degli eventi legati si ritenta dopo un minuto
+  const legati = O.cacheLegati(RIPROVA_LEGATI); // eventi dei deployment legati non più in elenco: id → evento | null (letti una volta)
+  let riprova = null;             // il ridisegno che ritenta le letture non riuscite
   let ascolto = null;
+  let ascoltoInterrotto = false;  // l'ascolto degli eventi della piattaforma si è chiuso per un errore: si riapre dopo un minuto
 
   const nomeOp = (id) => (A.operatori.find((o) => o.id === id) || {}).nome || 'operatore rimosso';
   const abilitati = () => A.operatori.filter((o) => o.attivo && (o.onsite === 'TL' || o.onsite === 'OP'))
@@ -45,7 +47,8 @@
   // le proposte per trasferte lunghe (MD-2, MD-3…) entrano nel menu accanto alle attività fisse
   const opzioni = (scelta) => (O.ATTIVITA.includes(scelta) || scelta === ALTRO ? O.ATTIVITA : O.ATTIVITA.concat(scelta)).concat(ALTRO);
 
-  // proponi = true dopo un cambio di date: attività ricalcolate; altrimenti resta quanto scritto
+  // proponi = true dopo un cambio di date: attività ricalcolate; altrimenti resta quanto scritto (i giorni precompilati
+  // dalla piattaforma tengono sempre quanto scritto a mano: O.rigaGiorno)
   function disegnaGiorni(proponi) {
     const prima = righeAttuali(), giorni = dateScelte(), proposte = O.attivitaProposte(giorni.length);
     if (giorni.length > 31) {
@@ -55,8 +58,7 @@
       return;
     }
     $('ons-giorni').innerHTML = giorni.map((d, i) => {
-      const v = preset[d] ? { attivita: preset[d].attivita, altro: false, partita: preset[d].partita || '' }
-        : !proponi && prima[d] ? prima[d] : { attivita: proposte[i], altro: false, partita: (prima[d] || {}).partita || '' };
+      const v = O.rigaGiorno(d, proposte[i], preset, prima, proponi);
       const scelta = v.altro ? ALTRO : v.attivita;
       return '<li data-data="' + d + '"><b>' + giornoBreve(d) + '</b>'
         + '<select data-attivita aria-label="Attività del ' + giornoBreve(d) + '">'
@@ -303,21 +305,27 @@
   // ---------- on-site dalla piattaforma: riquadro in cima a Convocazioni ----------
   function disegnaPiattaforma() {
     const box = $('onsite-piattaforma');
-    const eventi = Object.assign({}, legati, Object.fromEntries(segnati.map((e) => [e.id, e])));
-    // eventi dei deployment legati che non sono (più) tra i segnati: si leggono una volta sola
-    const mancanti = (A.onsite || []).filter((d) => d.progettoId && d.stato !== 'annullata' && d.a >= DO.oggi()
-      && !Object.prototype.hasOwnProperty.call(eventi, d.progettoId) && !inLettura.has(d.progettoId)).map((d) => d.progettoId);
+    const eventi = Object.assign({}, legati.letti, Object.fromEntries(segnati.map((e) => [e.id, e])));
+    // eventi dei deployment legati che non sono (più) tra i segnati: si leggono una volta sola; quelli non riusciti si
+    // ritentano dopo RIPROVA_LEGATI, con un ridisegno apposta se nel frattempo non ne arriva un altro
+    const mancanti = legati.daLeggere((A.onsite || []).filter((d) => d.progettoId && d.stato !== 'annullata' && d.a >= DO.oggi()
+      && !Object.prototype.hasOwnProperty.call(eventi, d.progettoId)).map((d) => d.progettoId), Date.now());
     if (mancanti.length) {
-      mancanti.forEach((id) => inLettura.add(id));
-      DO.dati.leggiProgetti(mancanti).then((letti) => { Object.assign(legati, letti); disegnaPiattaforma(); }, () => {});
+      DO.dati.leggiProgetti(mancanti).catch(() => ({})).then((letti) => {
+        if (legati.arrivati(mancanti, letti, Date.now()) && !riprova) riprova = setTimeout(() => { riprova = null; disegnaPiattaforma(); }, RIPROVA_LEGATI + 1000);
+        disegnaPiattaforma();
+      });
     }
     const r = O.righePiattaforma(eventi, A.onsite || [], DO.oggi());
-    box.hidden = !r.daRichiedere.length && !r.daRivedere.length;
+    box.hidden = !r.daRichiedere.length && !r.daRivedere.length && !ascoltoInterrotto;
     if (box.hidden) return;
     const md = (e) => ((e.staffOnsite && e.staffOnsite.giorni) || []).find((g) => g.attivita === 'MD') || { data: e.data };
     const periodoEvento = (e) => { const g = (e.staffOnsite && e.staffOnsite.giorni) || []; return g.length ? O.periodoBreve(g[0].data, g[g.length - 1].data) : '—'; };
     const riga = (testo, etichetta, tasto) => '<li>' + testo + ' <span class="tag-piattaforma">' + DO.esc(etichetta) + '</span>' + tasto + '</li>';
-    box.innerHTML = '<div class="scheda-testa"><h2>On-site dalla piattaforma</h2></div><ul class="righe-piattaforma">'
+    box.innerHTML = '<div class="scheda-testa"><h2>On-site dalla piattaforma</h2></div>'
+      // l'elenco resta quello dell'ultima lettura riuscita: il riquadro non sparisce come se non ci fosse niente da richiedere
+      + (ascoltoInterrotto ? '<p class="nota testo-errore">Eventi della piattaforma non aggiornati (errore di lettura): riprovo tra un minuto.</p>' : '')
+      + '<ul class="righe-piattaforma">'
       + r.daRichiedere.map((e) => {
         const p = O.daProgetto(e), g = p.giorni;
         return riga('<b>' + giornoBreve(md(e).data) + '</b> ' + DO.esc(p.titolo) + ' · ' + DO.esc(p.luogo) + ' · ' + DO.esc(O.periodoBreve(g[0].data, g[g.length - 1].data)),
@@ -346,9 +354,19 @@
     }
   });
 
+  // un errore chiude l'ascolto: il riquadro lo dice e l'ascolto si riapre dopo un minuto (ascolto resta valorizzato, così
+  // gli aggiornamenti della dashboard intanto non lo riaprono a ogni giro)
+  function ascoltaPiattaforma() {
+    ascolto = DO.dati.ascoltaProgettiOnsite((lista) => { segnati = lista; ascoltoInterrotto = false; disegnaPiattaforma(); }, () => {
+      ascoltoInterrotto = true;
+      disegnaPiattaforma();
+      setTimeout(ascoltaPiattaforma, 60000);
+    });
+  }
+
   A.registra({ aggiorna: () => {
     if ($('dlg-onsite-scheda').open) disegnaScheda();
-    if (!ascolto) ascolto = DO.dati.ascoltaProgettiOnsite((lista) => { segnati = lista; disegnaPiattaforma(); });
+    if (!ascolto) ascoltaPiattaforma();
     disegnaPiattaforma();
   } });
   DO.onsiteAdmin = { apri };

@@ -194,6 +194,37 @@ test('richiesta precompilata dall\'evento della piattaforma', () => {
   assert.deepEqual(p.giorniRichiesti, evento().staffOnsite.giorni);
 });
 
+test('giorni della richiesta: il precompilato vale al primo disegno, poi resta quanto scritto a mano', () => {
+  const D = '2026-11-04', preset = { [D]: { attivita: 'MD', partita: 'Benfica – Inter' } };
+  const aMano = { attivita: 'Altro', altro: true, partita: '' };
+  // primo disegno: il giorno dell'evento
+  assert.deepEqual(O.rigaGiorno(D, 'Travel Day', preset, {}, true), { attivita: 'MD', altro: false, partita: 'Benfica – Inter' });
+  // cambiato a mano, poi tolto un altro giorno (ridisegno senza proposte) o cambiate le date (con le proposte): resta il suo
+  assert.deepEqual(O.rigaGiorno(D, 'MD', preset, { [D]: aMano }, false), aMano);
+  assert.deepEqual(O.rigaGiorno(D, 'Travel Day', preset, { [D]: aMano }, true), aMano);
+  // giorni non precompilati: con le proposte l'attività proposta (la partita scritta resta), senza resta quanto scritto
+  const E = '2026-11-06', scritto = { attivita: 'MD+1', altro: false, partita: 'x' };
+  assert.deepEqual(O.rigaGiorno(E, 'Travel Day', preset, { [E]: scritto }, true), { attivita: 'Travel Day', altro: false, partita: 'x' });
+  assert.deepEqual(O.rigaGiorno(E, 'Travel Day', preset, { [E]: scritto }, false), scritto);
+  assert.deepEqual(O.rigaGiorno(E, 'Travel Day', {}, {}, false), { attivita: 'Travel Day', altro: false, partita: '' });
+});
+
+test('eventi legati: letti una volta, una lettura non riuscita si ritenta dopo l\'attesa', () => {
+  const c = O.cacheLegati(60000);
+  assert.deepEqual(c.daLeggere(['p1', 'p2', 'p3', 'p1'], 0), ['p1', 'p2', 'p3']);
+  // in lettura: non si rileggono
+  assert.deepEqual(c.daLeggere(['p1', 'p2', 'p3'], 10), []);
+  // p1 letto, p2 eliminato (null), p3 non riuscito
+  assert.equal(c.arrivati(['p1', 'p2', 'p3'], { p1: { id: 'p1' }, p2: null }, 1000), 1);
+  assert.deepEqual(c.letti, { p1: { id: 'p1' }, p2: null });
+  // prima dell'attesa niente (nessun giro di letture se l'errore resta), dopo p3 si ritenta; i letti mai più
+  assert.deepEqual(c.daLeggere(['p1', 'p2', 'p3'], 30000), []);
+  assert.deepEqual(c.daLeggere(['p1', 'p2', 'p3'], 61000), ['p3']);
+  assert.equal(c.arrivati(['p3'], { p3: { id: 'p3' } }, 62000), 0);
+  assert.deepEqual(c.daLeggere(['p1', 'p2', 'p3'], 200000), []);
+  assert.deepEqual(Object.keys(c.letti), ['p1', 'p2', 'p3']);
+});
+
 test('legame del deployment con l\'evento della piattaforma', () => {
   assert.deepEqual(O.legame({}), {});
   assert.deepEqual(O.legame({ progettoId: 'p1', giorniRichiesti: [{ data: '2026-11-04', attivita: 'MD', partita: 'x' }, { data: 'no', attivita: 'MD' }] }),
