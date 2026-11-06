@@ -551,6 +551,8 @@
     creaOnsite, modificaOnsite, togliOnsite, statoOnsite, mieiOnsite, rispondiOnsite,
     // la demo non ha la piattaforma TGI Sport: nessun evento da coprire
     ascoltaProgettiOnsite: (cb) => { cb([]); return () => {}; }, leggiProgetti: async () => ({}), leggiProgettiDelleDate: async () => [], scriviBuilding: async (id, vecchio, nuovo, rimanda, atteso) => false, segnaRivisto,
+    // partite remote dalla piattaforma: la demo non ha eventi della piattaforma e non scrive nulla
+    leggiProgettiFinestra: async () => [], leggiCompetizioniPiattaforma: async () => null, creaPartitaPiattaforma: async () => false, aggiornaDallaPiattaforma: async () => false,
     chiediPerEvento, allineaRichiestaEvento, mieRichiesteEvento, rispondiRichiestaEvento,
     aggiungiVisualizzatore, togliVisualizzatore, inviaBackupOra,
     mieiMessaggi, scriviMessaggio, segnaMessaggiLetti, messaggioSupervisore,

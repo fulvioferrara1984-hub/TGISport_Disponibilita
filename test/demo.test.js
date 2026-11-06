@@ -506,3 +506,10 @@ test('dashboard: i messaggi arrivano anche alla sola visualizzazione', async () 
   assert.ok(s.messaggi.length > 0);
   comeSupervisoreVero();
 });
+
+test('demo: le funzioni della piattaforma non scrivono nulla', async () => {
+  assert.deepEqual(await D.leggiProgettiFinestra('2026-11-06', '2026-12-06'), []);
+  assert.equal(await D.leggiCompetizioniPiattaforma(), null);
+  assert.equal(await D.creaPartitaPiattaforma('p1', {}, 'nota'), false);
+  assert.equal(await D.aggiornaDallaPiattaforma('e1', {}, {}, 'nota'), false);
+});
