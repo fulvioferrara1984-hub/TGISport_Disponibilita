@@ -209,6 +209,22 @@ test('giorni della richiesta: il precompilato vale al primo disegno, poi resta q
   assert.deepEqual(O.rigaGiorno(E, 'Travel Day', {}, {}, false), { attivita: 'Travel Day', altro: false, partita: '' });
 });
 
+test('eventi legati: letti una volta, una lettura non riuscita si ritenta dopo l\'attesa', () => {
+  const c = O.cacheLegati(60000);
+  assert.deepEqual(c.daLeggere(['p1', 'p2', 'p3', 'p1'], 0), ['p1', 'p2', 'p3']);
+  // in lettura: non si rileggono
+  assert.deepEqual(c.daLeggere(['p1', 'p2', 'p3'], 10), []);
+  // p1 letto, p2 eliminato (null), p3 non riuscito
+  assert.equal(c.arrivati(['p1', 'p2', 'p3'], { p1: { id: 'p1' }, p2: null }, 1000), 1);
+  assert.deepEqual(c.letti, { p1: { id: 'p1' }, p2: null });
+  // prima dell'attesa niente (nessun giro di letture se l'errore resta), dopo p3 si ritenta; i letti mai più
+  assert.deepEqual(c.daLeggere(['p1', 'p2', 'p3'], 30000), []);
+  assert.deepEqual(c.daLeggere(['p1', 'p2', 'p3'], 61000), ['p3']);
+  assert.equal(c.arrivati(['p3'], { p3: { id: 'p3' } }, 62000), 0);
+  assert.deepEqual(c.daLeggere(['p1', 'p2', 'p3'], 200000), []);
+  assert.deepEqual(Object.keys(c.letti), ['p1', 'p2', 'p3']);
+});
+
 test('legame del deployment con l\'evento della piattaforma', () => {
   assert.deepEqual(O.legame({}), {});
   assert.deepEqual(O.legame({ progettoId: 'p1', giorniRichiesti: [{ data: '2026-11-04', attivita: 'MD', partita: 'x' }, { data: 'no', attivita: 'MD' }] }),

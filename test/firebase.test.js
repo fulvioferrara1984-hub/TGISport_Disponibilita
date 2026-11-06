@@ -256,6 +256,19 @@ test('messaggi letti dall\'operatore: solo il campo letto', async () => {
   assert.equal(a.scritte.length, 2);
 });
 
+// ---------------------------------------------------------------- on-site dalla piattaforma
+test('eventi legati: letti → evento, eliminati → null, non riusciti assenti (la dashboard li ritenta)', async () => {
+  const { FB } = archivioNuovo({ email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' }, {
+    getDoc: async (rif) => {
+      if (rif.path === 'progetti/rete') throw new Error('rete');
+      return { exists: () => rif.path === 'progetti/p1', data: () => ({ data: '2026-11-04' }) };
+    },
+  });
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  assert.deepEqual(await FB.leggiProgetti(['p1', 'via', 'rete']), { p1: { id: 'p1', data: '2026-11-04' }, via: null });
+});
+
 // ---------------------------------------------------------------- building dalla piattaforma
 const SUP = { email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' };
 

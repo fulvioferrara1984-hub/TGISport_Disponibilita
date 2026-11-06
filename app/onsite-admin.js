@@ -12,8 +12,9 @@
   let preset = {};                // giorni precompilati da un evento della piattaforma: data → { attivita, partita }
   let progettoScelto = {};        // evento della piattaforma da cui nasce la richiesta: { progettoId, giorniRichiesti } del deployment
   let segnati = [];               // eventi della piattaforma con i nostri operatori, da oggi in poi (in tempo reale)
-  const legati = {};              // eventi dei deployment legati non più in elenco: id → evento | null (letti una volta)
-  const inLettura = new Set();
+  const RIPROVA_LEGATI = 60000;   // una lettura non riuscita degli eventi legati si ritenta dopo un minuto
+  const legati = O.cacheLegati(RIPROVA_LEGATI); // eventi dei deployment legati non più in elenco: id → evento | null (letti una volta)
+  let riprova = null;             // il ridisegno che ritenta le letture non riuscite
   let ascolto = null;
 
   const nomeOp = (id) => (A.operatori.find((o) => o.id === id) || {}).nome || 'operatore rimosso';
@@ -303,13 +304,16 @@
   // ---------- on-site dalla piattaforma: riquadro in cima a Convocazioni ----------
   function disegnaPiattaforma() {
     const box = $('onsite-piattaforma');
-    const eventi = Object.assign({}, legati, Object.fromEntries(segnati.map((e) => [e.id, e])));
-    // eventi dei deployment legati che non sono (più) tra i segnati: si leggono una volta sola
-    const mancanti = (A.onsite || []).filter((d) => d.progettoId && d.stato !== 'annullata' && d.a >= DO.oggi()
-      && !Object.prototype.hasOwnProperty.call(eventi, d.progettoId) && !inLettura.has(d.progettoId)).map((d) => d.progettoId);
+    const eventi = Object.assign({}, legati.letti, Object.fromEntries(segnati.map((e) => [e.id, e])));
+    // eventi dei deployment legati che non sono (più) tra i segnati: si leggono una volta sola; quelli non riusciti si
+    // ritentano dopo RIPROVA_LEGATI, con un ridisegno apposta se nel frattempo non ne arriva un altro
+    const mancanti = legati.daLeggere((A.onsite || []).filter((d) => d.progettoId && d.stato !== 'annullata' && d.a >= DO.oggi()
+      && !Object.prototype.hasOwnProperty.call(eventi, d.progettoId)).map((d) => d.progettoId), Date.now());
     if (mancanti.length) {
-      mancanti.forEach((id) => inLettura.add(id));
-      DO.dati.leggiProgetti(mancanti).then((letti) => { Object.assign(legati, letti); disegnaPiattaforma(); }, () => {});
+      DO.dati.leggiProgetti(mancanti).catch(() => ({})).then((letti) => {
+        if (legati.arrivati(mancanti, letti, Date.now()) && !riprova) riprova = setTimeout(() => { riprova = null; disegnaPiattaforma(); }, RIPROVA_LEGATI + 1000);
+        disegnaPiattaforma();
+      });
     }
     const r = O.righePiattaforma(eventi, A.onsite || [], DO.oggi());
     box.hidden = !r.daRichiedere.length && !r.daRivedere.length;

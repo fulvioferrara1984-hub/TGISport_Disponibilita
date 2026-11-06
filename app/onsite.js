@@ -240,8 +240,35 @@
     return { daRichiedere, daRivedere };
   }
 
+  // Eventi dei deployment legati che non sono tra quelli segnati: si leggono una volta e restano in letti (id → evento | null).
+  // Una lettura non riuscita si ritenta, ma non prima di attesa ms: se l'errore resta non parte un giro di letture.
+  // adesso: l'ora in ms (Date.now() nella dashboard).
+  function cacheLegati(attesa) {
+    const letti = {}, inLettura = new Set(), falliti = new Map();
+    const has = (id) => Object.prototype.hasOwnProperty.call(letti, id);
+    return {
+      letti,
+      // gli id da leggere adesso, che da qui restano «in lettura» fino ad arrivati
+      daLeggere(ids, adesso) {
+        const nuovi = Array.from(new Set(ids)).filter((id) => !has(id) && !inLettura.has(id) && !(falliti.has(id) && adesso - falliti.get(id) < attesa));
+        nuovi.forEach((id) => { inLettura.add(id); falliti.delete(id); });
+        return nuovi;
+      },
+      // risultato della lettura degli id (quelli che mancano non sono riusciti): dice quanti ritentare
+      arrivati(ids, risultato, adesso) {
+        let nonRiusciti = 0;
+        ids.forEach((id) => {
+          inLettura.delete(id);
+          if (Object.prototype.hasOwnProperty.call(risultato || {}, id)) letti[id] = risultato[id];
+          else { falliti.set(id, adesso); nonRiusciti++; }
+        });
+        return nonRiusciti;
+      },
+    };
+  }
+
   DO.onsite = {
-    daProgetto, legame, soloGiorni, righePiattaforma,
+    daProgetto, legame, soloGiorni, righePiattaforma, cacheLegati,
     ATTIVITA, MESSAGGI, attivitaProposte, rigaGiorno, giorniDa, normalizza, compensoProposto, compensoValido, modifiche, postiLiberi, etichettaPosti,
     ruoloAccettato, giorniOnsite, conflittiRemoti, conflittiOnsite, statoPerOperatore, quoteMese, periodoBreve,
     COLORE, statoCalendarioOnsite,

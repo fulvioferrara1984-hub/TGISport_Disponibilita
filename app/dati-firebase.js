@@ -699,7 +699,8 @@
     });
   }
 
-  // eventi dei deployment legati che non sono più nell'elenco: { id: evento | null } (null = eliminato)
+  // eventi dei deployment legati che non sono più nell'elenco: { id: evento | null } (null = eliminato); chi non si è letto manca
+  // (la dashboard lo ritenta dopo un minuto: O.cacheLegati)
   async function leggiProgetti(ids) {
     const letti = await Promise.all(ids.map((id) => F.getDoc(F.doc(db, 'progetti', id)).then((d) => [id, d.exists() ? Object.assign({ id }, d.data()) : null], () => null)));
     return Object.fromEntries(letti.filter(Boolean));
