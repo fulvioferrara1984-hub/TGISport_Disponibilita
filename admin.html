@@ -8,8 +8,8 @@
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
   <link rel="preload" href="app/font/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="app/stile.css?v=38">
-  <script src="app/tema.js?v=38"></script>
+  <link rel="stylesheet" href="app/stile.css?v=39">
+  <script src="app/tema.js?v=39"></script>
 </head>
 <body>
   <!-- Accesso con la password dei supervisori -->
@@ -97,6 +97,7 @@
         </div>
       </div>
       <section class="scheda onsite-piattaforma" id="onsite-piattaforma" hidden></section>
+      <section class="scheda onsite-piattaforma" id="remote-piattaforma" hidden></section>
       <div class="conteggi-conv" id="ev-conteggi"></div>
       <section class="scheda">
         <div class="scheda-testa">
@@ -523,6 +524,7 @@
         <label class="campo"><span>Note interne (non visibili agli operatori)</span><input type="text" id="evd-note" maxlength="300"></label>
       </div>
       <p id="evd-building" class="nota" hidden></p>
+      <p id="evd-piattaforma" class="nota" hidden></p>
       <label class="spunta"><input type="checkbox" id="evd-maggiorato"><span>Gettone maggiorato</span></label>
       <label class="spunta"><input type="checkbox" id="evd-sostituire"><span>Da sostituire (l'operatore assegnato va cambiato)</span></label>
       <div class="evd-richiesta" id="evd-richiesta" hidden>
@@ -632,21 +634,23 @@
     </form>
   </dialog>
 
-  <script src="app/config.js?v=38"></script>
-  <script src="app/comune.js?v=38"></script>
-  <script src="app/building.js?v=38"></script>
-  <script src="app/onsite.js?v=38"></script>
-  <script src="app/messaggi.js?v=38"></script>
-  <script src="app/richieste-evento.js?v=38"></script>
-  <script src="app/demo.js?v=38"></script>
-  <script src="app/dati-firebase.js?v=38"></script>
-  <script src="app/regole.js?v=38"></script>
-  <script src="app/menu.js?v=38"></script>
-  <script src="app/admin.js?v=38"></script>
-  <script src="app/convocazioni.js?v=38"></script>
-  <script src="app/onsite-admin.js?v=38"></script>
-  <script src="app/calendario.js?v=38"></script>
-  <script src="app/riepilogo.js?v=38"></script>
-  <script src="app/impostazioni.js?v=38"></script>
+  <script src="app/config.js?v=39"></script>
+  <script src="app/comune.js?v=39"></script>
+  <script src="app/building.js?v=39"></script>
+  <script src="app/partite-piattaforma.js?v=39"></script>
+  <script src="app/onsite.js?v=39"></script>
+  <script src="app/messaggi.js?v=39"></script>
+  <script src="app/richieste-evento.js?v=39"></script>
+  <script src="app/demo.js?v=39"></script>
+  <script src="app/dati-firebase.js?v=39"></script>
+  <script src="app/regole.js?v=39"></script>
+  <script src="app/menu.js?v=39"></script>
+  <script src="app/admin.js?v=39"></script>
+  <script src="app/convocazioni.js?v=39"></script>
+  <script src="app/onsite-admin.js?v=39"></script>
+  <script src="app/partite-piattaforma-admin.js?v=39"></script>
+  <script src="app/calendario.js?v=39"></script>
+  <script src="app/riepilogo.js?v=39"></script>
+  <script src="app/impostazioni.js?v=39"></script>
 </body>
 </html>

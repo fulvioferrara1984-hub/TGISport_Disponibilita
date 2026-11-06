@@ -70,13 +70,33 @@
     if (rimesse) DO.avviso(plurale(rimesse, 'convocazione da rimandare', 'convocazioni da rimandare') + ': building cambiato nella piattaforma.', 'ok', 8000);
   }
 
-  async function leggiBuilding(date) {
-    const eventiLetti = await DO.dati.leggiProgettiDelleDate(date);
-    // lettura non riuscita (null): non vuol dire che gli eventi non ci sono, quindi niente unione e niente controllo
-    if (eventiLetti === null) return;
-    unisciProgetti(date, eventiLetti);
-    await controllaBuilding(date);
-    disegna();
+  // Lettura della piattaforma (una tantum, mai in ascolto): gli eventi della finestra dei prossimi 35 giorni (per il giro delle partite
+  // remote e per il building) e, con leggiProgettiDelleDate, i soli giorni di giorniExtra oltre la finestra (building delle partite
+  // più avanti). Una lettura non riuscita (null) non vuol dire che gli eventi non ci sono: niente unione, niente controllo, niente giro.
+  // Il giro parte solo se la finestra è stata letta. Dice cosa è riuscito, e per quali giorni extra.
+  let ultimaLettura = 0, inLettura = false;
+  const giorniFinestra = () => { const f = DO.partitePiattaforma.finestra(DO.oggi()), g = []; for (let d = f.da; d <= f.a; d = DO.aggiungi(d, 1)) g.push(d); return g; };
+  const oltreFinestra = (giorni) => { const f = DO.partitePiattaforma.finestra(DO.oggi()); return giorni.filter((d) => d > f.a); };
+  async function letturaPiattaforma(giorniExtra) {
+    const fin = DO.partitePiattaforma.finestra(DO.oggi());
+    const extra = oltreFinestra(giorniExtra || []);
+    inLettura = true;
+    try {
+      const nelleFinestra = await DO.dati.leggiProgettiFinestra(fin.da, fin.a).catch(() => null);
+      const oltre = extra.length ? await DO.dati.leggiProgettiDelleDate(extra).catch(() => null) : [];
+      const letti = [];
+      if (nelleFinestra !== null) { const g = giorniFinestra(); unisciProgetti(g, nelleFinestra); letti.push(...g); }
+      if (oltre !== null && extra.length) { unisciProgetti(extra, oltre); letti.push(...extra); }
+      await controllaBuilding(letti);
+      if (nelleFinestra !== null) {
+        try { await DO.partiteAdmin.esegui(nelleFinestra); } catch (err) { console.warn('Partite dalla piattaforma non controllate:', err && err.message); }
+      }
+      ultimaLettura = Date.now();
+      disegna();
+      return { finestra: nelleFinestra !== null, extra: oltre !== null, giorniExtra: extra };
+    } finally {
+      inLettura = false;
+    }
   }
 
   // prima lettura: a scheda visibile e con le convocazioni arrivate dal server (una volta sola, non a ogni aggiornamento dei dati;
@@ -84,7 +104,14 @@
   function primaLettura() {
     if (letti || A.vista !== 'convocazioni' || !A.eventi.length || !A.sincronizzato) return;
     letti = true;
-    leggiBuilding(B.giorniDaLeggere(A.eventi, DO.oggi())).catch((err) => console.warn('Building non letto:', err && err.message));
+    letturaPiattaforma(oltreFinestra(B.giorniDaLeggere(A.eventi, DO.oggi()))).catch((err) => console.warn('Piattaforma non letta:', err && err.message));
+  }
+
+  // tornando su Convocazioni dopo 15 minuti la dashboard (aperta tutto il giorno) rilegge la piattaforma
+  const RILETTURA = 15 * 60 * 1000;
+  function riletturaSeVecchia() {
+    if (!letti || inLettura || !A.sincronizzato || Date.now() - ultimaLettura < RILETTURA) return;
+    letturaPiattaforma(oltreFinestra(B.giorniDaLeggere(A.eventi, DO.oggi()))).catch((err) => console.warn('Piattaforma non letta:', err && err.message));
   }
 
   // ---------- disegno ----------
@@ -338,6 +365,7 @@
     $('evd-sport').value = e.sport || '';
     $('evd-note').value = e.note || '';
     disegnaBuildingEvento();
+    disegnaPiattaformaEvento();
     $('evd-maggiorato').checked = e.gettone === 'maggiorato';
     $('evd-sostituire').checked = !!e.daSostituire;
     $('evd-annulla-evento').textContent = e.stato === 'annullato' ? 'Ripristina evento' : 'Annulla evento';
@@ -357,6 +385,14 @@
     const e = eventoAttuale(), b = e ? buildingDi(e) : '';
     $('evd-building').textContent = b ? 'Building ' + b + ' (dalla piattaforma)' : '';
     $('evd-building').hidden = !b;
+  }
+
+  // «Dalla piattaforma · 2627-SA-042» per le partite collegate (il codice solo se l'evento è tra quelli letti); sennò la riga non compare
+  function disegnaPiattaformaEvento() {
+    const e = eventoAttuale(), c = e && e.tipo === 'partita' && e.progettoId;
+    const p = c ? progetti.find((x) => x.id === e.progettoId) : null;
+    $('evd-piattaforma').textContent = c ? 'Dalla piattaforma' + (p && p.codice ? ' · ' + p.codice : '') : '';
+    $('evd-piattaforma').hidden = !c;
   }
 
   // ---------- messaggi con l'operatore dell'evento ----------
@@ -537,7 +573,8 @@
 
   $('evd-elimina').addEventListener('click', async () => {
     const e = inModifica;
-    const msg = e.inviata ? 'L\'evento è già stato inviato all\'operatore: se non si svolge è meglio "Annulla evento". Eliminarlo comunque?' : 'Eliminare definitivamente "' + titolo(e) + '"?';
+    const msg = (e.inviata ? 'L\'evento è già stato inviato all\'operatore: se non si svolge è meglio "Annulla evento". Eliminarlo comunque?' : 'Eliminare definitivamente "' + titolo(e) + '"?')
+      + (e.progettoId ? '\nÈ collegata alla piattaforma: tornerà al prossimo controllo. Per toglierla usa "Annulla evento".' : '');
     if (!confirm(msg)) return;
     try {
       await DO.dati.eliminaEvento(e.id);
@@ -694,18 +731,15 @@
     }
   });
   async function apriInvio() {
+    // piattaforma letta adesso, prima di calcolare le partite da inviare: KO (il giro può aggiornarli) e building freschi per l'invio
+    const previste = A.eventi.filter((e) => e.stato === 'assegnato' && e.data >= DO.oggi());
+    const lettura = await letturaPiattaforma(B.giorniDaLeggere(previste, DO.oggi())).catch(() => ({ finestra: false, extra: false, giorniExtra: [] }));
     daInviare = A.eventi.filter((e) => e.stato === 'assegnato' && e.data >= DO.oggi()).sort((a, b) => a.data.localeCompare(b.data));
-    // building letti adesso, solo per i giorni da inviare: dati freschi per l'invio (e, già che ci sono, il controllo dei cambi)
     const giorni = B.giorniDaLeggere(daInviare, DO.oggi());
-    const lettura = await DO.dati.leggiProgettiDelleDate(giorni).catch(() => null);
-    // lettura non riuscita (null): non vuol dire che gli eventi non ci sono; niente unione né controllo, e le partite partono senza building
-    buildingNonLetti = lettura === null;
-    progettiInvio = lettura || [];
-    if (!buildingNonLetti) {
-      unisciProgetti(giorni, progettiInvio);
-      await controllaBuilding(giorni);
-      disegna();
-    }
+    // building non letti: la lettura è fallita per uno dei giorni da inviare (finestra per quelli dentro, giorni extra per quelli fuori)
+    const fuori = oltreFinestra(giorni);
+    buildingNonLetti = giorni.some((d) => (fuori.includes(d) ? !(lettura.extra && lettura.giorniExtra.includes(d)) : !lettura.finestra));
+    progettiInvio = buildingNonLetti ? [] : progetti.filter((p) => giorni.includes(p.data));
     const perOp = {};
     daInviare.forEach((e) => { (perOp[e.operatoreId] = perOp[e.operatoreId] || []).push(e); });
     $('evi-elenco').innerHTML = '<p style="margin: 0 0 10px;">Le convocazioni compaiono sulla pagina di ciascun operatore, che potrà confermare. Chi ha un\'email la riceve anche per posta. Togli la spunta a quelle da inviare più tardi.</p>'
@@ -771,9 +805,10 @@
   });
 
   A.registra({
-    aggiorna: () => { disegna(); if ($('dlg-evento').open && inModifica) { disegnaRichiestaEvento(); disegnaMessaggiEvento(); disegnaBuildingEvento(); } primaLettura(); },
-    mostra: (nome) => { if (nome === 'convocazioni') { disegna(); primaLettura(); } },
+    aggiorna: () => { disegna(); if ($('dlg-evento').open && inModifica) { disegnaRichiestaEvento(); disegnaMessaggiEvento(); disegnaBuildingEvento(); disegnaPiattaformaEvento(); } primaLettura(); },
+    mostra: (nome) => { if (nome === 'convocazioni') { disegna(); primaLettura(); riletturaSeVecchia(); } },
     // arrivando da un altro punto (calendario, Aggiornamenti) si toglie ogni filtro: l'evento cercato deve vedersi
     vaiA: (data) => { if (data) inizio = DO.martedi(data); $('ev-filtro-stato').value = ''; $('ev-filtro-comp').value = ''; disegna(); },
   });
+  DO.convocazioni = { apriEvento };
 })(window.DO);
