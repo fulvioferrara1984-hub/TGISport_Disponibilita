@@ -507,6 +507,16 @@ test('partita dalla piattaforma: due creazioni dello stesso evento → un solo d
   assert.equal(arc.scritte.length, 1);
 });
 
+test('partita dalla piattaforma: il progettoId viene dall\'argomento, anche se i campi non lo hanno', async () => {
+  const arc = archivioTransazioni({});
+  const { FB } = archivioNuovo(SUP, arc.extra);
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  assert.equal(await FB.creaPartitaPiattaforma('p9', { tipo: 'partita', competizione: 'Ligue 1', data: '2026-11-18', titolo: 'A – B', orario: '18:00' }, 'Creata'), true);
+  assert.equal(arc.scritte[0].path, 'eventi/p-p9');
+  assert.equal(arc.scritte[0].dati.progettoId, 'p9');
+});
+
 test('aggiornamento dalla piattaforma: scrive solo se la partita è come il giro l\'ha vista', async () => {
   const visto = { data: '2026-11-18', titolo: 'A – B', orario: '18:00', inviata: false, stato: 'da-assegnare' };
   const atteso = Object.assign({ progettoId: '' }, visto);

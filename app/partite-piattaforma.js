@@ -141,6 +141,8 @@
     remoti.filter((e) => !tutte.some((p) => p.progettoId === e.id)).forEach((e) => {
       const k = squadre(e);
       const stesse = k ? libere.filter((p) => p.data === e.data && norm(p.titolo) === k) : [];
+      // una partita già iniziata non si tocca mai: l'evento resta fuori da questo giro (niente collegamento, dubbio o doppione)
+      if (stesse.some((p) => R.giaIniziato(p, regole, oggi, ora))) return;
       const altri = k ? remoti.some((o) => o.id !== e.id && o.data === e.data && squadre(o) === k) : false;
       if (stesse.length && !altri) {
         stesse.forEach((p) => az.collega.push(Object.assign({ partita: p, evento: e }, collegamento(p, e, regole, oggi))));

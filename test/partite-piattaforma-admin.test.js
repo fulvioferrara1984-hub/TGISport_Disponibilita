@@ -83,3 +83,33 @@ test('esegui: competizioni o finestra non lette: il giro non parte', async () =>
   assert.deepEqual(scritture, []);
   assert.deepEqual(avvisi, []);
 });
+
+test('esegui: un collegamento che rimanda conta tra le collegate e tra le da rimandare', async () => {
+  const { avvisi, finestra } = prepara();
+  DO.admin.eventi = [pa({ id: 'libera', titolo: 'Roma-Lazio', data: '2026-11-21', inviata: true, orario: '18:00' })];
+  await DO.partiteAdmin.esegui([finestra[1]]);
+  assert.equal(avvisi[0].testo, 'Dalla piattaforma: 1 partita collegata, 1 da rimandare.');
+});
+
+test('filtra: dopo un aggiornamento le righe che non servono più spariscono', async () => {
+  const { finestra } = prepara({ solaLettura: true });
+  const ev6 = Object.assign({}, finestra[3], { id: 'p6', squadraA: 'GENOA', squadraB: 'TORINO' });
+  const rev = pa({ id: 'rev', titolo: 'Genoa-Torino', progettoId: 'p6', inviata: true, data: '2026-11-22' });
+  const c1 = pa({ id: 'c1', titolo: 'Rennais-Olympiacos', progettoId: '', data: '2026-11-24' });
+  const c2 = pa({ id: 'c2', titolo: 'Rennais-Olympiacos', progettoId: '', data: '2026-11-24' });
+  DO.admin.eventi = [rev, c1, c2];
+  await DO.partiteAdmin.esegui([ev6, ev({ id: 'p7', squadraA: 'STADE RENNAIS', squadraB: 'OLYMPIACOS', data: '2026-11-24' })]);
+  let s = DO.partiteAdmin.stato();
+  assert.deepEqual([s.dubbi.length, s.dubbi[0].candidate.length, s.daRivedere.length], [1, 2, 1]);
+  DO.partiteAdmin.filtra();
+  assert.deepEqual([DO.partiteAdmin.stato().dubbi[0].candidate.length, DO.partiteAdmin.stato().daRivedere.length], [2, 1]);
+  // la riga «da rivedere» sparisce se la partita è annullata; una candidata sparisce se non è più libera
+  DO.admin.eventi = [Object.assign({}, rev, { stato: 'annullato' }), c1, Object.assign({}, c2, { progettoId: 'altro' })];
+  DO.partiteAdmin.filtra();
+  s = DO.partiteAdmin.stato();
+  assert.deepEqual([s.dubbi[0].candidate.map((c) => c.id), s.daRivedere.length], [['c1'], 0]);
+  // il dubbio sparisce se una partita ha ora il progettoId dell'evento
+  DO.admin.eventi = [Object.assign({}, c1, { progettoId: 'p7' })];
+  DO.partiteAdmin.filtra();
+  assert.equal(DO.partiteAdmin.stato().dubbi.length, 0);
+});

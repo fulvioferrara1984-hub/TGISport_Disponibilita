@@ -213,7 +213,7 @@ Ordine **sito → script**, regole di Firestore invariate (la dashboard legge gl
 
 ### Partite remote dalla piattaforma
 
-Ordine **siti → regole → ponte**, lo script delle email non cambia. Prima di pubblicare conviene una prova a secco in sola lettura: al primo giro le partite già incollate a mano nei prossimi 35 giorni si collegano tutte insieme, e quelle inviate con un orario diverso dal KO della piattaforma tornano *da inviare*. Con le regole vecchie la lettura di `configurazione/eventi` è negata ai supervisori che non sono staff della piattaforma: per loro il giro non parte e la dashboard funziona come oggi.
+Ordine **siti → regole → ponte**, lo script delle email non cambia. Prima di pubblicare conviene una prova a secco in sola lettura (script `ponte/prova-partite-remote.ts` di UnionePiattaforme, istruzioni in `ponte/LEGGIMI.md` di quel repository): al primo giro le partite già incollate a mano nei prossimi 35 giorni si collegano tutte insieme, e quelle inviate con un orario diverso dal KO della piattaforma tornano *da inviare*. Con le regole vecchie la lettura di `configurazione/eventi` è negata ai supervisori che non sono staff della piattaforma: per loro il giro non parte e la dashboard funziona come oggi.
 
 1. **Sito** (versione 39), poi ricarica la dashboard su ogni computer dei supervisori. Alla prima apertura di **Convocazioni** il giro crea, collega e allinea le partite dei prossimi 35 giorni; le partite già inviate non tornano da inviare se non cambia ciò che vede l'operatore.
 2. **Prova**: un evento REMOTE confermato della piattaforma compare come partita da assegnare; un'altra con le stesse squadre si collega da sola; un dubbio resta nel riquadro **Partite remote dalla piattaforma**.

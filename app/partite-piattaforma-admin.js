@@ -30,10 +30,10 @@
     if (P.puoScrivere(A)) {
       // una risposta false della transazione (la partita è cambiata) non conta e non è un errore; un errore vero conta e si prosegue
       const passo = async (chiave, scrivi) => {
-        try { if (await scrivi()) n[typeof chiave === 'function' ? chiave() : chiave]++; } catch (err) { n.nonRiuscite++; console.warn('Partita dalla piattaforma non scritta:', err && err.message); }
+        try { if (await scrivi()) [].concat(typeof chiave === 'function' ? chiave() : chiave).forEach((k) => { n[k]++; }); } catch (err) { n.nonRiuscite++; console.warn('Partita dalla piattaforma non scritta:', err && err.message); }
       };
       for (const x of az.crea) await passo('create', () => D.creaPartitaPiattaforma(x.evento.id, x.campi, P.NOTE.creata(x.evento.codice)));
-      for (const x of az.collega) await passo('collegate', () => D.aggiornaDallaPiattaforma(x.partita.id, P.atteso(x.partita), x.campi, x.nota));
+      for (const x of az.collega) await passo(() => (x.rimanda ? ['collegate', 'rimandate'] : 'collegate'), () => D.aggiornaDallaPiattaforma(x.partita.id, P.atteso(x.partita), x.campi, x.nota));
       for (const x of az.allinea) await passo(() => (x.rimanda ? 'rimandate' : 'aggiornate'), () => D.aggiornaDallaPiattaforma(x.partita.id, P.atteso(x.partita), x.campi, x.nota));
       for (const x of az.annulla) await passo('annullate', () => D.aggiornaDallaPiattaforma(x.partita.id, P.atteso(x.partita), { stato: 'annullato' }, x.nota));
       for (const x of az.ripristina) await passo('ripristinate', () => D.aggiornaDallaPiattaforma(x.partita.id, P.atteso(x.partita), x.campi, x.nota));
@@ -75,6 +75,19 @@
     box.hidden = !righe.length;
     if (!righe.length) { box.innerHTML = ''; return; }
     box.innerHTML = '<div class="scheda-testa"><h2>Partite remote dalla piattaforma</h2></div><ul class="righe-piattaforma">' + righe.map((r) => r.html).join('') + '</ul>';
+  }
+
+  // Dopo un aggiornamento delle partite (nessuna lettura nuova): toglie dal riquadro le righe che non servono più.
+  // «da rivedere»: la partita ora è annullata o senza progettoId; dubbio: una partita è ora collegata all'evento, oppure non resta
+  // nessuna candidata ancora libera. Una partita non più tra quelle caricate resta com'era (decide il prossimo giro).
+  function filtra() {
+    const eventi = (DO.admin && DO.admin.eventi) || [];
+    const per = new Map(eventi.map((p) => [p.id, p]));
+    daRivedere = daRivedere.filter((x) => { const p = per.get(x.partita.id); return !p || (!!p.progettoId && p.stato !== 'annullato'); });
+    dubbi = dubbi.filter((x) => !eventi.some((p) => p.progettoId === x.evento.id)).map((x) => {
+      const libere = x.candidate.filter((c) => { const p = per.get(c.id); return !!p && !p.progettoId && p.stato !== 'annullato'; });
+      return libere.length === x.candidate.length ? x : Object.assign({}, x, { candidate: libere });
+    }).filter((x) => x.candidate.length);
   }
 
   // ---------- pulsanti del riquadro ----------
@@ -120,5 +133,8 @@
   const box = elemento();
   if (box) box.addEventListener('click', (ev) => { const b = ev.target.closest('[data-azione]'); if (b) clic(b); });
 
-  DO.partiteAdmin = { esegui, disegna };
+  // a ogni aggiornamento delle partite (stesso aggancio degli altri moduli della dashboard)
+  if (DO.admin && DO.admin.registra) DO.admin.registra({ aggiorna: () => { filtra(); disegna(); } });
+
+  DO.partiteAdmin = { esegui, disegna, filtra, stato: () => ({ dubbi, sconosciute, daRivedere }) };
 })(window.DO);

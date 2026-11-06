@@ -155,6 +155,13 @@ test('giro: collega per giorno e squadre', () => {
   assert.equal(a.crea.length, 0);
 });
 
+test('giro: una partita libera già iniziata oggi non si tocca e l\'evento non fa doppioni', () => {
+  const iniziata = lib({ data: OGGI, orario: '09:00', inviata: true });
+  vuote(giro({ progetti: [ev({ data: OGGI, ko: '20:45' })], partite: [iniziata] }));
+  // se non è ancora iniziata si collega come sempre
+  assert.equal(giro({ progetti: [ev({ data: OGGI, ko: '20:45' })], partite: [lib({ data: OGGI, orario: '20:45' })] }).collega.length, 1);
+});
+
 test('giro: due partite della stessa partita si collegano entrambe', () => {
   const a = giro({ progetti: [ev()], partite: [lib(), lib({ id: 'c2' })] });
   assert.equal(a.collega.length, 2);

@@ -786,7 +786,7 @@
     await scrivi(() => F.runTransaction(db, async (t) => {
       scritto = false;
       if ((await t.get(rif)).exists()) return;
-      t.set(rif, Object.assign(pulisciEvento(campi), {
+      t.set(rif, Object.assign(pulisciEvento(Object.assign({}, campi, { progettoId })), {
         operatoreId: '', stato: 'da-assegnare', inviata: false, risposta: '', rispostaIl: '',
         storico: [voce(nota)], creato: new Date().toISOString(),
       }));
