@@ -116,3 +116,180 @@ test('NOTE', () => {
   assert.equal(P.NOTE.creata(''), 'Creata dalla piattaforma');
   assert.equal(P.NOTE.annullata('evento annullato'), 'Annullata dalla piattaforma: evento annullato');
 });
+
+// ---- il giro ----
+const ORA = '10:00';
+const COMP = [];
+const giro = (c) => P.giro(Object.assign({ progetti: [], letti: {}, partite: [], competizioniPiattaforma: COMP, regole: REGOLE, oggi: OGGI, ora: ORA }, c));
+const vuote = (a) => Object.keys(a).forEach((k) => assert.equal(a[k].length, 0, k));
+const lib = (c) => pa(Object.assign({ progettoId: '' }, c));
+const annullataDal = (testo, c) => pa(Object.assign({ stato: 'annullato', storico: [{ quando: 'x', testo: 'Creato' }, { quando: 'y', testo }] }, c));
+
+test('giro: crea l\'evento senza partite', () => {
+  const a = giro({ progetti: [ev()] });
+  assert.equal(a.crea.length, 1);
+  assert.equal(a.crea[0].campi.progettoId, 'p1');
+  assert.equal(a.crea[0].evento.id, 'p1');
+});
+
+test('giro: bordi della finestra', () => {
+  assert.equal(giro({ progetti: [ev({ data: '2026-12-10' })] }).crea.length, 1);
+  assert.equal(giro({ progetti: [ev({ data: '2026-12-11' })] }).crea.length, 0);
+  assert.equal(giro({ progetti: [ev({ data: '2026-11-05' })] }).crea.length, 0);
+});
+
+test('giro: esclusi', () => {
+  [{ modalita: 'ON-SITE' }, { modalita: 'FLYKIT' }, { modalita: 'TBC' }, { stato: 'TBC' }, { stato: 'CANCELLED' }, { attivita: 'MD-1' }]
+    .forEach((c) => vuote(giro({ progetti: [ev(c)] })));
+});
+
+test('giro: già iniziata non si crea', () => {
+  assert.equal(giro({ progetti: [ev({ data: OGGI, ko: '09:00' })] }).crea.length, 0);
+});
+
+test('giro: collega per giorno e squadre', () => {
+  const a = giro({ progetti: [ev()], partite: [lib({ titolo: 'Venezia - Napoli' })] });
+  assert.equal(a.collega.length, 1);
+  assert.equal(a.collega[0].partita.id, 'c1');
+  assert.equal(a.collega[0].campi.progettoId, 'p1');
+  assert.equal(a.crea.length, 0);
+});
+
+test('giro: due partite della stessa partita si collegano entrambe', () => {
+  const a = giro({ progetti: [ev()], partite: [lib(), lib({ id: 'c2' })] });
+  assert.equal(a.collega.length, 2);
+  assert.equal(a.dubbi.length, 0);
+});
+
+test('giro: una partita collegata a un altro evento non si ricollega', () => {
+  const a = giro({ progetti: [ev()], partite: [pa({ progettoId: 'p2' })], letti: {} });
+  assert.equal(a.collega.length, 0);
+  assert.equal(a.crea.length, 1);
+});
+
+test('giro: dubbio con nomi diversi', () => {
+  const a = giro({ progetti: [ev({ squadraA: 'STADE RENNAIS', squadraB: 'OLYMPIACOS' })], partite: [lib({ titolo: 'Rennais-Olympiacos' })] });
+  assert.deepEqual(a.dubbi[0].candidate.map((x) => x.id), ['c1']);
+  assert.equal(a.crea.length, 0);
+  assert.equal(a.collega.length, 0);
+});
+
+test('giro: due eventi sulla stessa partita libera', () => {
+  const a = giro({ progetti: [ev(), ev({ id: 'p2' })], partite: [lib()] });
+  assert.equal(a.dubbi.length, 2);
+  assert.equal(a.collega.length, 0);
+  assert.equal(a.crea.length, 0);
+});
+
+test('giro: partita con le squadre di un altro evento del giorno non è candidata', () => {
+  const tbc = ev({ id: 'p2', stato: 'TBC', squadraA: 'VERONA', squadraB: 'LECCE' });
+  const inter = ev({ squadraA: 'INTER', squadraB: 'MILAN' });
+  const a = giro({ progetti: [tbc, inter], partite: [lib({ titolo: 'Verona-Lecce' })] });
+  assert.equal(a.dubbi.length, 0);
+  assert.equal(a.crea.length, 1);
+  assert.equal(a.crea[0].evento.id, 'p1');
+});
+
+test('giro: competizione sconosciuta', () => {
+  const a = giro({ progetti: [ev({ competizione: 'UEFA YOUTH LEAGUE' })] });
+  assert.equal(a.sconosciute[0].evento.id, 'p1');
+  assert.equal(a.crea.length, 0);
+});
+
+test('giro: allinea la partita collegata', () => {
+  assert.equal(giro({ progetti: [ev({ ko: '18:00' })], partite: [pa()] }).allinea.length, 1);
+  const a = giro({ progetti: [ev({ ko: '18:00', stato: 'TBC' })], partite: [pa()] });
+  assert.equal(a.allinea.length, 1);
+  assert.equal(a.allinea[0].campi.orario, '18:00');
+  vuote(giro({ progetti: [ev()], partite: [pa()] }));
+});
+
+test('giro: annulla la non inviata, rivede l\'inviata', () => {
+  const nonInv = giro({ progetti: [ev({ stato: 'CANCELLED' })], partite: [pa()] });
+  assert.equal(nonInv.annulla[0].nota, 'Annullata dalla piattaforma: evento annullato');
+  assert.equal(nonInv.annulla[0].partita.id, 'c1');
+  const inv = giro({ progetti: [ev({ stato: 'CANCELLED' })], partite: [pa({ inviata: true, stato: 'convocato' })] });
+  assert.equal(inv.daRivedere[0].motivo, 'annullato nella piattaforma');
+  assert.equal(inv.annulla.length, 0);
+  const onsite = giro({ progetti: [ev({ modalita: 'ON-SITE' })], partite: [pa()] });
+  assert.equal(onsite.annulla[0].nota, 'Annullata dalla piattaforma: evento non più remoto');
+  assert.equal(giro({ progetti: [ev({ modalita: 'FLYKIT' })], partite: [pa({ inviata: true })] }).daRivedere[0].motivo, 'non più remoto nella piattaforma');
+  const el = giro({ letti: { p1: null }, partite: [pa()] });
+  assert.equal(el.annulla[0].nota, 'Annullata dalla piattaforma: evento eliminato');
+  assert.equal(el.annulla[0].partita.id, 'c1');
+  assert.equal(giro({ letti: { p1: null }, partite: [pa({ inviata: true })] }).daRivedere[0].motivo, 'eliminato nella piattaforma');
+  assert.equal(giro({ letti: { p1: null }, partite: [pa({ inviata: true })] }).daRivedere[0].evento, null);
+  // già annullata a mano: nulla
+  vuote(giro({ progetti: [ev({ stato: 'CANCELLED' })], partite: [annullataDal('Annullato')] }));
+});
+
+test('giro: lettura non riuscita non tocca nulla', () => {
+  vuote(giro({ partite: [pa({ progettoId: 'p9' })] }));
+  vuote(giro({ progetti: [ev({ id: 'p8', modalita: 'ON-SITE' })], letti: {}, partite: [pa({ progettoId: 'p9' })] }));
+});
+
+test('giro: ripristino solo dopo un annullamento del giro', () => {
+  const dalGiro = annullataDal('Annullata dalla piattaforma: evento annullato');
+  const r = giro({ progetti: [ev()], partite: [dalGiro] });
+  assert.equal(r.ripristina[0].campi.stato, 'assegnato');
+  assert.equal(r.ripristina[0].nota, 'Ripristinata dalla piattaforma: evento confermato di nuovo');
+  assert.equal(giro({ progetti: [ev()], partite: [Object.assign({}, dalGiro, { operatoreId: '' })] }).ripristina[0].campi.stato, 'da-assegnare');
+  ['Annullato', 'Modificato'].forEach((t) => vuote(giro({ progetti: [ev()], partite: [annullataDal(t)] })));
+  // evento non più confermato: resta annullata
+  vuote(giro({ progetti: [ev({ stato: 'TBC' })], partite: [dalGiro] }));
+});
+
+test('giro: modalità TBC → nulla', () => {
+  vuote(giro({ progetti: [ev({ modalita: 'TBC', ko: '18:00' })], partite: [pa()] }));
+  vuote(giro({ progetti: [ev({ modalita: 'TBC', stato: 'CANCELLED' })], partite: [pa()] }));
+});
+
+test('giro: partita già iniziata non si tocca', () => {
+  const p = pa({ data: OGGI, orario: '09:30', convocazione: '09:00' });
+  vuote(giro({ progetti: [ev({ data: OGGI, ko: '12:00' })], partite: [p] }));
+  vuote(giro({ progetti: [ev({ data: OGGI, stato: 'CANCELLED' })], partite: [p] }));
+});
+
+test('giro: partita passata non si tocca', () => {
+  vuote(giro({ progetti: [], letti: { p1: null }, partite: [pa({ data: '2026-11-01' })] }));
+});
+
+test('giro: evento in letti fuori finestra segue la partita ma non crea', () => {
+  const a = giro({ letti: { p1: ev({ data: '2026-12-26' }) }, partite: [pa()] });
+  assert.equal(a.allinea.length, 1);
+  assert.equal(a.allinea[0].campi.data, '2026-12-26');
+  assert.equal(giro({ letti: { p1: ev({ data: '2026-11-20' }) }, partite: [] }).crea.length, 0);
+});
+
+test('daRileggere', () => {
+  assert.deepEqual(P.daRileggere([pa({ progettoId: 'p2' })], [], OGGI), ['p2']);
+  assert.deepEqual(P.daRileggere([pa({ progettoId: 'p2' })], [ev({ id: 'p2' })], OGGI), []);
+  assert.deepEqual(P.daRileggere([pa({ progettoId: 'p2', data: '2026-11-01' })], [], OGGI), []);
+  assert.deepEqual(P.daRileggere([annullataDal('Annullato', { progettoId: 'p2' })], [], OGGI), []);
+  assert.deepEqual(P.daRileggere([annullataDal('Annullata dalla piattaforma: evento eliminato', { progettoId: 'p2' })], [], OGGI), ['p2']);
+  assert.deepEqual(P.daRileggere([pa({ progettoId: 'p2' }), pa({ id: 'c2', progettoId: 'p2' }), pa({ id: 'c3', progettoId: '' })], [], OGGI), ['p2']);
+  assert.deepEqual(P.daRileggere([pa({ progettoId: 'p2', tipo: 'turno' })], [], OGGI), []);
+});
+
+test('atteso', () => {
+  assert.deepEqual(P.atteso(pa({ progettoId: undefined, inviata: undefined })),
+    { progettoId: '', data: '2026-11-20', titolo: 'Venezia-Napoli', orario: '20:45', inviata: false, stato: 'assegnato' });
+});
+
+test('testoAvviso', () => {
+  assert.equal(P.testoAvviso({ create: 3, collegate: 2, aggiornate: 1, rimandate: 1, annullate: 1 }),
+    'Dalla piattaforma: 3 partite create, 2 collegate, 1 aggiornata, 1 da rimandare, 1 annullata.');
+  assert.equal(P.testoAvviso({ create: 1 }), 'Dalla piattaforma: 1 partita creata.');
+  assert.equal(P.testoAvviso({ collegate: 2 }), 'Dalla piattaforma: 2 partite collegate.');
+  assert.equal(P.testoAvviso({ ripristinate: 1, nonRiuscite: 2 }), 'Dalla piattaforma: 1 partita ripristinata, 2 non riuscite.');
+  assert.equal(P.testoAvviso({ nonRiuscite: 1 }), 'Dalla piattaforma: 1 partita non riuscita.');
+  assert.equal(P.testoAvviso({ create: 0 }), '');
+  assert.equal(P.testoAvviso({}), '');
+});
+
+test('puoScrivere', () => {
+  assert.equal(P.puoScrivere({ solaLettura: false, sincronizzato: true }), true);
+  assert.equal(P.puoScrivere({ solaLettura: true, sincronizzato: true }), false);
+  assert.equal(P.puoScrivere({ solaLettura: false, sincronizzato: false }), false);
+  assert.equal(P.puoScrivere({}), false);
+});
