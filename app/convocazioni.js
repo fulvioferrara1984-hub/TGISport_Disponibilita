@@ -74,30 +74,44 @@
   // remote e per il building) e, con leggiProgettiDelleDate, i soli giorni di giorniExtra oltre la finestra (building delle partite
   // più avanti). Una lettura non riuscita (null) non vuol dire che gli eventi non ci sono: niente unione, niente controllo, niente giro.
   // Il giro parte solo se la finestra è stata letta. Dice cosa è riuscito, e per quali giorni extra.
-  let ultimaLettura = 0, inLettura = false;
+  // Una lettura alla volta: Invia convocazioni o la prima lettura arrivati durante un giro aspettano che finisca e poi fanno il loro
+  // (le transazioni rifiutano le scritture già fatte dal giro prima, quindi niente doppioni né avvisi doppi delle stesse partite).
+  // Chi ha aspettato riceve anche le scritte del giro prima (Invia convocazioni le sovrappone ad A.eventi).
+  let ultimaLettura = 0, pendenti = 0, coda = Promise.resolve(null);
   const giorniFinestra = () => { const f = DO.partitePiattaforma.finestra(DO.oggi()), g = []; for (let d = f.da; d <= f.a; d = DO.aggiungi(d, 1)) g.push(d); return g; };
   const oltreFinestra = (giorni) => { const f = DO.partitePiattaforma.finestra(DO.oggi()); return giorni.filter((d) => d > f.a); };
-  async function letturaPiattaforma(giorniExtra) {
+  function letturaPiattaforma(giorniExtra) {
+    const haAspettato = pendenti > 0;
+    pendenti++;
+    const p = coda.then(async (prima) => {
+      try {
+        const r = await lettura(giorniExtra);
+        if (haAspettato && prima && prima.scritte) r.scritte = Object.assign({}, prima.scritte, r.scritte);
+        return r;
+      } finally {
+        pendenti--;
+      }
+    });
+    coda = p.catch(() => null);
+    return p;
+  }
+  async function lettura(giorniExtra) {
     const fin = DO.partitePiattaforma.finestra(DO.oggi());
     const extra = oltreFinestra(giorniExtra || []);
-    inLettura = true;
-    try {
-      const nelleFinestra = await DO.dati.leggiProgettiFinestra(fin.da, fin.a).catch(() => null);
-      const oltre = extra.length ? await DO.dati.leggiProgettiDelleDate(extra).catch(() => null) : [];
-      const letti = [];
-      if (nelleFinestra !== null) { const g = giorniFinestra(); unisciProgetti(g, nelleFinestra); letti.push(...g); }
-      if (oltre !== null && extra.length) { unisciProgetti(extra, oltre); letti.push(...extra); }
-      await controllaBuilding(letti);
-      let scritte = {};
-      if (nelleFinestra !== null) {
-        try { scritte = (await DO.partiteAdmin.esegui(nelleFinestra)) || {}; } catch (err) { console.warn('Partite dalla piattaforma non controllate:', err && err.message); }
-      }
-      ultimaLettura = Date.now();
-      disegna();
-      return { finestra: nelleFinestra !== null, extra: oltre !== null, giorniExtra: extra, scritte };
-    } finally {
-      inLettura = false;
+    const nelleFinestra = await DO.dati.leggiProgettiFinestra(fin.da, fin.a).catch(() => null);
+    const oltre = extra.length ? await DO.dati.leggiProgettiDelleDate(extra).catch(() => null) : [];
+    const letti = [];
+    if (nelleFinestra !== null) { const g = giorniFinestra(); unisciProgetti(g, nelleFinestra); letti.push(...g); }
+    if (oltre !== null && extra.length) { unisciProgetti(extra, oltre); letti.push(...extra); }
+    await controllaBuilding(letti);
+    let scritte = {};
+    if (nelleFinestra !== null) {
+      try { scritte = (await DO.partiteAdmin.esegui(nelleFinestra)) || {}; } catch (err) { console.warn('Partite dalla piattaforma non controllate:', err && err.message); }
     }
+    // senza la finestra il prossimo ritorno su Convocazioni riprova subito, non dopo 15 minuti
+    if (nelleFinestra !== null) ultimaLettura = Date.now();
+    disegna();
+    return { finestra: nelleFinestra !== null, extra: oltre !== null, giorniExtra: extra, scritte };
   }
 
   // prima lettura: a scheda visibile e con le convocazioni arrivate dal server (una volta sola, non a ogni aggiornamento dei dati;
@@ -111,7 +125,7 @@
   // tornando su Convocazioni dopo 15 minuti la dashboard (aperta tutto il giorno) rilegge la piattaforma
   const RILETTURA = 15 * 60 * 1000;
   function riletturaSeVecchia() {
-    if (!letti || inLettura || !A.sincronizzato || Date.now() - ultimaLettura < RILETTURA) return;
+    if (!letti || pendenti > 0 || !A.sincronizzato || Date.now() - ultimaLettura < RILETTURA) return;
     letturaPiattaforma(oltreFinestra(B.giorniDaLeggere(A.eventi, DO.oggi()))).catch((err) => console.warn('Piattaforma non letta:', err && err.message));
   }
 

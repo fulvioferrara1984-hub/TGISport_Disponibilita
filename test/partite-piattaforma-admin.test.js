@@ -131,3 +131,65 @@ test('filtra: dopo un aggiornamento le righe che non servono più spariscono', a
   DO.partiteAdmin.filtra();
   assert.equal(DO.partiteAdmin.stato().dubbi.length, 0);
 });
+
+// ---------- minori della revisione ----------
+test('esegui: un allineamento che rimanda conta tra le da rimandare, non tra le aggiornate', async () => {
+  const { avvisi, finestra } = prepara();
+  DO.admin.eventi = [pa({ id: 'coll', progettoId: 'p2', orario: '18:00', inviata: true, stato: 'confermato' })];
+  await DO.partiteAdmin.esegui([finestra[2]]);
+  assert.equal(avvisi[0].testo, 'Dalla piattaforma: 1 partita da rimandare.');
+});
+
+test('esegui: un ripristino conta tra le ripristinate', async () => {
+  const { avvisi, finestra } = prepara();
+  DO.admin.eventi = [pa({ id: 'ann', progettoId: 'p2', stato: 'annullato', storico: [{ testo: 'Annullata dalla piattaforma: evento annullato' }] })];
+  await DO.partiteAdmin.esegui([finestra[2]]);
+  assert.equal(avvisi[0].testo, 'Dalla piattaforma: 1 partita ripristinata.');
+});
+
+test('esegui: rilettura per ID non riuscita: la partita collegata fuori finestra non si tocca', async () => {
+  const { scritture, avvisi } = prepara();
+  DO.dati.leggiProgetti = async () => { throw new Error('offline'); };
+  DO.admin.eventi = [pa({ id: 'fuori', progettoId: 'p9', data: '2026-11-21' })];
+  await DO.partiteAdmin.esegui([]);
+  assert.deepEqual(scritture, []);
+  assert.deepEqual(avvisi, []);
+});
+
+test('riquadro: durante la scrittura di Collega il pulsante resta disabilitato anche se il riquadro si ridisegna', async () => {
+  const { finestra } = prepara();
+  const box = { hidden: false, innerHTML: '' };
+  global.document = { getElementById: (id) => (id === 'remote-piattaforma' ? box : null) };
+  DO.giorno = () => ({ breve: 'Mar' });
+  DO.esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  try {
+    DO.admin.eventi = [pa({ id: 'c1', titolo: 'Rennais-Olympiacos', data: '2026-11-24' })];
+    DO.admin.solaLettura = true;
+    await DO.partiteAdmin.esegui([ev({ id: 'p7', squadraA: 'STADE RENNAIS', squadraB: 'OLYMPIACOS', data: '2026-11-24' })]);
+    DO.admin.solaLettura = false;
+    let finisci;
+    DO.dati.aggiornaDallaPiattaforma = () => new Promise((r) => { finisci = r; });
+    const bottone = { dataset: { azione: 'collega', id: 'p7|c1' }, disabled: false };
+    const fatto = DO.partiteAdmin.clic(bottone);
+    DO.partiteAdmin.disegna();
+    assert.match(box.innerHTML, /data-id="p7\|c1" disabled/);
+    finisci(false);
+    DO.avviso = () => {};
+    await fatto;
+    DO.partiteAdmin.disegna();
+    assert.doesNotMatch(box.innerHTML, /disabled/);
+  } finally { delete global.document; }
+});
+
+test('riquadro: la data della riga passa da DO.esc', async () => {
+  prepara({ solaLettura: true });
+  const box = { hidden: false, innerHTML: '' };
+  global.document = { getElementById: () => box };
+  DO.giorno = () => ({ breve: '<b>' });
+  DO.esc = (s) => String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  try {
+    DO.admin.eventi = [];
+    await DO.partiteAdmin.esegui([ev({ id: 'p8', competizione: 'UEFA YOUTH LEAGUE' })]);
+    assert.ok(box.innerHTML.includes('&lt;b&gt;'));
+  } finally { delete global.document; }
+});

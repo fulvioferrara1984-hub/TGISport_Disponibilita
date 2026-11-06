@@ -6,6 +6,8 @@
 
   // ciò che il riquadro mostra: l'esito dell'ultimo giro riuscito (resta com'era se un giro non parte)
   let dubbi = [], sconosciute = [], daRivedere = [], competizioni = [];
+  // pulsanti con una scrittura in corso (azione|id): restano disabilitati anche se il riquadro si ridisegna nel frattempo
+  const inCorso = new Set();
 
   const elemento = () => (typeof document === 'undefined' ? null : document.getElementById('remote-piattaforma'));
   const giornoBreve = (d) => { const g = DO.giorno(d); return g.breve.toLowerCase() + ' ' + String(d).slice(8, 10) + '/' + String(d).slice(5, 7); };
@@ -55,25 +57,26 @@
     const A = DO.admin, P = DO.partitePiattaforma, R = DO.regole;
     const esc = DO.esc;
     const riga = (testo, etichetta, extra, tasti) => '<li>' + testo + ' <span class="tag-piattaforma">' + esc(etichetta) + '</span>' + (extra || '') + (tasti || '') + '</li>';
-    const tasto = (azione, id, testo, solo) => '<button type="button" class="bottone' + (solo ? ' solo-modifica' : '') + '" data-azione="' + azione + '" data-id="' + esc(id) + '">' + esc(testo) + '</button>';
+    const tasto = (azione, id, testo, solo) => '<button type="button" class="bottone' + (solo ? ' solo-modifica' : '') + '" data-azione="' + azione + '" data-id="' + esc(id) + '"'
+      + (inCorso.has(azione + '|' + id) ? ' disabled' : '') + '>' + esc(testo) + '</button>';
     const ko = (e) => { const m = R.minuti(e.ko); return m === null ? '' : ' · ' + R.hhmm(m); };
     const righe = [];
     dubbi.forEach((x) => {
       const e = x.evento;
       const nome = P.nomeCompetizione(e, competizioni, A.regole);
-      righe.push({ data: e.data, html: riga('<b>' + giornoBreve(e.data) + '</b> ' + esc(P.titoloPiattaforma(e) + ko(e)), 'da collegare', '',
+      righe.push({ data: e.data, html: riga('<b>' + esc(giornoBreve(e.data)) + '</b> ' + esc(P.titoloPiattaforma(e) + ko(e)), 'da collegare', '',
         x.candidate.map((c) => tasto('collega', e.id + '|' + c.id, 'Collega a «' + (c.titolo || 'partita') + '»', true)).join('')
         + (nome ? tasto('crea', e.id, 'Crea nuova', true) : '')) });
     });
     sconosciute.forEach((x) => {
       const e = x.evento;
-      righe.push({ data: e.data, html: riga('<b>' + giornoBreve(e.data) + '</b> ' + esc(String(e.competizione || '').trim() + ' · ' + P.titoloPiattaforma(e)), 'competizione sconosciuta',
+      righe.push({ data: e.data, html: riga('<b>' + esc(giornoBreve(e.data)) + '</b> ' + esc(String(e.competizione || '').trim() + ' · ' + P.titoloPiattaforma(e)), 'competizione sconosciuta',
         '<span class="tenue">: aggiungila nelle Impostazioni di Disponibilità o scrivi il nome in Settings → Competitions della piattaforma</span>') });
     });
     daRivedere.forEach((x) => {
       const p = x.partita;
       const op = (A.operatori.find((o) => o.id === p.operatoreId) || {}).nome || 'operatore rimosso';
-      righe.push({ data: p.data, html: riga('<b>' + giornoBreve(p.data) + '</b> ' + esc((p.titolo || 'Partita') + ' · ' + op), 'da rivedere: ' + x.motivo, '',
+      righe.push({ data: p.data, html: riga('<b>' + esc(giornoBreve(p.data)) + '</b> ' + esc((p.titolo || 'Partita') + ' · ' + op), 'da rivedere: ' + x.motivo, '',
         tasto('apri', p.id, 'Apri evento', false) + tasto('scollega', p.id, 'Scollega', true)) });
     });
     righe.sort((a, b) => String(a.data).localeCompare(String(b.data)));
@@ -124,15 +127,21 @@
       scrivi = () => D.aggiornaDallaPiattaforma(r.partita.id, P.atteso(r.partita), { progettoId: '' }, P.NOTE.scollegata);
       togli = () => { daRivedere = daRivedere.filter((x) => x !== r); };
     } else return;
+    const chiave = azione + '|' + id;
+    if (inCorso.has(chiave)) return;
+    inCorso.add(chiave);
     bottone.disabled = true;
     try {
-      if (await scrivi()) { togli(); disegna(); return; }
+      if (await scrivi()) { togli(); return; }
       // la transazione ha trovato la partita cambiata: la riga resta, il prossimo giro la ricalcola
       DO.avviso('La partita è cambiata nel frattempo: non è stato modificato nulla. Ricontrolla.', 'errore', 8000);
     } catch (err) {
       DO.avviso(err && err.message ? err.message : 'Scrittura non riuscita.', 'errore');
+    } finally {
+      inCorso.delete(chiave);
+      bottone.disabled = false;
+      disegna();
     }
-    bottone.disabled = false;
   }
 
   const box = elemento();
@@ -141,5 +150,5 @@
   // a ogni aggiornamento delle partite (stesso aggancio degli altri moduli della dashboard)
   if (DO.admin && DO.admin.registra) DO.admin.registra({ aggiorna: () => { filtra(); disegna(); } });
 
-  DO.partiteAdmin = { esegui, disegna, filtra, stato: () => ({ dubbi, sconosciute, daRivedere }) };
+  DO.partiteAdmin = { esegui, disegna, filtra, clic, stato: () => ({ dubbi, sconosciute, daRivedere }) };
 })(window.DO);

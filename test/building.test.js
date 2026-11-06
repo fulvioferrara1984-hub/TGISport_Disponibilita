@@ -161,3 +161,14 @@ test('abbina: collegata, evento annullato o FLYKIT vale comunque', () => {
   assert.deepEqual(B.abbina(c({ progettoId: 'p1' }), [p({ stato: 'CANCELLED', building: 'T2' })]), { building: 'T2', motivo: '' });
   assert.deepEqual(B.abbina(c({ progettoId: 'p1' }), [p({ modalita: 'FLYKIT', building: 'T2' })]), { building: 'T2', motivo: '' });
 });
+
+test('abbina: la partita collegata prende il building del suo evento anche se un altro evento ha le stesse squadre', () => {
+  const eventi = [p({ id: 'p1', building: 'T1' }), p({ id: 'p2', building: 'T3' })];
+  assert.deepEqual(B.abbina(c({ progettoId: 'p2' }), eventi), { building: 'T3', motivo: '' });
+  assert.deepEqual(B.abbina(c({ progettoId: 'p1' }), eventi), { building: 'T1', motivo: '' });
+});
+
+test('abbina: progettoId vuoto ricade sulla regola delle squadre', () => {
+  assert.deepEqual(B.abbina(c({ progettoId: '' }), [p({ building: 'T3' })]), B.abbina(c(), [p({ building: 'T3' })]));
+  assert.equal(B.abbina(c({ progettoId: '' }), [p({ building: 'T3' })]).building, 'T3');
+});
