@@ -194,6 +194,21 @@ test('richiesta precompilata dall\'evento della piattaforma', () => {
   assert.deepEqual(p.giorniRichiesti, evento().staffOnsite.giorni);
 });
 
+test('giorni della richiesta: il precompilato vale al primo disegno, poi resta quanto scritto a mano', () => {
+  const D = '2026-11-04', preset = { [D]: { attivita: 'MD', partita: 'Benfica – Inter' } };
+  const aMano = { attivita: 'Altro', altro: true, partita: '' };
+  // primo disegno: il giorno dell'evento
+  assert.deepEqual(O.rigaGiorno(D, 'Travel Day', preset, {}, true), { attivita: 'MD', altro: false, partita: 'Benfica – Inter' });
+  // cambiato a mano, poi tolto un altro giorno (ridisegno senza proposte) o cambiate le date (con le proposte): resta il suo
+  assert.deepEqual(O.rigaGiorno(D, 'MD', preset, { [D]: aMano }, false), aMano);
+  assert.deepEqual(O.rigaGiorno(D, 'Travel Day', preset, { [D]: aMano }, true), aMano);
+  // giorni non precompilati: con le proposte l'attività proposta (la partita scritta resta), senza resta quanto scritto
+  const E = '2026-11-06', scritto = { attivita: 'MD+1', altro: false, partita: 'x' };
+  assert.deepEqual(O.rigaGiorno(E, 'Travel Day', preset, { [E]: scritto }, true), { attivita: 'Travel Day', altro: false, partita: 'x' });
+  assert.deepEqual(O.rigaGiorno(E, 'Travel Day', preset, { [E]: scritto }, false), scritto);
+  assert.deepEqual(O.rigaGiorno(E, 'Travel Day', {}, {}, false), { attivita: 'Travel Day', altro: false, partita: '' });
+});
+
 test('legame del deployment con l\'evento della piattaforma', () => {
   assert.deepEqual(O.legame({}), {});
   assert.deepEqual(O.legame({ progettoId: 'p1', giorniRichiesti: [{ data: '2026-11-04', attivita: 'MD', partita: 'x' }, { data: 'no', attivita: 'MD' }] }),

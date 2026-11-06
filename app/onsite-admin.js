@@ -45,7 +45,8 @@
   // le proposte per trasferte lunghe (MD-2, MD-3…) entrano nel menu accanto alle attività fisse
   const opzioni = (scelta) => (O.ATTIVITA.includes(scelta) || scelta === ALTRO ? O.ATTIVITA : O.ATTIVITA.concat(scelta)).concat(ALTRO);
 
-  // proponi = true dopo un cambio di date: attività ricalcolate; altrimenti resta quanto scritto
+  // proponi = true dopo un cambio di date: attività ricalcolate; altrimenti resta quanto scritto (i giorni precompilati
+  // dalla piattaforma tengono sempre quanto scritto a mano: O.rigaGiorno)
   function disegnaGiorni(proponi) {
     const prima = righeAttuali(), giorni = dateScelte(), proposte = O.attivitaProposte(giorni.length);
     if (giorni.length > 31) {
@@ -55,8 +56,7 @@
       return;
     }
     $('ons-giorni').innerHTML = giorni.map((d, i) => {
-      const v = preset[d] ? { attivita: preset[d].attivita, altro: false, partita: preset[d].partita || '' }
-        : !proponi && prima[d] ? prima[d] : { attivita: proposte[i], altro: false, partita: (prima[d] || {}).partita || '' };
+      const v = O.rigaGiorno(d, proposte[i], preset, prima, proponi);
       const scelta = v.altro ? ALTRO : v.attivita;
       return '<li data-data="' + d + '"><b>' + giornoBreve(d) + '</b>'
         + '<select data-attivita aria-label="Attività del ' + giornoBreve(d) + '">'

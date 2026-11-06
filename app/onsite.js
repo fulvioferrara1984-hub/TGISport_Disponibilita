@@ -19,6 +19,16 @@
     return ['Travel Day'].concat(prima, ['MD', 'Travel Day']);
   }
 
+  // Un giorno della richiesta nel modulo: { attivita, altro, partita }. prima: le righe già sul modulo (data → riga);
+  // proponi: dopo un cambio di date le attività dei giorni si ricalcolano (proposta). Un giorno precompilato da un evento
+  // della piattaforma (preset) prende i valori dell'evento solo al primo disegno: dopo resta quanto scritto a mano.
+  function rigaGiorno(d, proposta, preset, prima, proponi) {
+    const sul = prima && prima[d], p = preset && preset[d];
+    if (sul && (p || !proponi)) return sul;
+    if (p) return { attivita: p.attivita, altro: false, partita: p.partita || '' };
+    return { attivita: proposta, altro: false, partita: (sul && sul.partita) || '' };
+  }
+
   function giorniDa(da, a) {
     const out = [];
     for (let d = da; d <= a && out.length < 400; d = DO.aggiungi(d, 1)) out.push(d);
@@ -232,7 +242,7 @@
 
   DO.onsite = {
     daProgetto, legame, soloGiorni, righePiattaforma,
-    ATTIVITA, MESSAGGI, attivitaProposte, giorniDa, normalizza, compensoProposto, compensoValido, modifiche, postiLiberi, etichettaPosti,
+    ATTIVITA, MESSAGGI, attivitaProposte, rigaGiorno, giorniDa, normalizza, compensoProposto, compensoValido, modifiche, postiLiberi, etichettaPosti,
     ruoloAccettato, giorniOnsite, conflittiRemoti, conflittiOnsite, statoPerOperatore, quoteMese, periodoBreve,
     COLORE, statoCalendarioOnsite,
   };
