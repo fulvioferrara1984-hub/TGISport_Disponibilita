@@ -555,3 +555,12 @@ test('eliminare un operatore senza eventi né deployment', async () => {
   await D.eliminaOperatore(op.id);
   assert.ok(!(await statoDemo()).operatori.some((x) => x.id === op.id));
 });
+
+test('contratto con data: la storia «da sempre» (dal vuoto) non si perde nella demo', async () => {
+  const op = await nuovoOperatoreProva('Prova Storia Da Sempre');
+  const r = DO.regole.nuovoContratto(op, 'Coop', '2026-11-14', '2026-11-15');
+  assert.deepEqual(r.campi.contrattiPrecedenti, [{ dal: '', contratto: 'P.IVA' }]);
+  await D.salvaOperatore(Object.assign({}, op, r.campi));
+  const riletto = (await statoDemo()).operatori.find((x) => x.id === op.id);
+  assert.deepEqual(riletto.contrattiPrecedenti, [{ dal: '', contratto: 'P.IVA' }]);
+});

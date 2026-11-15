@@ -194,14 +194,11 @@
     salva();
   }
 
-  const dataIso = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
-  const contrattiPuliti = (v) => (Array.isArray(v) ? v : []).filter((c) => c && dataIso(c.dal) && ['P.IVA', 'Coop'].includes(c.contratto)).map((c) => ({ dal: c.dal, contratto: c.contratto }));
-
   async function salvaOperatore(o) {
     await pausa(150);
     const campi = { nome: String(o.nome || '').trim(), mansione: (o.mansione || '').trim(), email: (o.email || '').trim(), telefono: (o.telefono || '').trim(), attivo: o.attivo !== false,
       contratto: o.contratto || '', ruolo: ['TL', 'SUP'].includes(o.ruolo) ? o.ruolo : 'OP', onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
-      contrattoDal: dataIso(o.contrattoDal) ? o.contrattoDal : '', contrattiPrecedenti: contrattiPuliti(o.contrattiPrecedenti) };
+      contrattoDal: DO.regole.giornoContratto(o.contrattoDal), contrattiPrecedenti: DO.regole.storiaContrattiPulita(o.contrattiPrecedenti) };
     if (!campi.nome) throw new Error('Il nome è obbligatorio.');
     if (o.id) {
       const op = dati.operatori.find((x) => x.id === o.id);

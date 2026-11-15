@@ -441,9 +441,7 @@
       email: String(o.email || '').trim().slice(0, 120), telefono: String(o.telefono || '').trim().slice(0, 30), attivo: o.attivo !== false,
       contratto: ['P.IVA', 'Coop'].includes(o.contratto) ? o.contratto : '', ruolo: ['TL', 'SUP'].includes(o.ruolo) ? o.ruolo : 'OP',
       onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
-      contrattoDal: /^\d{4}-\d{2}-\d{2}$/.test(String(o.contrattoDal || '')) ? o.contrattoDal : '',
-      contrattiPrecedenti: (Array.isArray(o.contrattiPrecedenti) ? o.contrattiPrecedenti : [])
-        .filter((c) => c && /^\d{4}-\d{2}-\d{2}$/.test(String(c.dal || '')) && ['P.IVA', 'Coop'].includes(c.contratto)).map((c) => ({ dal: c.dal, contratto: c.contratto })),
+      contrattoDal: DO.regole.giornoContratto(o.contrattoDal), contrattiPrecedenti: DO.regole.storiaContrattiPulita(o.contrattiPrecedenti),
     };
     if (!campi.nome) throw new Error('Il nome è obbligatorio.');
     if (o.id) {
@@ -598,9 +596,7 @@
       p.operatori.forEach((o) => scritture.push(['set', F.doc(db, 'operatori', o.id), {
         nome: o.nome, mansione: o.mansione || '', email: o.email || '', telefono: o.telefono || '', attivo: o.attivo !== false, contratto: o.contratto, ruolo: o.ruolo,
         onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
-        contrattoDal: /^\d{4}-\d{2}-\d{2}$/.test(String(o.contrattoDal || '')) ? o.contrattoDal : '',
-        contrattiPrecedenti: (Array.isArray(o.contrattiPrecedenti) ? o.contrattiPrecedenti : [])
-          .filter((c) => c && /^\d{4}-\d{2}-\d{2}$/.test(String(c.dal || '')) && ['P.IVA', 'Coop'].includes(c.contratto)).map((c) => ({ dal: c.dal, contratto: c.contratto })),
+        contrattoDal: DO.regole.giornoContratto(o.contrattoDal), contrattiPrecedenti: DO.regole.storiaContrattiPulita(o.contrattiPrecedenti),
         uid: '', ultimoInvio: '', creato: new Date().toISOString(),
       }]));
       p.eventi.forEach((e) => scritture.push(['set', F.doc(db, 'eventi', e.id), Object.assign(pulisciEvento(e), {

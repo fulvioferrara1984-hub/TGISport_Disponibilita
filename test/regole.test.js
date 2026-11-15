@@ -561,3 +561,11 @@ test('periodiVersioni: una versione precedente parziale esce con tutti i campi d
   const c = p.competizioni.find((x) => x.nome === 'Serie A');
   assert.deepEqual([c.compenso, typeof c.prima, Array.isArray(c.alias)], ['maggiorato', 'number', true]);
 });
+
+test('storiaContrattiPulita: tiene «da sempre» (dal vuoto) e le date, scarta il resto', () => {
+  assert.deepEqual(R.storiaContrattiPulita([{ dal: '', contratto: 'P.IVA' }, { dal: '2026-09-01', contratto: 'Coop', extra: 1 }]),
+    [{ dal: '', contratto: 'P.IVA' }, { dal: '2026-09-01', contratto: 'Coop' }]);
+  assert.deepEqual(R.storiaContrattiPulita([null, { dal: '01/09/2026', contratto: 'Coop' }, { dal: '2026-09-01', contratto: 'Boh' }, { dal: 5, contratto: 'Coop' }, { contratto: 'Coop' }]), []);
+  assert.deepEqual(R.storiaContrattiPulita(undefined), []);
+  assert.deepEqual([R.giornoContratto('2026-09-01'), R.giornoContratto('x'), R.giornoContratto(undefined)], ['2026-09-01', '', '']);
+});

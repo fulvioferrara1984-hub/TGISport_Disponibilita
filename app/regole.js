@@ -239,6 +239,11 @@
   // Versione valida in una data tra quella in vigore (dal) e le precedenti, in ordine di data.
   // «dal» vuoto o assente = da sempre; data vuota o non valida = quella in vigore.
   const dataValida = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
+  // contrattoDal: una data oppure '' (da sempre)
+  const giornoContratto = (d) => (dataValida(d) ? d : '');
+  // Storia dei contratti per l'archivio: dal è una data o '' (= «da sempre», il dal della prima voce); il resto si scarta
+  const storiaContrattiPulita = (v) => (Array.isArray(v) ? v : [])
+    .filter((c) => c && (c.dal === '' || dataValida(c.dal)) && ['P.IVA', 'Coop'].includes(c.contratto)).map((c) => ({ dal: c.dal, contratto: c.contratto }));
   function versioneDel(inVigore, dal, precedenti, data) {
     if (!dal || !dataValida(data) || data >= dal || !Array.isArray(precedenti) || !precedenti.length) return inVigore;
     const valide = precedenti.filter((p) => (p.dal || '') <= data);
@@ -503,6 +508,6 @@
       + (u.drive === 'salvato' ? ' · copia su Drive' : u.drive ? ' · copia su Drive non riuscita: ' + String(u.drive).replace(/^errore: /, '') : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, stessaCompetizione, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
+  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, stessaCompetizione, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, giornoContratto, storiaContrattiPulita, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});
