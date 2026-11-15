@@ -8,7 +8,7 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
   - **Disponibilità**: griglia settimanale del team in tempo reale (passando su una casella si leggono nota e impegni del giorno), pannello per ogni giorno, **Richiedi disponibilità** per un periodo.
   - **Aggiornamenti**: invii delle disponibilità, conferme e rifiuti delle convocazioni, messaggi degli operatori (con **Rispondi**), stato delle richieste.
   - **Riepilogo**: eventi coperti (solo i **confermati**) e compensi netti per operatore, competizione e mese; a parte *In attesa di conferma* con il costo previsto (e quanti sono già passati); esportazione in Excel. Una convocazione confermata a voce o per messaggio si segna dalla finestra dell'evento con **Segna come confermata**.
-  - **Operatori** (ruolo Remote OP / Remote Support / Remote TL, on-site TL/OP, contratto P.IVA/Coop, codici) e **Impostazioni** (tariffe, competizioni, importazione dal file Excel, email, password).
+  - **Operatori** (ruolo Remote OP / Remote Support / Remote TL, on-site TL/OP, contratto P.IVA/Coop, codici; cambiando il contratto si sceglie da quando vale; un operatore con eventi o deployment non si elimina, si disattiva) e **Impostazioni** (tariffe, competizioni, importazione dal file Excel, email, password).
 
 ## Regole
 
