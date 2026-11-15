@@ -19,7 +19,8 @@
   }
   const periodo = () => periodi().find((p) => p.id === $('rie-periodo').value) || periodi()[0];
   // gruppo dell'evento: la competizione, o la mansione per i turni Remote TL / Remote Support
-  const comp = (e) => R.competizioneDi(e) || '(senza competizione)';
+  // col nome in vigore: una competizione rinominata è una riga sola (il filtro delle Convocazioni non cambia)
+  const comp = (e) => { const n = R.competizioneDi(e); return n ? (R.competizione(n, A.regole) || { nome: n }).nome : '(senza competizione)'; };
 
   // Ogni evento che conta, con il suo gettone calcolato.
   function righe(p) {

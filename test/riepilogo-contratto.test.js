@@ -81,3 +81,18 @@ test('nota dei cambi sopra le tabelle solo se ci sono cambi nel periodo', () => 
   pagina.mostra('riepilogo');
   assert.doesNotMatch(elemento('rie-contenuto').innerHTML, /<p class="nota">/);
 });
+
+test('competizione rinominata: una riga sola, col nome in vigore, nella pagina e nell\'Excel', async () => {
+  const regolePrima = A.regole;
+  A.regole = R.complete({ competizioni: [{ nome: 'Serie A Enilive', alias: ['Serie A'], sport: 'Calcio' }] });
+  prepara(false);
+  A.onsite = [];
+  A.eventi = [evento('e1', '2026-11-10', 'l'), Object.assign(evento('e2', '2026-11-11', 'l'), { competizione: 'Serie A Enilive' })];
+  await periodo('2026-11');
+  const comp = fogli['Per competizione'];
+  assert.deepEqual(comp.slice(1).map((r) => [r[0], r[1]]), [['Serie A Enilive', 2]]);
+  const html = elemento('rie-contenuto').innerHTML;
+  assert.equal((html.match(/<b>Serie A Enilive<\/b>/g) || []).length, 2);   // «Per competizione» e l'incrocio
+  assert.ok(!html.includes('<b>Serie A</b>'));
+  A.regole = regolePrima;
+});
