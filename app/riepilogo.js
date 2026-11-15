@@ -25,22 +25,42 @@
   function righe(p) {
     return A.eventi.filter((e) => R.conta(e) && e.data >= p.da && e.data <= p.a).map((e) => {
       const o = A.operatori.find((x) => x.id === e.operatoreId) || { nome: '(operatore rimosso)', contratto: '' };
-      return Object.assign({}, e, { op: o, g: R.gettone(e, o, A.regole) });
+      // il contratto è quello del giorno dell'evento: le colonne P.IVA e Coop seguono i cambi
+      return Object.assign({}, e, { op: Object.assign({}, o, { contratto: R.contrattoDel(o, e.data) }), g: R.gettone(e, o, A.regole) });
     });
   }
 
   // On-site: per ogni persona accettata in un deployment non annullato, giorni ed euro del periodo.
   // Il compenso si divide in parti uguali sui giorni e quindi sui mesi (DO.onsite.quoteMese).
+  // Se il contratto cambia durante il deployment, la persona ha una riga per contratto: ogni parte prende
+  // la quota del mese in proporzione ai suoi giorni (l'ultima parte del mese i centesimi che restano).
+  const cent = (n) => Math.round(n * 100) / 100;
   function righeOnsite(p) {
     const out = [];
     (A.onsite || []).filter((d) => d.stato !== 'annullata').forEach((d) => {
       const quote = DO.onsite.quoteMese(d, Number(A.compensiOnsite[d.id]) || 0);
+      const tutti = (d.giorni || []).map((g) => g.data);
       ['TL', 'OP'].forEach((ruolo) => (d['accettati' + ruolo] || []).forEach((id) => {
-        const giorni = (d.giorni || []).filter((g) => g.data >= p.da && g.data <= p.a).length;
-        if (!giorni) return;
-        const euro = Object.keys(quote).filter((m) => m >= p.da.slice(0, 7) && m <= p.a.slice(0, 7)).reduce((t, m) => t + quote[m], 0);
         const op = A.operatori.find((x) => x.id === id) || { nome: '(operatore rimosso)', contratto: '' };
-        out.push({ dep: d, operatoreId: id, op, ruolo, giorni, euro, quote });
+        const parti = R.datePerContratto(tutti, op);
+        const ultima = {};
+        parti.forEach((pt, i) => pt.date.forEach((x) => { ultima[x.slice(0, 7)] = i; }));
+        const assegnato = {};
+        parti.forEach((pt, i) => {
+          const giorni = pt.date.filter((x) => x >= p.da && x <= p.a).length;
+          const quoteParte = {};
+          Object.keys(quote).forEach((m) => {
+            const suoi = pt.date.filter((x) => x.slice(0, 7) === m).length;
+            if (!suoi) return;
+            if (parti.length === 1) { quoteParte[m] = quote[m]; return; }
+            const del = tutti.filter((x) => x.slice(0, 7) === m).length;
+            quoteParte[m] = ultima[m] === i ? cent(quote[m] - (assegnato[m] || 0)) : cent(quote[m] * suoi / del);
+            assegnato[m] = (assegnato[m] || 0) + quoteParte[m];
+          });
+          if (!giorni) return;
+          const euro = Object.keys(quoteParte).filter((m) => m >= p.da.slice(0, 7) && m <= p.a.slice(0, 7)).reduce((t, m) => t + quoteParte[m], 0);
+          out.push({ dep: d, operatoreId: id, op: Object.assign({}, op, { contratto: pt.contratto }), ruolo, giorni, euro, quote: quoteParte });
+        });
       }));
     });
     return out;
@@ -79,6 +99,7 @@
     const attesa = A.eventi.filter((e) => R.inAttesa(e) && e.data >= p.da && e.data <= p.a);
     const attesaEuro = attesa.reduce((t, e) => { const o = A.operatori.find((x) => x.id === e.operatoreId); return t + (o ? R.gettone(e, o, A.regole).importo : 0); }, 0);
     const attesaPassati = attesa.filter((e) => e.data < DO.oggi()).length;
+    const cambi = R.cambiNelPeriodo(A.regole, A.operatori, p.da, p.a);
     const senzaContratto = [...new Set(lista.filter((r) => r.g.senzaContratto).map((r) => r.op.nome))];
     const onsiteSenzaContratto = [...new Set(ons.filter((r) => !r.op.contratto).map((r) => r.op.nome))];
 
@@ -87,7 +108,7 @@
       .map((o) => ({ o, t: somma(lista.filter((r) => r.operatoreId === o.id)), on: sommaOnsite(ons.filter((r) => r.operatoreId === o.id)) }))
       .filter((x) => x.t.n || x.on.giorni || x.o.attivo);
     const tabOp = '<table class="tabella numeri"><thead><tr><th>Operatore</th><th class="sx">Ruolo</th><th class="sx">Contratto</th><th>Diurni</th><th>Notturni</th><th>Maggiorati</th><th>Dimezzati</th><th>di cui Remote TL</th><th>di cui Remote Support</th><th>Totale eventi</th><th>Giorni on-site</th><th>€ on-site</th><th>Netto</th></tr></thead><tbody>'
-      + ops.map(({ o, t, on }) => '<tr><td><b>' + DO.esc(o.nome) + '</b></td><td class="sx">' + R.nomeRuolo(o.ruolo) + '</td><td class="sx">' + (o.contratto || '<span class="testo-errore">da indicare</span>') + '</td>'
+      + ops.map(({ o, t, on }) => '<tr><td><b>' + DO.esc(o.nome) + '</b></td><td class="sx">' + R.nomeRuolo(o.ruolo) + '</td><td class="sx">' + (R.contrattoDel(o, p.a) || '<span class="testo-errore">da indicare</span>') + '</td>'
         + TIPI.map((k) => '<td>' + num(t[k]) + '</td>').join('') + '<td>' + num(t.tl) + '</td><td>' + num(t.support) + '</td><td><b>' + num(t.n) + '</b></td>'
         + '<td>' + num(on.giorni) + '</td><td>' + eur(on.euro) + '</td><td><b>' + eur(t.euro + on.euro) + '</b></td></tr>').join('')
       + '</tbody><tfoot><tr><td>Totale</td><td></td><td></td>' + TIPI.map((k) => '<td>' + tot[k] + '</td>').join('') + '<td>' + tot.tl + '</td><td>' + tot.support + '</td><td>' + tot.n + '</td>'
@@ -142,6 +163,7 @@
       + '<div><span>In attesa di conferma</span><b>' + attesa.length + '</b><small>' + R.euro(attesaEuro) + ' previsti'
         + (attesaPassati ? ' · ' + attesaPassati + ' già ' + (attesaPassati === 1 ? 'passato' : 'passati') : '') + '</small></div>'
       + '<div><span>Ancora da assegnare</span><b>' + futuri + '</b></div></div>'
+      + (cambi.length ? '<p class="nota">' + cambi.map(DO.esc).join(' · ') + '</p>' : '')
       + (attesaPassati && !A.solaLettura ? '<div class="nota rie-attesa">' + (attesaPassati === 1
         ? '1 evento già passato non è confermato e non conta: se si è svolto, segnalo come confermato qui o dalla finestra dell\'evento.'
         : attesaPassati + ' eventi già passati non sono confermati e non contano: se si sono svolti, segnali come confermati tutti insieme qui o uno per uno dalla finestra dell\'evento.')
@@ -207,7 +229,7 @@
         const g = R.conta(e) && o ? R.gettone(e, o, A.regole) : null;
         const turno = DO.turnoRemoto(e.tipo);
         return [e.data, R.nomeTipo(e.tipo), R.competizioneDi(e), turno ? '' : e.round, turno ? '' : e.sport, turno ? R.nomeTipo(e.tipo) : e.titolo,
-          e.orario, R.convocazione(e, A.regole), o ? o.nome : '', o ? R.nomeRuolo(o.ruolo) : '', o ? o.contratto : '', e.stato, g ? g.etichetta : '', g ? g.importo : 0, e.note || ''];
+          e.orario, R.convocazione(e, R.regoleDel(A.regole, e.data)), o ? o.nome : '', o ? R.nomeRuolo(o.ruolo) : '', o ? R.contrattoDel(o, e.data) : '', e.stato, g ? g.etichetta : '', g ? g.importo : 0, e.note || ''];
       }));
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(conv), 'Convocazioni');
     const ons = righeOnsite(p);
@@ -219,7 +241,7 @@
     const perOp = [['Operatore', 'Ruolo', 'Contratto', 'Diurni', 'Notturni', 'Maggiorati', 'Dimezzati', 'di cui Remote TL', 'di cui Remote Support', 'Totale eventi', 'Giorni on-site', '€ on-site', 'Netto']];
     A.operatori.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'it')).forEach((o) => {
       const t = somma(lista.filter((r) => r.operatoreId === o.id)), on = sommaOnsite(ons.filter((r) => r.operatoreId === o.id));
-      if (t.n || on.giorni) perOp.push([o.nome, R.nomeRuolo(o.ruolo), o.contratto, t.diurno, t.notturno, t.maggiorato, t.dimezzato, t.tl, t.support, t.n, on.giorni, Math.round(on.euro * 100) / 100, Math.round((t.euro + on.euro) * 100) / 100]);
+      if (t.n || on.giorni) perOp.push([o.nome, R.nomeRuolo(o.ruolo), R.contrattoDel(o, p.a), t.diurno, t.notturno, t.maggiorato, t.dimezzato, t.tl, t.support, t.n, on.giorni, Math.round(on.euro * 100) / 100, Math.round((t.euro + on.euro) * 100) / 100]);
     });
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(perOp), 'Per operatore');
     const perComp = [['Competizione / mansione', 'Eventi coperti', 'Netto P.IVA', 'Netto Coop', 'Totale netto']];
