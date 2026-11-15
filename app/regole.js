@@ -59,7 +59,8 @@
     x.competizioni = mansioni.concat(salvate.filter((c) => !RIGHE_MANSIONE.includes(c.nome)).map(({ uefa, mansione, ...c }) => {
       const compenso = tipoValido(c.compenso) ? c.compenso : uefa && c.compenso === undefined ? 'dimezzato' : 'diurno';
       const prima = ore(c.prima), dopo = ore(c.dopo);
-      return Object.assign({}, c, { prima: prima === null ? anticipo : prima, dopo: dopo === null ? dopoGenerale : dopo, colore: coloreValido(c.colore), compenso });
+      // alias: i vecchi nomi della competizione, per ritrovarla nelle partite create prima della rinomina
+      return Object.assign({}, c, { alias: Array.isArray(c.alias) ? c.alias : [], prima: prima === null ? anticipo : prima, dopo: dopo === null ? dopoGenerale : dopo, colore: coloreValido(c.colore), compenso });
     }));
     x.tariffe = {
       'P.IVA': Object.assign({}, PREDEFINITE.tariffe['P.IVA'], (r && r.tariffe && r.tariffe['P.IVA']) || {}),
@@ -125,7 +126,11 @@
     return da > a ? c >= da || c < a : c >= da && c < a;
   }
 
-  const competizione = (nome, regole) => complete(regole).competizioni.find((c) => c.nome === nome) || null;
+  // per nome, poi tra i vecchi nomi (alias): rinominare una competizione non lascia partite senza regole
+  const competizione = (nome, regole) => {
+    const lista = complete(regole).competizioni;
+    return lista.find((c) => c.nome === nome) || lista.find((c) => (c.alias || []).includes(nome)) || null;
+  };
   // ruoli remoti come si mostrano (nei dati 'OP' / 'SUP' / 'TL'; un valore sconosciuto vale Remote OP)
   const nomeRuolo = (ruolo) => DO.RUOLI[ruolo === 'TL' || ruolo === 'SUP' ? ruolo : 'OP'];
   // ogni ruolo comprende quelli sotto: Remote OP < Remote Support < Remote TL
@@ -228,11 +233,51 @@
     return { ok, errori, doppie };
   }
 
+  // Versione valida in una data tra quella in vigore (dal) e le precedenti, in ordine di data.
+  // «dal» vuoto o assente = da sempre; data vuota o non valida = quella in vigore.
+  const dataValida = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
+  function versioneDel(inVigore, dal, precedenti, data) {
+    if (!dal || !dataValida(data) || data >= dal || !Array.isArray(precedenti) || !precedenti.length) return inVigore;
+    const valide = precedenti.filter((p) => (p.dal || '') <= data);
+    // prima della versione più vecchia che si conosce vale comunque quella
+    return valide.length ? valide[valide.length - 1] : precedenti[0];
+  }
+
+  // Regole complete come valevano in una data: della versione prendono solo i campi di compenso (tariffe,
+  // fascia notturna, anticipo, tipo di compenso e ore di ritrovo di ogni competizione); il resto è quello in vigore.
+  // Le competizioni sono quelle della versione (una aggiunta dopo vale dall'inizio della versione in vigore).
+  function regoleDel(regole, data) {
+    const r = complete(regole), v = versioneDel(r, r.dal, r.precedenti, data);
+    if (v === r) return r;
+    const campi = { dal: v.dal || '', precedenti: [] };
+    for (const k of ['tariffe', 'notteDa', 'notteA', 'anticipoOre']) if (v[k] !== undefined) campi[k] = v[k];
+    const dellaVersione = Array.isArray(v.competizioni) ? v.competizioni : [];
+    const abbina = (c) => r.competizioni.find((a) => a.nome === c.nome || (c.alias || []).includes(a.nome) || (a.alias || []).includes(c.nome)
+      || (a.alias || []).some((x) => (c.alias || []).includes(x)));
+    const unici = (nomi) => nomi.filter((n, i) => n && nomi.indexOf(n) === i);
+    campi.competizioni = dellaVersione.map((c) => {
+      const oggi = abbina(c);
+      if (!oggi) return c;
+      // sport, colore e ore di fine restano quelli in vigore; i nomi di oggi diventano alias del nome di allora
+      return Object.assign({}, c, { sport: oggi.sport, colore: oggi.colore, dopo: oggi.dopo, mansione: oggi.mansione,
+        alias: unici([].concat(c.alias || [], oggi.nome, oggi.alias || [])).filter((n) => n !== c.nome) });
+    }).concat(r.competizioni.filter((a) => a.mansione && !dellaVersione.some((c) => c.nome === a.nome)));
+    return complete(Object.assign({}, r, campi));
+  }
+
+  // Contratto di un operatore in una data (contratto, contrattoDal e contrattiPrecedenti); operatore assente = ''
+  function contrattoDel(operatore, data) {
+    if (!operatore) return '';
+    const v = versioneDel(operatore, operatore.contrattoDal, operatore.contrattiPrecedenti, data);
+    return v.contratto || '';
+  }
+
   // Gettone di un evento: il maggiorato deciso dal supervisore vale su tutto;
   // poi il tipo della competizione (o della mansione per i turni remoti).
+  // Regole e contratto sono quelli del giorno dell'evento: cambiarli dopo non tocca i mesi passati.
   function gettone(e, operatore, regole) {
-    const r = complete(regole);
-    const t = r.tariffe[operatore && operatore.contratto] || null;
+    const r = regoleDel(regole, e.data);
+    const t = r.tariffe[contrattoDel(operatore, e.data)] || null;
     // ordine: maggiorato sull'evento, poi il tipo della competizione; «diurno» diventa notturno se il ritrovo è di notte
     const comp = compensoCompetizione(competizioneDi(e), r);
     let tipo = 'diurno';
@@ -345,6 +390,6 @@
       + (u.drive === 'salvato' ? ' · copia su Drive' : u.drive ? ' · copia su Drive non riuscita: ' + String(u.drive).replace(/^errore: /, '') : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
+  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});
