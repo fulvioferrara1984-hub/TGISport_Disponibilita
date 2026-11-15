@@ -35,7 +35,7 @@
   async function salva(modifiche, messaggio, dopo) {
     if (!R.cambiaCompenso(A.regole, Object.assign({}, A.regole, modifiche))) {
       const { regole, errore } = R.nuoveRegole(A.regole, modifiche, '', DO.oggi());
-      if (errore) DO.avviso(errore, 'errore'); else if (await scrivi(regole, messaggio) && dopo) dopo();
+      if (errore) DO.avviso(errore, 'errore'); else if (await scrivi(regole, messaggio) && dopo) dopo(regole);
       return;
     }
     const oggi = DO.oggi(), { min, max } = R.limitiDal(A.regole, oggi);
@@ -56,7 +56,7 @@
     const { messaggio, dopo } = inAttesa;
     const ok = await scrivi(regole, messaggio);
     $('dal-salva').disabled = false;
-    if (ok) { inAttesa = null; $('dlg-dal').close(); if (dopo) dopo(); }
+    if (ok) { inAttesa = null; $('dlg-dal').close(); if (dopo) dopo(regole); }
   });
 
   // regole precedenti: una riga per versione, dalla più recente
@@ -101,8 +101,8 @@
 
   // ---------- competizioni e sport ----------
   let bozzaComp = null;
-  function disegnaCompetizioni(forza) {
-    if (!bozzaComp || forza) bozzaComp = A.regole.competizioni.map((c) => Object.assign({}, c, { origine: c.nome }));
+  function disegnaCompetizioni(forza, regole) {
+    if (!bozzaComp || forza) bozzaComp = (regole || A.regole).competizioni.map((c) => Object.assign({}, c, { origine: c.nome }));
     const sport = A.regole.sport;
     const valore = (v) => (v === null || v === undefined ? '' : v);
     $('reg-competizioni').innerHTML = bozzaComp.map((c, i) => '<li data-i="' + i + '"' + (c.mansione ? ' class="mansione"' : '') + '>'
@@ -169,7 +169,7 @@
     const conflitto = R.aliasInConflitto(competizioni);
     if (conflitto) { DO.avviso(conflitto, 'errore', 8000); return; }
     const sport = $('reg-sport').value.split(',').map((s) => s.trim()).filter(Boolean);
-    salva({ competizioni, sport }, 'Competizioni salvate.', () => { bozzaComp = null; });
+    salva({ competizioni, sport }, 'Competizioni salvate.', (salvate) => disegnaCompetizioni(true, R.complete(salvate)));
   });
 
   // ---------- accessi in sola visualizzazione ----------

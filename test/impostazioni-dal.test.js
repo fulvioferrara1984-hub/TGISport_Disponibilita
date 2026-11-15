@@ -82,3 +82,30 @@ test('regole precedenti: una versione parziale non fa saltare la pagina e compar
   assert.ok(elemento('reg-precedenti-elenco').innerHTML.includes('130'));
   assert.ok(elemento('reg-competizioni').innerHTML.length > 0);
 });
+
+test('dopo un salvataggio delle competizioni la bozza si ricostruisce e la modifica successiva salva', async () => {
+  const base = DO.regole.complete(null);
+  DO.admin.regole = base;
+  DO.admin.vista = 'impostazioni';
+  const nome = base.competizioni.find((c) => !c.mansione).nome;
+  const indice = base.competizioni.findIndex((c) => c.nome === nome);
+  const chiamate = [];
+  // come Firestore: l'istantanea locale arriva prima che la promessa si risolva
+  DO.dati.salvaRegole = async (r) => { chiamate.push(r); DO.admin.regole = DO.regole.complete(r); pagina.aggiorna(); };
+  const modifica = (campo, valore) => {
+    const li = { dataset: { i: String(indice) }, querySelector: () => ({}) };
+    ascolti['reg-competizioni:input']({ target: { dataset: { campo }, value: valore, closest: (s) => (s === 'li' ? li : null) } });
+  };
+  pagina.mostra('impostazioni');
+  modifica('sport', 'Basket');
+  invia('form-competizioni');
+  await new Promise((ok) => setImmediate(ok));   // il modulo non restituisce la promessa del salvataggio
+  modifica('nome', nome + ' Enilive');
+  invia('form-competizioni');
+  await new Promise((ok) => setImmediate(ok));
+  assert.equal(chiamate.length, 2);
+  const c = chiamate[1].competizioni[indice];
+  assert.equal(c.nome, nome + ' Enilive');
+  assert.deepEqual(c.alias, [nome]);
+  DO.admin.vista = '';
+});
