@@ -251,7 +251,10 @@
   // Le competizioni sono quelle della versione (una aggiunta dopo vale dall'inizio della versione in vigore).
   function regoleDel(regole, data) {
     const r = complete(regole), v = versioneDel(r, r.dal, r.precedenti, data);
-    if (v === r) return r;
+    return v === r ? r : completaVersione(r, v);
+  }
+  // Una versione precedente completata: i campi di compenso mancanti vengono da quelle in vigore (r già completa)
+  function completaVersione(r, v) {
     const campi = { dal: v.dal || '', precedenti: [] };
     for (const k of ['tariffe', 'notteDa', 'notteA', 'anticipoOre']) if (v[k] !== undefined) campi[k] = v[k];
     const dellaVersione = Array.isArray(v.competizioni) ? v.competizioni : [];
@@ -318,7 +321,7 @@
 
   // Versioni delle regole dalla più vecchia; «al» è il giorno prima della successiva, '' per quella in vigore
   function periodiVersioni(regole) {
-    const r = complete(regole), versioni = r.precedenti.concat([r]);
+    const r = complete(regole), versioni = r.precedenti.map((p) => completaVersione(r, p)).concat([r]);
     return versioni.map((v, i) => ({ dal: v.dal || '', al: i + 1 < versioni.length ? giornoPrima(versioni[i + 1].dal) : '', versione: v }));
   }
 

@@ -71,3 +71,14 @@ test('regole precedenti: elenca solo le competizioni con compenso o ritrovo dive
   assert.ok(!html.includes('Vecchio Nome'));
   assert.ok(html.includes(c1.nome));
 });
+
+test('regole precedenti: una versione parziale non fa saltare la pagina e compare nell\'elenco', () => {
+  const base = DO.regole.complete(null);
+  DO.admin.regole = Object.assign({}, base, { dal: '2026-11-01',
+    precedenti: [{ dal: '', tariffe: { 'P.IVA': { diurno: 130 } }, competizioni: [{ nome: 'Serie A', compenso: 'maggiorato' }] }] });
+  elemento('reg-competizioni').innerHTML = '';
+  pagina.mostra('impostazioni');
+  assert.equal(elemento('reg-precedenti').hidden, false);
+  assert.ok(elemento('reg-precedenti-elenco').innerHTML.includes('130'));
+  assert.ok(elemento('reg-competizioni').innerHTML.length > 0);
+});

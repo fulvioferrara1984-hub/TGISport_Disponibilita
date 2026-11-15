@@ -549,3 +549,15 @@ test('complete: regole senza date di validità valgono da sempre e senza precede
   assert.deepEqual([c.dal, c.precedenti], ['', []]);
   assert.deepEqual(R.periodiVersioni({}).map((p) => [p.dal, p.al]), [['', '']]);
 });
+
+test('periodiVersioni: una versione precedente parziale esce con tutti i campi di compenso', () => {
+  const parziale = { dal: '', tariffe: { 'P.IVA': { diurno: 130 } }, competizioni: [{ nome: 'Serie A', compenso: 'maggiorato' }] };
+  const p = R.periodiVersioni({ dal: '2026-11-01', precedenti: [parziale] })[0].versione;
+  assert.equal(p.tariffe['P.IVA'].diurno, 130);
+  assert.equal(typeof p.tariffe['P.IVA'].notturno, 'number');
+  assert.equal(typeof p.tariffe.Coop.diurno, 'number');
+  assert.equal(typeof p.tariffe.Coop.maggiorato, 'number');
+  assert.deepEqual([p.notteDa, p.notteA, p.anticipoOre], ['22:00', '06:00', 4]);
+  const c = p.competizioni.find((x) => x.nome === 'Serie A');
+  assert.deepEqual([c.compenso, typeof c.prima, Array.isArray(c.alias)], ['maggiorato', 'number', true]);
+});
