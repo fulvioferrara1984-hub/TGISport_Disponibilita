@@ -230,6 +230,37 @@ test('ripristino: la storia delle regole e dei contratti torna come nel backup',
   DO.admin.operatori = operatoriPrima;
 });
 
+test('ripristino: una competizione rinominata si aggiorna dal nome vecchio, senza una seconda', async () => {
+  const regolePrima = DO.admin.regole;
+  DO.admin.regole = DO.regole.complete({ competizioni: [{ nome: 'Serie A Enilive', alias: ['Serie A'], sport: 'Calcio', prima: 9, dopo: 9 }] });
+  const { p } = await importaFogli(BACKUP);
+  assert.equal(p.regole.competizioni.filter((c) => c.nome === 'Serie A').length, 0);
+  const rinominata = p.regole.competizioni.filter((c) => c.nome === 'Serie A Enilive');
+  assert.equal(rinominata.length, 1);
+  assert.deepEqual([rinominata[0].prima, rinominata[0].dopo, rinominata[0].alias], [4, 2, ['Serie A']]);
+  DO.admin.regole = regolePrima;
+});
+
+test('ripristino: la storia dei contratti si confronta come coppie, non dall\'ordine delle chiavi', async () => {
+  const operatoriPrima = DO.admin.operatori;
+  const uguale = { id: 'luca', nome: 'Luca Bianchi', ruolo: 'TL', contratto: 'P.IVA', mansione: 'Regia', email: 'luca@x.it', telefono: '+39 1', onsite: 'TL', attivo: true,
+    contrattoDal: '2026-11-01', contrattiPrecedenti: [{ contratto: 'Coop', dal: '' }, { contratto: '', dal: '2026-12-15' }] };
+  DO.admin.operatori = [uguale];
+  const a = await importaFogli(BACKUP_STORIA());
+  assert.equal(a.p.esistenti.luca, undefined);
+  // cambia solo la data del contratto: compare nell'elenco
+  DO.admin.operatori = [Object.assign({}, uguale, { contrattoDal: '2026-10-01' })];
+  const b = await importaFogli(BACKUP_STORIA());
+  assert.ok(b.p.esistenti.luca);
+  assert.ok(b.anteprima.includes('data del contratto'), b.anteprima);
+  assert.ok(!b.anteprima.includes('Luca Bianchi</b>: contratto'), b.anteprima);
+  // cambia solo la storia
+  DO.admin.operatori = [Object.assign({}, uguale, { contrattiPrecedenti: [] })];
+  const c = await importaFogli(BACKUP_STORIA());
+  assert.ok(c.anteprima.includes('storia dei contratti'), c.anteprima);
+  DO.admin.operatori = operatoriPrima;
+});
+
 test('ripristino: un backup senza la storia lascia date, regole precedenti e alias come sono', async () => {
   const operatoriPrima = DO.admin.operatori;
   DO.admin.operatori = [{ id: 'luca', nome: 'Luca Bianchi', ruolo: 'TL', contratto: 'P.IVA', mansione: 'Regia', email: 'luca@x.it', telefono: '+39 1', onsite: 'TL', attivo: true,

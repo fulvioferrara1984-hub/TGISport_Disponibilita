@@ -262,7 +262,7 @@
     elenco.comp.concat(['Europa League', 'Conference League']).forEach((c) => {
       // competizioni UEFA (Champions, Europa, Conference League): compenso dimezzato
       const coppaEuropea = /champions|europa league|conference/i.test(c);
-      if (!regole.competizioni.some((x) => x.nome === c)) regole.competizioni.push({ nome: c, sport: coppaEuropea ? 'Calcio' : '', compenso: coppaEuropea ? 'dimezzato' : 'diurno' });
+      if (!regole.competizioni.some((x) => R.stessaCompetizione({ nome: c }, x))) regole.competizioni.push({ nome: c, sport: coppaEuropea ? 'Calcio' : '', compenso: coppaEuropea ? 'dimezzato' : 'diurno' });
     });
 
     // operatori: si riconoscono per nome tra quelli già presenti
@@ -388,8 +388,9 @@
       const compenso = COMPENSI[testo(r[9]).toLowerCase()] || 'diurno';
       const campi = Object.assign({ nome, compenso, prima: numero(r[10]), dopo: numero(r[11]), colore: testo(r[12]) },
         testo(r[13]) ? { sport: testo(r[13]) } : {}, conAlias ? { alias: elencoAlias(r[14]) } : {});
-      const i = regole.competizioni.findIndex((c) => c.nome === nome);
-      if (i >= 0) regole.competizioni[i] = Object.assign({}, regole.competizioni[i], campi);
+      // per nome o nome precedente: un backup col nome vecchio aggiorna la competizione rinominata
+      const i = regole.competizioni.findIndex((c) => R.stessaCompetizione({ nome }, c));
+      if (i >= 0) regole.competizioni[i] = Object.assign({}, regole.competizioni[i], campi, { nome: regole.competizioni[i].nome });
       else regole.competizioni.push(Object.assign({ sport: '' }, campi));
     });
     // regole precedenti (fogli dopo Impostazioni): senza il foglio restano quelle attuali
@@ -457,9 +458,9 @@
         // degli operatori presenti cambia solo ciò che è diverso, e mai con un campo vuoto (il backup non cancella dati più recenti)
         const diversi = {};
         // contratto, data e storia contano insieme: se uno cambia vanno tutti e tre (come per l'attivo, un contratto vuoto non cancella)
-        const storia = (o) => JSON.stringify(o.contrattiPrecedenti || []);
+        // la storia si confronta come coppie «dal|contratto», non dall'ordine delle chiavi degli oggetti
         if (campi.contratto && 'contrattoDal' in campi
-          && (campi.contratto !== (e.contratto || '') || campi.contrattoDal !== (e.contrattoDal || '') || storia(campi) !== storia(e))) {
+          && (campi.contratto !== (e.contratto || '') || campi.contrattoDal !== (e.contrattoDal || '') || storiaTesto(campi) !== storiaTesto(e))) {
           Object.assign(diversi, { contratto: campi.contratto, contrattoDal: campi.contrattoDal, contrattiPrecedenti: campi.contrattiPrecedenti });
         }
         Object.keys(campi).forEach((c) => {
@@ -565,6 +566,8 @@
   }
 
   // righe dell'anteprima per disponibilità e on-site di un backup
+  // storia dei contratti come coppie «dal|contratto», uguale qualunque sia l'ordine delle chiavi
+  const storiaTesto = (o) => (o.contrattiPrecedenti || []).map((v) => (v.dal || '') + '|' + (v.contratto || '')).join(';');
   function anteprimaRipristino(p) {
     const x = p.ripristino || {}, out = [];
     const quanti = (n, uno, molti) => n + (n === 1 ? uno : molti);
@@ -609,7 +612,9 @@
         + '<li><b>' + nuoviOp.length + '</b> operatori nuovi' + (nuoviOp.length ? ': ' + nuoviOp.map((o) => DO.esc(o.nome) + ' (' + R.nomeRuolo(o.ruolo) + ', ' + (o.contratto || 'contratto ?') + ')').join(', ') : '') + '</li>'
         + (pacchetto.backup && Object.keys(pacchetto.esistenti).length ? '<li>Operatori già presenti che cambiano: ' + Object.keys(pacchetto.esistenti).map((id) => {
           const o = A.operatori.find((x) => x.id === id), m = pacchetto.esistenti[id];
-          const voci = [m.ruolo && 'ruolo ' + R.nomeRuolo(m.ruolo), m.mansione && 'mansione ' + m.mansione, m.contratto && 'contratto ' + m.contratto,
+          const voci = [m.ruolo && 'ruolo ' + R.nomeRuolo(m.ruolo), m.mansione && 'mansione ' + m.mansione, m.contratto && m.contratto !== (o.contratto || '') && 'contratto ' + m.contratto,
+            m.contratto && 'contrattoDal' in m && m.contrattoDal !== (o.contrattoDal || '') && 'data del contratto ' + (m.contrattoDal || 'da sempre'),
+            m.contratto && 'contrattiPrecedenti' in m && storiaTesto(m) !== storiaTesto(o) && 'storia dei contratti',
             m.email && 'email ' + m.email, m.telefono && 'telefono ' + m.telefono, m.onsite && 'on-site ' + m.onsite,
             m.attivo === true && 'accesso riattivato', m.attivo === false && 'disattivato'].filter(Boolean);
           return '<b>' + DO.esc(o.nome) + '</b>: ' + DO.esc(voci.join(', '));
