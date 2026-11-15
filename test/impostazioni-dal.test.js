@@ -55,3 +55,19 @@ test('rinomina senza cambio di compenso: salva subito, il vecchio nome diventa a
   assert.deepEqual(salvate[0].competizioni[0].alias, [nome]);
   assert.equal(salvate[0].precedenti.length, 0);
 });
+
+test('regole precedenti: elenca solo le competizioni con compenso o ritrovo diversi, anche dopo una rinomina', () => {
+  const base = DO.regole.complete(null);
+  const [c0, c1] = base.competizioni.filter((c) => !c.mansione);
+  const v = { dal: '', tariffe: base.tariffe, notteDa: '22:00', notteA: '06:00', anticipoOre: 4,
+    competizioni: [
+      { nome: 'Vecchio Nome', alias: [], compenso: c0.compenso, prima: c0.prima },          // rinominata, uguale
+      { nome: c1.nome, alias: [], compenso: 'maggiorato', prima: c1.prima }] };            // compenso diverso
+  DO.admin.regole = Object.assign({}, base, { dal: '2026-11-01', precedenti: [v],
+    competizioni: base.competizioni.map((c) => (c === c0 ? Object.assign({}, c, { nome: 'Nuovo Nome', alias: ['Vecchio Nome'] }) : c)) });
+  pagina.mostra('impostazioni');
+  const html = elemento('reg-precedenti-elenco').innerHTML;
+  assert.equal(elemento('reg-precedenti').hidden, false);
+  assert.ok(!html.includes('Vecchio Nome'));
+  assert.ok(html.includes(c1.nome));
+});

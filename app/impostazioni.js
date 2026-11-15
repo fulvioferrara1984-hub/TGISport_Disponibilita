@@ -65,9 +65,9 @@
     $('reg-precedenti').hidden = !periodi.length;
     if (!periodi.length) return;
     const euro = (n) => String(n).replace('.', ',') + ' €';
-    const attuali = {}; r.competizioni.forEach((c) => { attuali[c.nome] = c; });
+    // stessa competizione per nome o alias: una rinomina non conta come differenza
     const comp = (v) => v.competizioni.filter((c) => {
-      const a = attuali[c.nome];
+      const a = r.competizioni.find((x) => R.stessaCompetizione(c, x));
       return !a || a.compenso !== c.compenso || a.prima !== c.prima;
     });
     $('reg-precedenti-elenco').innerHTML = periodi.map((p) => {

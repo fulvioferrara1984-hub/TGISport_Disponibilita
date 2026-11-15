@@ -500,6 +500,6 @@
       + (u.drive === 'salvato' ? ' · copia su Drive' : u.drive ? ' · copia su Drive non riuscita: ' + String(u.drive).replace(/^errore: /, '') : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
+  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, stessaCompetizione, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});
