@@ -105,6 +105,7 @@
     id, nome: o.nome || '', mansione: o.mansione || '', email: o.email || '', telefono: o.telefono || '',
     attivo: o.attivo !== false, ultimoInvio: o.ultimoInvio || '', contratto: o.contratto || '', ruolo: o.ruolo || 'OP',
     onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
+    contrattoDal: o.contrattoDal || '', contrattiPrecedenti: o.contrattiPrecedenti || [],
   });
 
   // ---------- sessione ----------
@@ -440,6 +441,7 @@
       email: String(o.email || '').trim().slice(0, 120), telefono: String(o.telefono || '').trim().slice(0, 30), attivo: o.attivo !== false,
       contratto: ['P.IVA', 'Coop'].includes(o.contratto) ? o.contratto : '', ruolo: ['TL', 'SUP'].includes(o.ruolo) ? o.ruolo : 'OP',
       onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
+      contrattoDal: DO.regole.giornoContratto(o.contrattoDal), contrattiPrecedenti: DO.regole.storiaContrattiPulita(o.contrattiPrecedenti),
     };
     if (!campi.nome) throw new Error('Il nome è obbligatorio.');
     if (o.id) {
@@ -472,8 +474,15 @@
     return { codice: formato(codice) };
   }
 
+  // chi compare in un evento o tra gli accettati di un deployment non si elimina: i suoi compensi sparirebbero dal Riepilogo
   async function eliminaOperatore(id) {
     const o = await F.getDoc(F.doc(db, 'operatori', id));
+    const [inEventi, inTL, inOP] = await scrivi(() => Promise.all([
+      F.getDocs(F.query(F.collection(db, 'eventi'), F.where('operatoreId', '==', id), F.limit(1))),
+      F.getDocs(F.query(F.collection(db, 'onsite'), F.where('accettatiTL', 'array-contains', id), F.limit(1))),
+      F.getDocs(F.query(F.collection(db, 'onsite'), F.where('accettatiOP', 'array-contains', id), F.limit(1))),
+    ]));
+    if (!inEventi.empty || !inTL.empty || !inOP.empty) throw new Error(DO.regole.testoNonEliminabile(o.exists() ? o.data().nome : 'Questo operatore'));
     await scrivi(async () => {
       const batch = F.writeBatch(db);
       if (o.exists() && o.data().uid) batch.delete(F.doc(db, 'utenti', o.data().uid));
@@ -587,6 +596,7 @@
       p.operatori.forEach((o) => scritture.push(['set', F.doc(db, 'operatori', o.id), {
         nome: o.nome, mansione: o.mansione || '', email: o.email || '', telefono: o.telefono || '', attivo: o.attivo !== false, contratto: o.contratto, ruolo: o.ruolo,
         onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
+        contrattoDal: DO.regole.giornoContratto(o.contrattoDal), contrattiPrecedenti: DO.regole.storiaContrattiPulita(o.contrattiPrecedenti),
         uid: '', ultimoInvio: '', creato: new Date().toISOString(),
       }]));
       p.eventi.forEach((e) => scritture.push(['set', F.doc(db, 'eventi', e.id), Object.assign(pulisciEvento(e), {

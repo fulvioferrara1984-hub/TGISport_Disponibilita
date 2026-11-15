@@ -8,8 +8,8 @@
   <link rel="icon" type="image/png" href="app/favicon.png">
   <link rel="apple-touch-icon" href="app/favicon-180.png">
   <link rel="preload" href="app/font/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="app/stile.css?v=39">
-  <script src="app/tema.js?v=39"></script>
+  <link rel="stylesheet" href="app/stile.css?v=40">
+  <script src="app/tema.js?v=40"></script>
 </head>
 <body>
   <!-- Accesso con la password dei supervisori -->
@@ -269,6 +269,10 @@
               <p class="nota" style="margin: -4px 0 12px;">Compenso proposto per ogni deployment: giorni × tariffa (4 giorni a 150 € = 600 €), modificabile nella richiesta.</p>
               <button type="submit" class="primario">Salva regole</button>
             </form>
+            <details class="scheda-corpo" id="reg-precedenti" hidden>
+              <summary>Regole precedenti</summary>
+              <ul class="reg-precedenti" id="reg-precedenti-elenco"></ul>
+            </details>
           </section>
           <section class="scheda">
             <div class="scheda-testa"><h2>Accessi in sola visualizzazione</h2></div>
@@ -345,6 +349,20 @@
     </div>
   </div>
 
+  <!-- Da quando valgono le regole dei compensi -->
+  <dialog id="dlg-dal">
+    <form method="dialog" id="form-dal">
+      <h2>Da quando valgono queste regole?</h2>
+      <label class="campo"><span>Primo giorno di validità</span><input type="date" id="dal-giorno" required></label>
+      <p class="nota" id="dal-testo"></p>
+      <div class="errore" id="dal-errore" hidden></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" id="dal-annulla">Annulla</button>
+        <button type="submit" class="primario" id="dal-salva">Salva</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Nuovo operatore / modifica -->
   <dialog id="dlg-operatore">
     <form method="dialog" id="form-operatore">
@@ -358,6 +376,7 @@
         <label class="campo"><span>Ruolo</span><select id="op-ruolo"><option value="OP">Remote OP – partite</option><option value="SUP">Remote Support – partite e turni Remote Support</option><option value="TL">Remote TL – partite e tutti i turni</option></select></label>
         <label class="campo"><span>Contratto</span><select id="op-contratto"><option>P.IVA</option><option>Coop</option></select></label>
       </div>
+      <label class="campo" id="op-dal-riga" hidden><span>Dal</span><input type="date" id="op-dal"></label>
       <label class="campo"><span>On-site</span><select id="op-onsite"><option value="">No</option><option value="TL">On-site TL</option><option value="OP">On-site OP</option></select></label>
       <label class="spunta" id="op-attivo-riga"><input type="checkbox" id="op-attivo" checked><span>Attivo (può entrare e compare nella griglia)</span></label>
       <div class="errore" id="op-errore" hidden></div>
@@ -634,23 +653,23 @@
     </form>
   </dialog>
 
-  <script src="app/config.js?v=39"></script>
-  <script src="app/comune.js?v=39"></script>
-  <script src="app/building.js?v=39"></script>
-  <script src="app/partite-piattaforma.js?v=39"></script>
-  <script src="app/onsite.js?v=39"></script>
-  <script src="app/messaggi.js?v=39"></script>
-  <script src="app/richieste-evento.js?v=39"></script>
-  <script src="app/demo.js?v=39"></script>
-  <script src="app/dati-firebase.js?v=39"></script>
-  <script src="app/regole.js?v=39"></script>
-  <script src="app/menu.js?v=39"></script>
-  <script src="app/admin.js?v=39"></script>
-  <script src="app/convocazioni.js?v=39"></script>
-  <script src="app/onsite-admin.js?v=39"></script>
-  <script src="app/partite-piattaforma-admin.js?v=39"></script>
-  <script src="app/calendario.js?v=39"></script>
-  <script src="app/riepilogo.js?v=39"></script>
-  <script src="app/impostazioni.js?v=39"></script>
+  <script src="app/config.js?v=40"></script>
+  <script src="app/comune.js?v=40"></script>
+  <script src="app/building.js?v=40"></script>
+  <script src="app/partite-piattaforma.js?v=40"></script>
+  <script src="app/onsite.js?v=40"></script>
+  <script src="app/messaggi.js?v=40"></script>
+  <script src="app/richieste-evento.js?v=40"></script>
+  <script src="app/demo.js?v=40"></script>
+  <script src="app/dati-firebase.js?v=40"></script>
+  <script src="app/regole.js?v=40"></script>
+  <script src="app/menu.js?v=40"></script>
+  <script src="app/admin.js?v=40"></script>
+  <script src="app/convocazioni.js?v=40"></script>
+  <script src="app/onsite-admin.js?v=40"></script>
+  <script src="app/partite-piattaforma-admin.js?v=40"></script>
+  <script src="app/calendario.js?v=40"></script>
+  <script src="app/riepilogo.js?v=40"></script>
+  <script src="app/impostazioni.js?v=40"></script>
 </body>
 </html>

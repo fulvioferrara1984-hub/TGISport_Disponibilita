@@ -17,12 +17,70 @@
     if (document.activeElement !== $('reg-tariffa-onsite')) $('reg-tariffa-onsite').value = r.tariffaOnsite;
   }
 
-  async function salva(modifiche, messaggio) {
-    const r = Object.assign({}, A.regole, modifiche);
+  const giornoIt = (iso) => iso.slice(8) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+
+  // Salvataggio: se cambia un compenso chiede da quando valgono le regole, altrimenti salva subito
+  let inAttesa = null;   // { modifiche, messaggio } in attesa della data nel dialog
+  async function scrivi(regole, messaggio) {
     try {
-      await DO.dati.salvaRegole(JSON.parse(JSON.stringify(r)));
+      await DO.dati.salvaRegole(JSON.parse(JSON.stringify(regole)));
       DO.avviso(messaggio, 'ok');
-    } catch (e) { DO.avviso(e.message, 'errore'); }
+      return true;
+    } catch (e) { DO.avviso(e.message, 'errore'); return false; }
+  }
+  function testoDal() {
+    const dal = A.regole.dal;
+    $('dal-testo').textContent = dal && $('dal-giorno').value === dal ? 'Correggi le regole in vigore dal ' + giornoIt(dal) + '.' : '';
+  }
+  async function salva(modifiche, messaggio, dopo) {
+    if (!R.cambiaCompenso(A.regole, Object.assign({}, A.regole, modifiche))) {
+      const { regole, errore } = R.nuoveRegole(A.regole, modifiche, '', DO.oggi());
+      if (errore) DO.avviso(errore, 'errore'); else if (await scrivi(regole, messaggio) && dopo) dopo(regole);
+      return;
+    }
+    const oggi = DO.oggi(), { min, max } = R.limitiDal(A.regole, oggi);
+    inAttesa = { modifiche, messaggio, dopo };
+    $('dal-giorno').min = min; $('dal-giorno').max = max; $('dal-giorno').value = oggi;
+    $('dal-errore').hidden = true;
+    testoDal();
+    $('dlg-dal').showModal();
+  }
+  $('dal-giorno').addEventListener('input', testoDal);
+  $('dal-annulla').addEventListener('click', () => { inAttesa = null; $('dlg-dal').close(); });
+  $('form-dal').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!inAttesa) return;
+    const { regole, errore } = R.nuoveRegole(A.regole, inAttesa.modifiche, $('dal-giorno').value, DO.oggi());
+    if (errore) { $('dal-errore').textContent = errore; $('dal-errore').hidden = false; return; }
+    $('dal-salva').disabled = true;
+    const { messaggio, dopo } = inAttesa;
+    const ok = await scrivi(regole, messaggio);
+    $('dal-salva').disabled = false;
+    if (ok) { inAttesa = null; $('dlg-dal').close(); if (dopo) dopo(regole); }
+  });
+
+  // regole precedenti: una riga per versione, dalla più recente
+  function disegnaPrecedenti() {
+    const r = A.regole, periodi = R.periodiVersioni(r).reverse().slice(1);   // senza quella in vigore
+    $('reg-precedenti').hidden = !periodi.length;
+    if (!periodi.length) return;
+    const euro = (n) => String(n).replace('.', ',') + ' €';
+    // stessa competizione per nome o alias: una rinomina non conta come differenza
+    const comp = (v) => v.competizioni.filter((c) => {
+      const a = r.competizioni.find((x) => R.stessaCompetizione(c, x));
+      return !a || a.compenso !== c.compenso || a.prima !== c.prima;
+    });
+    $('reg-precedenti-elenco').innerHTML = periodi.map((p) => {
+      const v = p.versione, t = v.tariffe;
+      const diverse = comp(v);
+      return '<li><b>dal ' + (p.dal ? giornoIt(p.dal) : 'sempre') + ' al ' + giornoIt(p.al) + '</b>'
+        + '<span>P.IVA ' + euro(t['P.IVA'].diurno) + ' / ' + euro(t['P.IVA'].notturno) + ' / ' + euro(t['P.IVA'].maggiorato)
+        + ' · Coop ' + euro(t.Coop.diurno) + ' / ' + euro(t.Coop.notturno) + ' / ' + euro(t.Coop.maggiorato)
+        + ' (diurno / notturno / maggiorato)</span>'
+        + '<span>Notte dalle ' + DO.esc(v.notteDa) + ' alle ' + DO.esc(v.notteA) + ' · anticipo ' + v.anticipoOre + ' h</span>'
+        + (diverse.length ? '<small>' + diverse.map((c) => DO.esc(c.nome) + ': ' + DO.esc(R.TIPI[c.compenso || 'diurno'] || c.compenso) + (c.prima === null || c.prima === undefined ? '' : ', ' + c.prima + ' h prima')).join(' · ') + '</small>' : '')
+        + '</li>';
+    }).join('');
   }
 
   $('form-regole').addEventListener('submit', (e) => {
@@ -43,8 +101,8 @@
 
   // ---------- competizioni e sport ----------
   let bozzaComp = null;
-  function disegnaCompetizioni(forza) {
-    if (!bozzaComp || forza) bozzaComp = A.regole.competizioni.map((c) => Object.assign({}, c));
+  function disegnaCompetizioni(forza, regole) {
+    if (!bozzaComp || forza) bozzaComp = (regole || A.regole).competizioni.map((c) => Object.assign({}, c, { origine: c.nome }));
     const sport = A.regole.sport;
     const valore = (v) => (v === null || v === undefined ? '' : v);
     $('reg-competizioni').innerHTML = bozzaComp.map((c, i) => '<li data-i="' + i + '"' + (c.mansione ? ' class="mansione"' : '') + '>'
@@ -88,7 +146,7 @@
     disegnaCompetizioni();
   });
   $('reg-aggiungi-comp').addEventListener('click', () => {
-    bozzaComp.push({ nome: '', sport: '', compenso: 'diurno', prima: 4, dopo: 2 });
+    bozzaComp.push({ origine: '', nome: '', sport: '', compenso: 'diurno', prima: 4, dopo: 2 });
     disegnaCompetizioni();
     $('reg-competizioni').lastElementChild.querySelector('input').focus();
   });
@@ -106,11 +164,12 @@
       return;
     }
     const competizioni = righe.map((c) => (c.mansione
-      ? { nome: c.nome, mansione: true, sport: '', compenso: c.compenso || 'diurno', prima: 0, dopo: ore(c.dopo, 0.5, 16), colore: c.colore || '' }
-      : { nome: c.nome.trim(), sport: c.sport || '', compenso: c.compenso || 'diurno', prima: ore(c.prima, 0, 12), dopo: ore(c.dopo, 0, 12), colore: c.colore || '' }));
+      ? { nome: c.nome, mansione: true, sport: '', compenso: c.compenso || 'diurno', prima: 0, dopo: ore(c.dopo, 0.5, 16), colore: c.colore || '', alias: R.aliasDopoRinomina(c.origine, c.nome, c.alias) }
+      : { nome: c.nome.trim(), sport: c.sport || '', compenso: c.compenso || 'diurno', prima: ore(c.prima, 0, 12), dopo: ore(c.dopo, 0, 12), colore: c.colore || '', alias: R.aliasDopoRinomina(c.origine, c.nome.trim(), c.alias) }));
+    const conflitto = R.aliasInConflitto(competizioni);
+    if (conflitto) { DO.avviso(conflitto, 'errore', 8000); return; }
     const sport = $('reg-sport').value.split(',').map((s) => s.trim()).filter(Boolean);
-    bozzaComp = null;
-    salva({ competizioni, sport }, 'Competizioni salvate.');
+    salva({ competizioni, sport }, 'Competizioni salvate.', (salvate) => disegnaCompetizioni(true, R.complete(salvate)));
   });
 
   // ---------- accessi in sola visualizzazione ----------
@@ -203,7 +262,7 @@
     elenco.comp.concat(['Europa League', 'Conference League']).forEach((c) => {
       // competizioni UEFA (Champions, Europa, Conference League): compenso dimezzato
       const coppaEuropea = /champions|europa league|conference/i.test(c);
-      if (!regole.competizioni.some((x) => x.nome === c)) regole.competizioni.push({ nome: c, sport: coppaEuropea ? 'Calcio' : '', compenso: coppaEuropea ? 'dimezzato' : 'diurno' });
+      if (!regole.competizioni.some((x) => R.stessaCompetizione({ nome: c }, x))) regole.competizioni.push({ nome: c, sport: coppaEuropea ? 'Calcio' : '', compenso: coppaEuropea ? 'dimezzato' : 'diurno' });
     });
 
     // operatori: si riconoscono per nome tra quelli già presenti
@@ -309,8 +368,13 @@
     const tariffe = {};
     ['P.IVA', 'Coop'].forEach((c) => ['diurno', 'notturno', 'maggiorato'].forEach((t) => { tariffe[('netto ' + c + ' ' + t).toLowerCase()] = [c, t]; }));
     const COMPENSI = { diurno: 'diurno', notturno: 'notturno', maggiorato: 'maggiorato', dimezzato: 'dimezzato' };
+    // «sempre» e le date che non si leggono valgono come vuote
+    const dataCella = (v) => dataExcel(v);
+    const conAlias = testo((imp[0] || [])[14]) === 'Nomi precedenti';
+    const elencoAlias = (v) => [...new Set(testo(v).split(',').map((x) => x.trim()).filter(Boolean))];
     imp.slice(1).forEach((r) => {
       const voce = testo(r[0]).toLowerCase();
+      if (voce === 'regole in vigore dal') regole.dal = dataCella(r[1]);
       if (tariffe[voce] && typeof r[1] === 'number') regole.tariffe[tariffe[voce][0]][tariffe[voce][1]] = r[1];
       if (voce.startsWith('tariffa on-site') && typeof r[1] === 'number') regole.tariffaOnsite = r[1];
       if (voce === 'notturno dalle' && oraExcel(r[1])) regole.notteDa = oraExcel(r[1]);
@@ -323,21 +387,51 @@
       if (!nome) return;
       const compenso = COMPENSI[testo(r[9]).toLowerCase()] || 'diurno';
       const campi = Object.assign({ nome, compenso, prima: numero(r[10]), dopo: numero(r[11]), colore: testo(r[12]) },
-        testo(r[13]) ? { sport: testo(r[13]) } : {});
-      const i = regole.competizioni.findIndex((c) => c.nome === nome);
-      if (i >= 0) regole.competizioni[i] = Object.assign({}, regole.competizioni[i], campi);
+        testo(r[13]) ? { sport: testo(r[13]) } : {}, conAlias ? { alias: elencoAlias(r[14]) } : {});
+      // per nome o nome precedente: un backup col nome vecchio aggiorna la competizione rinominata
+      const i = regole.competizioni.findIndex((c) => R.stessaCompetizione({ nome }, c));
+      if (i >= 0) regole.competizioni[i] = Object.assign({}, regole.competizioni[i], campi, { nome: regole.competizioni[i].nome });
       else regole.competizioni.push(Object.assign({ sport: '' }, campi));
     });
+    // regole precedenti (fogli dopo Impostazioni): senza il foglio restano quelle attuali
+    if (wb.Sheets['Regole precedenti']) {
+      const vers = foglio('Regole precedenti'), intest = (vers[0] || []).map((x) => testo(x).toLowerCase());
+      const col = (nome) => intest.indexOf(nome.toLowerCase());
+      const cella = (x, nome) => x[col(nome)];
+      const compPrec = {};
+      (wb.Sheets['Competizioni precedenti'] ? foglio('Competizioni precedenti') : []).slice(1).forEach((x) => {
+        const nome = testo(x[1]);
+        if (!nome) return;
+        (compPrec[dataCella(x[0])] = compPrec[dataCella(x[0])] || []).push({ nome, alias: elencoAlias(x[2]), compenso: COMPENSI[testo(x[3]).toLowerCase()] || 'diurno', prima: numero(x[4]) });
+      });
+      const num = (v, d) => (numero(v) === null ? d : numero(v));
+      regole.precedenti = vers.slice(1).filter((x) => x.some((v) => testo(v))).map((x) => {
+        const dal = dataCella(x[0]), t = (c, k) => num(cella(x, 'Netto ' + c + ' ' + k), regole.tariffe[c][k]);
+        const anticipo = num(cella(x, 'Anticipo (ore)'), regole.anticipoOre);
+        return { dal, tariffe: { 'P.IVA': { diurno: t('P.IVA', 'diurno'), notturno: t('P.IVA', 'notturno'), maggiorato: t('P.IVA', 'maggiorato') },
+          Coop: { diurno: t('Coop', 'diurno'), notturno: t('Coop', 'notturno'), maggiorato: t('Coop', 'maggiorato') } },
+        notteDa: oraExcel(cella(x, 'Notturno dalle')) || regole.notteDa, notteA: oraExcel(cella(x, 'Notturno alle')) || regole.notteA, anticipoOre: anticipo,
+        competizioni: (compPrec[dal] || []).map((c) => Object.assign(c, { prima: c.prima === null ? anticipo : c.prima })) };
+      });
+    }
     const r = R.complete(regole);
 
     // operatori: dati completi dal foglio Operatori, per ID (due omonimi restano distinti) o, nei backup vecchi, per nome
     const RUOLI = { 'Remote TL': 'TL', 'Remote Support': 'SUP' };
     const elencoOp = [];
-    (wb.Sheets.Operatori ? foglio('Operatori') : []).slice(1).forEach((x) => {
+    const fogliOp = wb.Sheets.Operatori ? foglio('Operatori') : [];
+    // contratto con data e storia: solo nei backup che hanno le due colonne
+    const conStoriaContratti = testo((fogliOp[0] || [])[9]) === 'Contratto dal' && testo((fogliOp[0] || [])[10]) === 'Contratti precedenti';
+    const contrattiDa = (v) => testo(v).split(';').map((voce) => {
+      const m = /^(P\.IVA|Coop|da indicare) dal (sempre|(\d{2})\/(\d{2})\/(\d{4}))$/.exec(voce.trim());
+      return m ? { dal: m[3] ? m[5] + '-' + m[4] + '-' + m[3] : '', contratto: m[1] === 'da indicare' ? '' : m[1] } : null;
+    }).filter(Boolean);
+    fogliOp.slice(1).forEach((x) => {
       const nome = testo(x[0]);
       if (!nome) return;
-      elencoOp.push({ mansione: testo(x[1]), ruolo: RUOLI[testo(x[2])] || 'OP', contratto: ['P.IVA', 'Coop'].includes(testo(x[3])) ? testo(x[3]) : '',
-        email: testo(x[4]), telefono: testo(x[5]), onsite: ['TL', 'OP'].includes(testo(x[6])) ? testo(x[6]) : '', attivo: testo(x[7]).toUpperCase() !== 'NO', nome, id: idValido(x[8]) });
+      elencoOp.push(Object.assign({ mansione: testo(x[1]), ruolo: RUOLI[testo(x[2])] || 'OP', contratto: ['P.IVA', 'Coop'].includes(testo(x[3])) ? testo(x[3]) : '',
+        email: testo(x[4]), telefono: testo(x[5]), onsite: ['TL', 'OP'].includes(testo(x[6])) ? testo(x[6]) : '', attivo: testo(x[7]).toUpperCase() !== 'NO', nome, id: idValido(x[8]) },
+        conStoriaContratti ? { contrattoDal: dataCella(x[9]), contrattiPrecedenti: contrattiDa(x[10]) } : {}));
     });
     const datiDi = (k, idOp) => (idOp && elencoOp.find((o) => o.id === idOp)) || elencoOp.find((o) => !o.id && chiave(o.nome) === k)
       || (!idOp && elencoOp.find((o) => chiave(o.nome) === k)) || {};
@@ -363,7 +457,14 @@
       if (e) {
         // degli operatori presenti cambia solo ciò che è diverso, e mai con un campo vuoto (il backup non cancella dati più recenti)
         const diversi = {};
+        // contratto, data e storia contano insieme: se uno cambia vanno tutti e tre (come per l'attivo, un contratto vuoto non cancella)
+        // la storia si confronta come coppie «dal|contratto», non dall'ordine delle chiavi degli oggetti
+        if (campi.contratto && 'contrattoDal' in campi
+          && (campi.contratto !== (e.contratto || '') || campi.contrattoDal !== (e.contrattoDal || '') || storiaTesto(campi) !== storiaTesto(e))) {
+          Object.assign(diversi, { contratto: campi.contratto, contrattoDal: campi.contrattoDal, contrattiPrecedenti: campi.contrattiPrecedenti });
+        }
         Object.keys(campi).forEach((c) => {
+          if ('contrattoDal' in campi && ['contratto', 'contrattoDal', 'contrattiPrecedenti'].includes(c)) return;
           if (c === 'attivo' ? campi.attivo !== (e.attivo !== false) : campi[c] !== '' && campi[c] !== (e[c] || '')) diversi[c] = campi[c];
         });
         if (Object.keys(diversi).length) esistenti[e.id] = diversi;
@@ -465,6 +566,8 @@
   }
 
   // righe dell'anteprima per disponibilità e on-site di un backup
+  // storia dei contratti come coppie «dal|contratto», uguale qualunque sia l'ordine delle chiavi
+  const storiaTesto = (o) => (o.contrattiPrecedenti || []).map((v) => (v.dal || '') + '|' + (v.contratto || '')).join(';');
   function anteprimaRipristino(p) {
     const x = p.ripristino || {}, out = [];
     const quanti = (n, uno, molti) => n + (n === 1 ? uno : molti);
@@ -509,7 +612,9 @@
         + '<li><b>' + nuoviOp.length + '</b> operatori nuovi' + (nuoviOp.length ? ': ' + nuoviOp.map((o) => DO.esc(o.nome) + ' (' + R.nomeRuolo(o.ruolo) + ', ' + (o.contratto || 'contratto ?') + ')').join(', ') : '') + '</li>'
         + (pacchetto.backup && Object.keys(pacchetto.esistenti).length ? '<li>Operatori già presenti che cambiano: ' + Object.keys(pacchetto.esistenti).map((id) => {
           const o = A.operatori.find((x) => x.id === id), m = pacchetto.esistenti[id];
-          const voci = [m.ruolo && 'ruolo ' + R.nomeRuolo(m.ruolo), m.mansione && 'mansione ' + m.mansione, m.contratto && 'contratto ' + m.contratto,
+          const voci = [m.ruolo && 'ruolo ' + R.nomeRuolo(m.ruolo), m.mansione && 'mansione ' + m.mansione, m.contratto && m.contratto !== (o.contratto || '') && 'contratto ' + m.contratto,
+            m.contratto && 'contrattoDal' in m && m.contrattoDal !== (o.contrattoDal || '') && 'data del contratto ' + (m.contrattoDal || 'da sempre'),
+            m.contratto && 'contrattiPrecedenti' in m && storiaTesto(m) !== storiaTesto(o) && 'storia dei contratti',
             m.email && 'email ' + m.email, m.telefono && 'telefono ' + m.telefono, m.onsite && 'on-site ' + m.onsite,
             m.attivo === true && 'accesso riattivato', m.attivo === false && 'disattivato'].filter(Boolean);
           return '<b>' + DO.esc(o.nome) + '</b>: ' + DO.esc(voci.join(', '));
@@ -557,7 +662,7 @@
   });
 
   A.registra({
-    aggiorna: () => { if (A.vista === 'impostazioni') { disegnaRegole(); disegnaOperativo(); disegnaVisualizzatori(); if (!bozzaComp) disegnaCompetizioni(); } },
-    mostra: (nome) => { if (nome === 'impostazioni') { disegnaRegole(); disegnaOperativo(); disegnaVisualizzatori(); disegnaCompetizioni(true); } },
+    aggiorna: () => { if (A.vista === 'impostazioni') { disegnaRegole(); disegnaPrecedenti(); disegnaOperativo(); disegnaVisualizzatori(); if (!bozzaComp) disegnaCompetizioni(); } },
+    mostra: (nome) => { if (nome === 'impostazioni') { disegnaRegole(); disegnaPrecedenti(); disegnaOperativo(); disegnaVisualizzatori(); disegnaCompetizioni(true); } },
   });
 })(window.DO);

@@ -59,13 +59,17 @@
     x.competizioni = mansioni.concat(salvate.filter((c) => !RIGHE_MANSIONE.includes(c.nome)).map(({ uefa, mansione, ...c }) => {
       const compenso = tipoValido(c.compenso) ? c.compenso : uefa && c.compenso === undefined ? 'dimezzato' : 'diurno';
       const prima = ore(c.prima), dopo = ore(c.dopo);
-      return Object.assign({}, c, { prima: prima === null ? anticipo : prima, dopo: dopo === null ? dopoGenerale : dopo, colore: coloreValido(c.colore), compenso });
+      // alias: i vecchi nomi della competizione, per ritrovarla nelle partite create prima della rinomina
+      return Object.assign({}, c, { alias: Array.isArray(c.alias) ? c.alias : [], prima: prima === null ? anticipo : prima, dopo: dopo === null ? dopoGenerale : dopo, colore: coloreValido(c.colore), compenso });
     }));
     x.tariffe = {
       'P.IVA': Object.assign({}, PREDEFINITE.tariffe['P.IVA'], (r && r.tariffe && r.tariffe['P.IVA']) || {}),
       Coop: Object.assign({}, PREDEFINITE.tariffe.Coop, (r && r.tariffe && r.tariffe.Coop) || {}),
     };
     if (!(Number.isFinite(x.tariffaOnsite) && x.tariffaOnsite >= 0)) x.tariffaOnsite = PREDEFINITE.tariffaOnsite;
+    // regole salvate prima delle date di validità: valgono da sempre e senza versioni precedenti
+    if (typeof x.dal !== 'string') x.dal = '';
+    if (!Array.isArray(x.precedenti)) x.precedenti = [];
     return x;
   }
 
@@ -125,7 +129,11 @@
     return da > a ? c >= da || c < a : c >= da && c < a;
   }
 
-  const competizione = (nome, regole) => complete(regole).competizioni.find((c) => c.nome === nome) || null;
+  // per nome, poi tra i vecchi nomi (alias): rinominare una competizione non lascia partite senza regole
+  const competizione = (nome, regole) => {
+    const lista = complete(regole).competizioni;
+    return lista.find((c) => c.nome === nome) || lista.find((c) => (c.alias || []).includes(nome)) || null;
+  };
   // ruoli remoti come si mostrano (nei dati 'OP' / 'SUP' / 'TL'; un valore sconosciuto vale Remote OP)
   const nomeRuolo = (ruolo) => DO.RUOLI[ruolo === 'TL' || ruolo === 'SUP' ? ruolo : 'OP'];
   // ogni ruolo comprende quelli sotto: Remote OP < Remote Support < Remote TL
@@ -228,11 +236,166 @@
     return { ok, errori, doppie };
   }
 
+  // Versione valida in una data tra quella in vigore (dal) e le precedenti, in ordine di data.
+  // «dal» vuoto o assente = da sempre; data vuota o non valida = quella in vigore.
+  const dataValida = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
+  // contrattoDal: una data oppure '' (da sempre)
+  const giornoContratto = (d) => (dataValida(d) ? d : '');
+  // Storia dei contratti per l'archivio: dal è una data o '' (= «da sempre», il dal della prima voce); il resto si scarta
+  const storiaContrattiPulita = (v) => (Array.isArray(v) ? v : [])
+    .filter((c) => c && (c.dal === '' || dataValida(c.dal)) && ['P.IVA', 'Coop'].includes(c.contratto)).map((c) => ({ dal: c.dal, contratto: c.contratto }));
+  function versioneDel(inVigore, dal, precedenti, data) {
+    if (!dal || !dataValida(data) || data >= dal || !Array.isArray(precedenti) || !precedenti.length) return inVigore;
+    const valide = precedenti.filter((p) => (p.dal || '') <= data);
+    // prima della versione più vecchia che si conosce vale comunque quella
+    return valide.length ? valide[valide.length - 1] : precedenti[0];
+  }
+
+  // Regole complete come valevano in una data: della versione prendono solo i campi di compenso (tariffe,
+  // fascia notturna, anticipo, tipo di compenso e ore di ritrovo di ogni competizione); il resto è quello in vigore.
+  // Le competizioni sono quelle della versione (una aggiunta dopo vale dall'inizio della versione in vigore).
+  function regoleDel(regole, data) {
+    const r = complete(regole), v = versioneDel(r, r.dal, r.precedenti, data);
+    return v === r ? r : completaVersione(r, v);
+  }
+  // Una versione precedente completata: i campi di compenso mancanti vengono da quelle in vigore (r già completa)
+  function completaVersione(r, v) {
+    const campi = { dal: v.dal || '', precedenti: [] };
+    for (const k of ['tariffe', 'notteDa', 'notteA', 'anticipoOre']) if (v[k] !== undefined) campi[k] = v[k];
+    const dellaVersione = Array.isArray(v.competizioni) ? v.competizioni : [];
+    const abbina = (c) => r.competizioni.find((a) => a.nome === c.nome || (c.alias || []).includes(a.nome) || (a.alias || []).includes(c.nome)
+      || (a.alias || []).some((x) => (c.alias || []).includes(x)));
+    const unici = (nomi) => nomi.filter((n, i) => n && nomi.indexOf(n) === i);
+    campi.competizioni = dellaVersione.map((c) => {
+      const oggi = abbina(c);
+      if (!oggi) return c;
+      // sport, colore e ore di fine restano quelli in vigore; i nomi di oggi diventano alias del nome di allora
+      return Object.assign({}, c, { sport: oggi.sport, colore: oggi.colore, dopo: oggi.dopo, mansione: oggi.mansione,
+        alias: unici([].concat(c.alias || [], oggi.nome, oggi.alias || [])).filter((n) => n !== c.nome) });
+    }).concat(r.competizioni.filter((a) => a.mansione && !dellaVersione.some((c) => c.nome === a.nome)));
+    return complete(Object.assign({}, r, campi));
+  }
+
+  // Contratto di un operatore in una data (contratto, contrattoDal e contrattiPrecedenti); operatore assente = ''
+  function contrattoDel(operatore, data) {
+    if (!operatore) return '';
+    const v = versioneDel(operatore, operatore.contrattoDal, operatore.contrattiPrecedenti, data);
+    return v.contratto || '';
+  }
+
+  // ---- salvataggi con data ----
+  const giornoIt = (iso, conAnno) => iso.slice(8) + '/' + iso.slice(5, 7) + (conAnno ? '/' + iso.slice(0, 4) : '');
+  const giornoPrima = (iso) => {
+    const d = new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8)) - 1));
+    return d.toISOString().slice(0, 10);
+  };
+  // stessa competizione per nome o alias (una rinomina con alias non è una competizione nuova)
+  const stessaCompetizione = (a, b) => a.nome === b.nome || (b.alias || []).includes(a.nome) || (a.alias || []).includes(b.nome)
+    || (a.alias || []).some((x) => (b.alias || []).includes(x));
+
+  // Cambia qualcosa che muove i compensi? Contano solo tariffe, fascia notturna, anticipo e, per ogni competizione
+  // o mansione, tipo di compenso e ore di ritrovo. Una competizione tolta conta, una nuova no.
+  function cambiaCompenso(attuali, dopo) {
+    const a = complete(attuali), d = complete(dopo);
+    const campi = (r) => JSON.stringify([r.tariffe, r.notteDa, r.notteA, r.anticipoOre]);
+    if (campi(a) !== campi(d)) return true;
+    return a.competizioni.some((c) => {
+      const x = d.competizioni.find((y) => stessaCompetizione(c, y));
+      return !x || x.compenso !== c.compenso || x.prima !== c.prima;
+    });
+  }
+
+  // Giorni tra cui si può scegliere da quando valgono le nuove regole: dalla versione in vigore (stesso giorno = correzione) a oggi
+  function limitiDal(regole, oggi) { return { min: complete(regole).dal || '', max: oggi }; }
+
+  const erroreGiorno = (min) => (min ? 'Scegli un giorno dal ' + giornoIt(min, true) + ' a oggi.' : 'Scegli un giorno fino a oggi.');
+
+  // Documento delle regole da salvare. Senza cambi di compenso «dal» non serve e si tengono dal e precedenti;
+  // con «dal» uguale a quello in vigore si corregge; altrimenti la versione in vigore va in precedenti.
+  function nuoveRegole(attuali, modifiche, dal, oggi) {
+    const r = complete(attuali), nuove = Object.assign({}, attuali, modifiche);
+    if (!cambiaCompenso(r, nuove)) return { regole: Object.assign(nuove, { dal: r.dal || '', precedenti: r.precedenti }) };
+    if (!dataValida(dal)) return { errore: 'Scegli da quando valgono le regole.' };
+    const { min } = limitiDal(r, oggi);
+    if (dal > oggi || dal < min) return { errore: erroreGiorno(min) };
+    if (dal === min) return { regole: Object.assign(nuove, { dal, precedenti: r.precedenti }) };
+    const versione = { dal: r.dal || '', tariffe: r.tariffe, notteDa: r.notteDa, notteA: r.notteA, anticipoOre: r.anticipoOre,
+      competizioni: r.competizioni.map((c) => ({ nome: c.nome, alias: c.alias || [], compenso: c.compenso, prima: c.prima })) };
+    return { regole: Object.assign(nuove, { dal, precedenti: r.precedenti.concat([versione]) }) };
+  }
+
+  // Versioni delle regole dalla più vecchia; «al» è il giorno prima della successiva, '' per quella in vigore
+  function periodiVersioni(regole) {
+    const r = complete(regole), versioni = r.precedenti.map((p) => completaVersione(r, p)).concat([r]);
+    return versioni.map((v, i) => ({ dal: v.dal || '', al: i + 1 < versioni.length ? giornoPrima(versioni[i + 1].dal) : '', versione: v }));
+  }
+
+  // Alias dopo aver rinominato una competizione: il vecchio nome diventa alias, il nuovo non lo è più
+  function aliasDopoRinomina(origine, nome, alias) {
+    const resto = (alias || []).filter((x) => x !== nome);
+    return origine && origine !== nome && !resto.includes(origine) ? resto.concat(origine) : resto;
+  }
+
+  // Un nome o alias non può essere anche nome o alias di un'altra competizione
+  function aliasInConflitto(competizioni) {
+    const visti = {};
+    for (let i = 0; i < competizioni.length; i++) {
+      const c = competizioni[i];
+      for (const n of [c.nome].concat(c.alias || [])) {
+        if (!n) continue;
+        if (n in visti && visti[n] !== i) return n + ' è già il nome di un\'altra competizione.';
+        visti[n] = i;
+      }
+    }
+    return null;
+  }
+
+  // Cambio di contratto di un operatore: i campi da salvare. Chi non aveva contratto lo ha da sempre;
+  // altrimenti serve il giorno da cui vale (stesso giorno del contratto in vigore = correzione).
+  function nuovoContratto(operatore, contratto, dal, oggi) {
+    const attuale = operatore.contratto || '';
+    if (contratto === attuale) return { campi: {} };
+    if (!attuale) return { campi: { contratto } };
+    if (!dataValida(dal)) return { errore: 'Scegli da quando vale il nuovo contratto.' };
+    const min = operatore.contrattoDal || '';
+    if (dal > oggi || dal < min) return { errore: erroreGiorno(min) };
+    if (dal === min) return { campi: { contratto } };
+    return { campi: { contratto, contrattoDal: dal, contrattiPrecedenti: (operatore.contrattiPrecedenti || []).concat([{ dal: min, contratto: attuale }]) } };
+  }
+
+  // Cambi di regole e contratti con da < dal <= a, per avvisare nel Riepilogo che il periodo non è uniforme
+  function cambiNelPeriodo(regole, operatori, da, a) {
+    const r = complete(regole), dentro = (dal) => !!dal && da < dal && dal <= a;
+    const righe = [];
+    const cambi = r.precedenti.map((p) => p.dal).concat([r.dal]).filter(dentro).sort();
+    if (cambi.length) righe.push('Regole dei compensi cambiate dal ' + cambi.map((d) => giornoIt(d)).join(', '));
+    for (const o of operatori) {
+      (o.contrattiPrecedenti || []).concat([{ dal: o.contrattoDal, contratto: o.contratto }]).filter((c) => dentro(c.dal))
+        .sort((x, y) => x.dal.localeCompare(y.dal))
+        .forEach((c) => righe.push(o.nome + ': ' + c.contratto + ' dal ' + giornoIt(c.dal)));
+    }
+    return righe;
+  }
+
+  // Le date raggruppate per contratto dell'operatore in quel giorno, nell'ordine in cui compare il contratto
+  function datePerContratto(date, operatore) {
+    const gruppi = [];
+    for (const d of date) {
+      const contratto = contrattoDel(operatore, d);
+      const g = gruppi.find((x) => x.contratto === contratto);
+      if (g) g.date.push(d); else gruppi.push({ contratto, date: [d] });
+    }
+    return gruppi;
+  }
+
+  const testoNonEliminabile = (nome) => nome + ' ha eventi o deployment: eliminarlo azzererebbe i suoi compensi nel Riepilogo. Disattivalo da Modifica → Attivo.';
+
   // Gettone di un evento: il maggiorato deciso dal supervisore vale su tutto;
   // poi il tipo della competizione (o della mansione per i turni remoti).
+  // Regole e contratto sono quelli del giorno dell'evento: cambiarli dopo non tocca i mesi passati.
   function gettone(e, operatore, regole) {
-    const r = complete(regole);
-    const t = r.tariffe[operatore && operatore.contratto] || null;
+    const r = regoleDel(regole, e.data);
+    const t = r.tariffe[contrattoDel(operatore, e.data)] || null;
     // ordine: maggiorato sull'evento, poi il tipo della competizione; «diurno» diventa notturno se il ritrovo è di notte
     const comp = compensoCompetizione(competizioneDi(e), r);
     let tipo = 'diurno';
@@ -345,6 +508,6 @@
       + (u.drive === 'salvato' ? ' · copia su Drive' : u.drive ? ' · copia su Drive non riuscita: ' + String(u.drive).replace(/^errore: /, '') : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
+  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, stessaCompetizione, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, giornoContratto, storiaContrattiPulita, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});

@@ -1096,3 +1096,9 @@ body:not(.entrato) .lato, body:not(.entrato) .barra-pagina { display: none; }
 
 /* l'ultima riga colorata segue l'angolo del riquadro, che a 16 px si vede */
 .giorno:last-child, .feed-voce:last-child, .ev-giorno:last-child > :last-child, .tabella-box:last-child { border-radius: 0 0 var(--raggio) var(--raggio); }
+
+/* Impostazioni: regole dei compensi precedenti */
+#reg-precedenti summary { cursor: pointer; font-weight: 600; }
+.reg-precedenti { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.reg-precedenti li { display: grid; gap: 2px; font-size: var(--t-14); }
+.reg-precedenti small { font-size: var(--t-12); color: var(--inchiostro-2); }

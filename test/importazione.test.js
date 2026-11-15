@@ -183,6 +183,97 @@ test('il file della stagione non entra in modalità backup', async () => {
   assert.ok(!elemento('imp-anteprima').innerHTML.includes('Backup del'));
 });
 
+// backup con la storia delle regole e dei contratti (formato scritto dallo script, Task 8)
+const BACKUP_STORIA = () => {
+  const imp = BACKUP.Impostazioni.map((r) => r.slice());
+  imp[0][14] = 'Nomi precedenti';
+  imp[3][14] = 'Serie A Old, SA';          // Serie A: alias
+  imp.push(['Regole in vigore dal', giorno('2026-11-01')]);
+  const op = BACKUP.Operatori.map((r) => r.slice());
+  op[0][8] = 'ID'; op[0][9] = 'Contratto dal'; op[0][10] = 'Contratti precedenti';
+  op[1][9] = giorno('2026-11-01'); op[1][10] = 'Coop dal sempre; da indicare dal 15/12/2026; testo rotto';
+  op[2][9] = 'sempre'; op[2][10] = '';
+  return Object.assign({}, BACKUP, {
+    Impostazioni: imp, Operatori: op,
+    'Regole precedenti': [['Dal', 'Al', 'Netto P.IVA diurno', 'Netto P.IVA notturno', 'Netto P.IVA maggiorato', 'Netto Coop diurno', 'Netto Coop notturno', 'Netto Coop maggiorato', 'Notturno dalle', 'Notturno alle', 'Anticipo (ore)'],
+      ['sempre', giorno('2026-08-31'), 100, 140, 160, 110, 150, 170, '22:00', '06:00', 3],
+      [giorno('2026-09-01'), giorno('2026-10-31'), 120, 180, 200, 130, 190, 210, '23:00', '05:30', 4]],
+    'Competizioni precedenti': [['Dal', 'Competizione / mansione', 'Nomi precedenti', 'Compenso', 'Ore prima'],
+      ['sempre', 'Serie A Old', '', 'Diurno', 2],
+      [giorno('2026-09-01'), 'Serie A Old', 'SA', 'Dimezzato', 'xx'],
+      [giorno('2026-09-01'), 'Coppa Y', 'Coppa Z, Coppa W', 'Maggiorato', 1]],
+  });
+};
+
+test('ripristino: la storia delle regole e dei contratti torna come nel backup', async () => {
+  const operatoriPrima = DO.admin.operatori;
+  DO.admin.operatori = [{ id: 'luca', nome: 'Luca Bianchi', ruolo: 'TL', contratto: 'P.IVA', mansione: 'Regia', email: 'luca@x.it', telefono: '+39 1', onsite: 'TL', attivo: true }];
+  const { p } = await importaFogli(BACKUP_STORIA());
+  assert.equal(p.regole.dal, '2026-11-01');
+  assert.deepEqual(p.regole.precedenti, [
+    { dal: '', tariffe: { 'P.IVA': { diurno: 100, notturno: 140, maggiorato: 160 }, Coop: { diurno: 110, notturno: 150, maggiorato: 170 } }, notteDa: '22:00', notteA: '06:00', anticipoOre: 3,
+      competizioni: [{ nome: 'Serie A Old', alias: [], compenso: 'diurno', prima: 2 }] },
+    { dal: '2026-09-01', tariffe: { 'P.IVA': { diurno: 120, notturno: 180, maggiorato: 200 }, Coop: { diurno: 130, notturno: 190, maggiorato: 210 } }, notteDa: '23:00', notteA: '05:30', anticipoOre: 4,
+      competizioni: [{ nome: 'Serie A Old', alias: ['SA'], compenso: 'dimezzato', prima: 4 }, { nome: 'Coppa Y', alias: ['Coppa Z', 'Coppa W'], compenso: 'maggiorato', prima: 1 }] },
+  ]);
+  assert.deepEqual(p.regole.competizioni.find((c) => c.nome === 'Serie A').alias, ['Serie A Old', 'SA']);
+  assert.deepEqual(p.regole.competizioni.find((c) => c.nome === 'Coppa X').alias, []);
+  // contratto presente: i tre campi insieme; operatore nuovo: con i suoi
+  assert.deepEqual([p.esistenti.luca.contratto, p.esistenti.luca.contrattoDal, p.esistenti.luca.contrattiPrecedenti],
+    ['P.IVA', '2026-11-01', [{ dal: '', contratto: 'Coop' }, { dal: '2026-12-15', contratto: '' }]]);
+  const n = p.operatori[0];
+  assert.deepEqual([n.contrattoDal, n.contrattiPrecedenti], ['', []]);
+  // già uguale a com'è in piattaforma: nessun cambio
+  DO.admin.operatori = [Object.assign({}, DO.admin.operatori[0], { contrattoDal: '2026-11-01', contrattiPrecedenti: [{ dal: '', contratto: 'Coop' }, { dal: '2026-12-15', contratto: '' }] })];
+  const dinuovo = await importaFogli(BACKUP_STORIA());
+  assert.equal(dinuovo.p.esistenti.luca, undefined);
+  DO.admin.operatori = operatoriPrima;
+});
+
+test('ripristino: una competizione rinominata si aggiorna dal nome vecchio, senza una seconda', async () => {
+  const regolePrima = DO.admin.regole;
+  DO.admin.regole = DO.regole.complete({ competizioni: [{ nome: 'Serie A Enilive', alias: ['Serie A'], sport: 'Calcio', prima: 9, dopo: 9 }] });
+  const { p } = await importaFogli(BACKUP);
+  assert.equal(p.regole.competizioni.filter((c) => c.nome === 'Serie A').length, 0);
+  const rinominata = p.regole.competizioni.filter((c) => c.nome === 'Serie A Enilive');
+  assert.equal(rinominata.length, 1);
+  assert.deepEqual([rinominata[0].prima, rinominata[0].dopo, rinominata[0].alias], [4, 2, ['Serie A']]);
+  DO.admin.regole = regolePrima;
+});
+
+test('ripristino: la storia dei contratti si confronta come coppie, non dall\'ordine delle chiavi', async () => {
+  const operatoriPrima = DO.admin.operatori;
+  const uguale = { id: 'luca', nome: 'Luca Bianchi', ruolo: 'TL', contratto: 'P.IVA', mansione: 'Regia', email: 'luca@x.it', telefono: '+39 1', onsite: 'TL', attivo: true,
+    contrattoDal: '2026-11-01', contrattiPrecedenti: [{ contratto: 'Coop', dal: '' }, { contratto: '', dal: '2026-12-15' }] };
+  DO.admin.operatori = [uguale];
+  const a = await importaFogli(BACKUP_STORIA());
+  assert.equal(a.p.esistenti.luca, undefined);
+  // cambia solo la data del contratto: compare nell'elenco
+  DO.admin.operatori = [Object.assign({}, uguale, { contrattoDal: '2026-10-01' })];
+  const b = await importaFogli(BACKUP_STORIA());
+  assert.ok(b.p.esistenti.luca);
+  assert.ok(b.anteprima.includes('data del contratto'), b.anteprima);
+  assert.ok(!b.anteprima.includes('Luca Bianchi</b>: contratto'), b.anteprima);
+  // cambia solo la storia
+  DO.admin.operatori = [Object.assign({}, uguale, { contrattiPrecedenti: [] })];
+  const c = await importaFogli(BACKUP_STORIA());
+  assert.ok(c.anteprima.includes('storia dei contratti'), c.anteprima);
+  DO.admin.operatori = operatoriPrima;
+});
+
+test('ripristino: un backup senza la storia lascia date, regole precedenti e alias come sono', async () => {
+  const operatoriPrima = DO.admin.operatori;
+  DO.admin.operatori = [{ id: 'luca', nome: 'Luca Bianchi', ruolo: 'TL', contratto: 'P.IVA', mansione: 'Regia', email: 'luca@x.it', telefono: '+39 1', onsite: 'TL', attivo: true,
+    contrattoDal: '2026-11-01', contrattiPrecedenti: [{ dal: '', contratto: 'Coop' }] }];
+  const { p } = await importaFogli(BACKUP);
+  assert.equal(p.regole.dal, DO.admin.regole.dal);
+  assert.deepEqual(p.regole.precedenti, DO.admin.regole.precedenti);
+  assert.deepEqual(p.regole.competizioni.find((c) => c.nome === 'Serie A').alias, ((DO.admin.regole.competizioni.find((c) => c.nome === 'Serie A') || {}).alias) || []);
+  assert.equal('contrattoDal' in (p.esistenti.luca || {}), false);
+  assert.equal('contrattiPrecedenti' in (p.esistenti.luca || {}), false);
+  DO.admin.operatori = operatoriPrima;
+});
+
 test('ripristino: operatori riconosciuti per ID, reperibilità e giorni di blocco', async () => {
   const operatoriPrima = DO.admin.operatori;
   DO.admin.operatori = [{ id: 'op7', nome: 'Mario Nuovo', ruolo: 'OP', contratto: 'P.IVA', attivo: true }];

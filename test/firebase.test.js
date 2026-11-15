@@ -115,6 +115,20 @@ test('importazione: gli operatori nuovi arrivano con i loro dati', async () => {
 });
 
 
+test('contratto con data: la storia «da sempre» (dal vuoto) arriva a Firestore da salvaOperatore e dal ripristino', async () => {
+  const scritte = [];
+  const { FB } = archivioNuovo({ email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' }, {
+    updateDoc: async (rif, campi) => scritte.push(campi),
+    writeBatch: () => ({ set: (rif, dati) => scritte.push(dati), commit: async () => {} }),
+  });
+  DO.avviaPagina('admin', () => {});
+  await FB.utente();
+  const storia = [{ dal: '', contratto: 'P.IVA' }, { dal: 'boh', contratto: 'Coop' }];
+  await FB.salvaOperatore({ id: 'o1', nome: 'Mario', contratto: 'Coop', contrattoDal: '2026-11-14', contrattiPrecedenti: storia });
+  await FB.importa({ operatori: [{ id: 'o1', nome: 'Mario', ruolo: 'OP', contratto: 'Coop', contrattoDal: '2026-11-14', contrattiPrecedenti: storia }], eventi: [], disponibilita: [], regole: null });
+  assert.deepEqual(scritte.map((c) => [c.contrattoDal, c.contrattiPrecedenti]), [['2026-11-14', [{ dal: '', contratto: 'P.IVA' }]], ['2026-11-14', [{ dal: '', contratto: 'P.IVA' }]]]);
+});
+
 test('regole per gli operatori: lettura non riuscita → errore (la pagina tiene il valore già noto), documento assente → predefinite', async () => {
   const { FB } = archivioNuovo({ email: 'sup@x.it', emailVerified: true, getIdToken: async () => 'g' }, {
     getDoc: async (rif) => { if (rif.path === 'impostazioni/operativo') throw Object.assign(new Error('offline'), { code: 'unavailable' }); return { exists: () => false, data: () => ({}) }; },

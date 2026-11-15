@@ -513,3 +513,54 @@ test('demo: le funzioni della piattaforma non scrivono nulla', async () => {
   assert.equal(await D.creaPartitaPiattaforma('p1', {}, 'nota'), false);
   assert.equal(await D.aggiornaDallaPiattaforma('e1', {}, {}, 'nota'), false);
 });
+
+// ---------------------------------------------------------------- operatori: contratto con data ed eliminazione
+const nuovoOperatoreProva = async (nome) => {
+  comeSupervisore();
+  const r = await D.salvaOperatore({ nome, mansione: 'Operatore camera', contratto: 'P.IVA' });
+  return r.operatore;
+};
+
+test('contratto con data: salvaOperatore conserva contrattoDal e contrattiPrecedenti', async () => {
+  const op = await nuovoOperatoreProva('Prova Contratto');
+  const precedenti = [{ dal: '2026-07-01', contratto: 'P.IVA' }];
+  await D.salvaOperatore(Object.assign({}, op, { contratto: 'Coop', contrattoDal: '2026-09-01', contrattiPrecedenti: precedenti }));
+  const riletto = (await statoDemo()).operatori.find((x) => x.id === op.id);
+  assert.equal(riletto.contratto, 'Coop');
+  assert.equal(riletto.contrattoDal, '2026-09-01');
+  assert.deepEqual(riletto.contrattiPrecedenti, precedenti);
+});
+
+test('eliminare un operatore con eventi è bloccato', async () => {
+  const op = await nuovoOperatoreProva('Prova Con Eventi');
+  await D.creaEventi([{ tipo: 'partita', competizione: 'Serie A', data: tra(20), titolo: 'Prova eliminazione', orario: '20:45', operatoreId: op.id }]);
+  await assert.rejects(D.eliminaOperatore(op.id), { message: DO.regole.testoNonEliminabile(op.nome) });
+  assert.ok((await statoDemo()).operatori.some((x) => x.id === op.id));
+});
+
+test('eliminare un operatore tra gli accettati di un deployment è bloccato', async () => {
+  const op = await nuovoOperatoreProva('Prova Con Deployment');
+  await abilita(op.id, 'OP');
+  const id = await creaOnsite({ posti: { TL: 0, OP: 1 }, destinatari: [op.id] });
+  const { codice } = await D.nuovoCodice(op.id);
+  await comeOperatore(codice.replace(/-/g, '').replace(/^(DEMO)/, '$1-'));
+  await D.rispondiOnsite(id, true);
+  assert.deepEqual((await scheda(id)).accettatiOP, [op.id]);
+  await assert.rejects(D.eliminaOperatore(op.id), { message: DO.regole.testoNonEliminabile(op.nome) });
+  assert.ok((await statoDemo()).operatori.some((x) => x.id === op.id));
+});
+
+test('eliminare un operatore senza eventi né deployment', async () => {
+  const op = await nuovoOperatoreProva('Prova Senza Eventi');
+  await D.eliminaOperatore(op.id);
+  assert.ok(!(await statoDemo()).operatori.some((x) => x.id === op.id));
+});
+
+test('contratto con data: la storia «da sempre» (dal vuoto) non si perde nella demo', async () => {
+  const op = await nuovoOperatoreProva('Prova Storia Da Sempre');
+  const r = DO.regole.nuovoContratto(op, 'Coop', '2026-11-14', '2026-11-15');
+  assert.deepEqual(r.campi.contrattiPrecedenti, [{ dal: '', contratto: 'P.IVA' }]);
+  await D.salvaOperatore(Object.assign({}, op, r.campi));
+  const riletto = (await statoDemo()).operatori.find((x) => x.id === op.id);
+  assert.deepEqual(riletto.contrattiPrecedenti, [{ dal: '', contratto: 'P.IVA' }]);
+});

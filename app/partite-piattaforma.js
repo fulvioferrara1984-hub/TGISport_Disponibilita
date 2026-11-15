@@ -28,7 +28,9 @@
     const voce = (Array.isArray(competizioniPiattaforma) ? competizioniPiattaforma : []).find((c) => c && norm(c.nome) === norm(nome));
     const cerca = norm((voce && testo(voce.nomeDisponibilita)) || nome);
     if (!cerca) return '';
-    const trovata = DO.regole.complete(regole).competizioni.find((c) => !c.mansione && norm(c.nome) === cerca);
+    const tutte = DO.regole.complete(regole).competizioni.filter((c) => !c.mansione);
+    // nome esatto; altrimenti un nome precedente (alias): la partita nasce sotto il nome in vigore
+    const trovata = tutte.find((c) => norm(c.nome) === cerca) || tutte.find((c) => (c.alias || []).some((x) => norm(x) === cerca));
     return trovata ? trovata.nome : '';
   }
 
@@ -151,7 +153,7 @@
       const nome = nomeCompetizione(e, competizioniPiattaforma, regole);
       if (stesse.length) return az.dubbi.push({ evento: e, candidate: stesse });
       if (nome) {
-        const candidate = libere.filter((p) => p.data === e.data && norm(p.competizione) === norm(nome)
+        const candidate = libere.filter((p) => p.data === e.data && norm((R.competizione(p.competizione, regole) || { nome: p.competizione }).nome) === norm(nome)
           && !noti.some((o) => o.id !== e.id && o.data === e.data && squadre(o) && squadre(o) === norm(p.titolo)));
         if (candidate.length) return az.dubbi.push({ evento: e, candidate });
       }

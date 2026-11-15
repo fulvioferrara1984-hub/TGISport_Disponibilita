@@ -757,9 +757,16 @@
     $('op-onsite').value = o ? o.onsite || '' : '';
     $('op-attivo').checked = o ? o.attivo : true;
     $('op-attivo-riga').hidden = !o;
+    $('op-dal').value = DO.oggi();
+    mostraDal();
     $('op-errore').hidden = true;
     $('dlg-operatore').showModal();
   }
+  // la data di un nuovo contratto si chiede solo a chi ne ha già uno e lo cambia
+  function mostraDal() {
+    $('op-dal-riga').hidden = !(inModifica && inModifica.contratto && $('op-contratto').value !== inModifica.contratto);
+  }
+  $('op-contratto').addEventListener('change', mostraDal);
   $('btn-nuovo-op').addEventListener('click', () => apriOperatore(null));
   document.querySelectorAll('[data-chiudi]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
 
@@ -776,13 +783,19 @@
     const omonimo = operatori.find((o) => chiave(o.nome) === chiave(nome) && (!inModifica || o.id !== inModifica.id));
     if (omonimo && !confirm('Esiste già un operatore di nome ' + omonimo.nome + (omonimo.mansione ? ' (' + omonimo.mansione + ')' : '') + '.\n'
       + 'Due nomi uguali si confondono nei menu e nell\'importazione: meglio aggiungere un\'iniziale. Salvare comunque?')) return;
+    let contratto = { campi: {} };
+    if (inModifica) {
+      contratto = DO.regole.nuovoContratto(inModifica, $('op-contratto').value, $('op-dal').value, DO.oggi());
+      if (contratto.errore) { $('op-errore').textContent = contratto.errore; $('op-errore').hidden = false; return; }
+    }
     bottone.disabled = true;
     try {
-      const r = await DO.dati.salvaOperatore({
+      const r = await DO.dati.salvaOperatore(Object.assign({
         id: inModifica && inModifica.id, nome: $('op-nome').value, mansione: $('op-mansione').value,
         email: $('op-email').value, telefono: $('op-telefono').value, attivo: $('op-attivo').checked,
         contratto: $('op-contratto').value, ruolo: $('op-ruolo').value, onsite: $('op-onsite').value,
-      });
+        contrattoDal: inModifica ? inModifica.contrattoDal : '', contrattiPrecedenti: inModifica ? inModifica.contrattiPrecedenti : [],
+      }, contratto.campi));
       $('dlg-operatore').close();
       if (r.codice) mostraCodice(r.operatore, r.codice);
       else DO.avviso('Operatore salvato.', 'ok');

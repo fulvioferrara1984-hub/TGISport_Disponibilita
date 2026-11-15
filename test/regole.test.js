@@ -431,3 +431,141 @@ test('evento già iniziato: partita notturna con il ritrovo la sera prima', () =
   assert.equal(R.giaIniziato(ev, reg, '2026-10-12', '00:30'), true);
   assert.equal(R.giaIniziato(ev, reg, '2026-10-10', '23:00'), false);
 });
+
+const DATATE = {
+  dal: '2026-11-01',
+  tariffe: { 'P.IVA': { diurno: 150, notturno: 220, maggiorato: 220 } },
+  competizioni: [
+    { nome: 'UEFA Champions League', alias: ['Champions League'], compenso: 'diurno', prima: 4, dopo: 2 },
+    { nome: 'Serie A', compenso: 'diurno', prima: 1, dopo: 2 },
+    { nome: 'Coppa', compenso: 'notturno', prima: 4, dopo: 2 },   // aggiunta dopo: non c'è nella versione precedente
+  ],
+  precedenti: [{ dal: '', tariffe: { 'P.IVA': { diurno: 140, notturno: 210, maggiorato: 210 }, Coop: { diurno: 175, notturno: 262.5, maggiorato: 262.5 } },
+    notteDa: '22:00', notteA: '06:00', anticipoOre: 4,
+    competizioni: [{ nome: 'Champions League', alias: [], compenso: 'dimezzato', prima: 4 }, { nome: 'Serie A', alias: [], compenso: 'diurno', prima: 4 }] }],
+};
+const P = { contratto: 'P.IVA' };
+const partita = (competizione, data, orario = '20:45') => ({ tipo: 'partita', competizione, data, orario, convocazione: '' });
+const g = (e, op = P) => { const x = R.gettone(e, op, DATATE); return [x.tipo, x.importo]; };
+
+test('regole datate: il giorno prima del cambio la versione precedente, dal giorno del cambio quella in vigore', () => {
+  assert.deepEqual(g(partita('Serie A', '2026-10-31')), ['diurno', 140]);
+  assert.deepEqual(g(partita('Serie A', '2026-11-01')), ['diurno', 150]);
+  assert.deepEqual(g(partita('Serie A', '')), ['diurno', 150]);   // data vuota: regole in vigore
+});
+test('regole datate: le ore di ritrovo cambiano diurno e notturno solo dal cambio', () => {
+  assert.deepEqual(g(partita('Serie A', '2026-10-31', '23:30')), ['diurno', 140]);    // ritrovo 19:30
+  assert.deepEqual(g(partita('Serie A', '2026-11-01', '23:30')), ['notturno', 220]);  // ritrovo 22:30
+});
+test('rinomina: alias e versioni', () => {
+  assert.deepEqual(g(partita('Champions League', '2026-10-20')), ['dimezzato', 70]);
+  assert.deepEqual(g(partita('Champions League', '2026-11-10')), ['diurno', 150]);
+  assert.deepEqual(g(partita('UEFA Champions League', '2026-10-20')), ['dimezzato', 70]);
+});
+test('competizione aggiunta dopo: vale dall\'inizio della versione in vigore', () => {
+  assert.deepEqual(g(partita('Coppa', '2026-10-31')), ['diurno', 140]);   // ritrovo 16:45 con l'anticipo generale
+  assert.deepEqual(g(partita('Coppa', '2026-11-01')), ['notturno', 220]);
+});
+test('contratto datato', () => {
+  const op = { contratto: 'Coop', contrattoDal: '2026-11-01', contrattiPrecedenti: [{ dal: '', contratto: 'P.IVA' }] };
+  assert.deepEqual([R.contrattoDel(op, '2026-10-31'), R.contrattoDel(op, '2026-11-01'), R.contrattoDel(op, ''), R.contrattoDel({ contratto: 'Coop' }, '2020-01-01'), R.contrattoDel(undefined, '2026-11-01')],
+    ['P.IVA', 'Coop', 'Coop', 'Coop', '']);
+  assert.deepEqual(g(partita('Serie A', '2026-10-31'), op), ['diurno', 140]);
+  assert.deepEqual(g(partita('Serie A', '2026-11-05'), op), ['diurno', 175]);
+});
+test('complete conserva dal, precedenti e alias (scheda vecchia che salva)', () => {
+  const c = R.complete(DATATE);
+  assert.equal(c.dal, '2026-11-01');
+  assert.equal(c.precedenti.length, 1);
+  assert.deepEqual(c.competizioni.find((x) => x.nome === 'UEFA Champions League').alias, ['Champions League']);
+  assert.deepEqual(c.competizioni.find((x) => x.nome === 'Serie A').alias, []);
+});
+test('regole senza data: tutto come prima', () => {
+  assert.deepEqual(R.regoleDel(R.complete({}), '2020-01-01').tariffe, R.complete({}).tariffe);
+});
+
+// ---- salvataggi con data (funzioni pure) ----
+const OGGI = '2026-11-15';
+const att = R.complete(DATATE);
+test('cambiaCompenso', () => {
+  assert.equal(R.cambiaCompenso(att, Object.assign({}, att, { tariffaOnsite: 200 })), false);
+  assert.equal(R.cambiaCompenso(att, Object.assign({}, att, { tariffe: { 'P.IVA': { diurno: 160, notturno: 220, maggiorato: 220 }, Coop: att.tariffe.Coop } })), true);
+  const comp = (f) => Object.assign({}, att, { competizioni: f(att.competizioni.map((c) => Object.assign({}, c))) });
+  assert.equal(R.cambiaCompenso(att, comp((l) => { l[2].colore = '#000000'; return l; })), false);
+  assert.equal(R.cambiaCompenso(att, comp((l) => { l[3].prima = 2; return l; })), true);
+  assert.equal(R.cambiaCompenso(att, comp((l) => l.filter((c) => c.nome !== 'Serie A'))), true);
+  assert.equal(R.cambiaCompenso(att, comp((l) => l.concat([{ nome: 'Coppa Italia', compenso: 'notturno', prima: 4, dopo: 2 }]))), false);
+  assert.equal(R.cambiaCompenso(att, comp((l) => { l[2] = Object.assign({}, l[2], { nome: 'Champions', alias: ['Champions League', 'UEFA Champions League'] }); return l; })), false);
+});
+test('limitiDal e nuoveRegole', () => {
+  assert.deepEqual(R.limitiDal(att, OGGI), { min: '2026-11-01', max: OGGI });
+  assert.deepEqual(R.limitiDal(R.complete({}), OGGI), { min: '', max: OGGI });
+  const tariffe = { 'P.IVA': { diurno: 160, notturno: 230, maggiorato: 230 }, Coop: att.tariffe.Coop };
+  const n = R.nuoveRegole(att, { tariffe }, '2026-11-10', OGGI).regole;
+  assert.deepEqual([n.dal, n.precedenti.length, n.precedenti[1].dal, n.precedenti[1].tariffe['P.IVA'].diurno, n.tariffe['P.IVA'].diurno], ['2026-11-10', 2, '2026-11-01', 150, 160]);
+  assert.deepEqual(Object.keys(n.precedenti[1]).sort(), ['anticipoOre', 'competizioni', 'dal', 'notteA', 'notteDa', 'tariffe']);
+  assert.deepEqual(Object.keys(n.precedenti[1].competizioni[0]).sort(), ['alias', 'compenso', 'nome', 'prima']);
+  const c = R.nuoveRegole(att, { tariffe }, '2026-11-01', OGGI).regole;       // correzione
+  assert.deepEqual([c.dal, c.precedenti.length, c.tariffe['P.IVA'].diurno], ['2026-11-01', 1, 160]);
+  const s = R.nuoveRegole(att, { tariffaOnsite: 200 }, '', OGGI).regole;      // nessun cambio di compenso
+  assert.deepEqual([s.dal, s.precedenti.length, s.tariffaOnsite], ['2026-11-01', 1, 200]);
+  assert.deepEqual(R.nuoveRegole(att, { tariffe }, '2026-11-16', OGGI), { errore: 'Scegli un giorno dal 01/11/2026 a oggi.' });
+  assert.deepEqual(R.nuoveRegole(att, { tariffe }, '2026-10-20', OGGI), { errore: 'Scegli un giorno dal 01/11/2026 a oggi.' });
+  assert.deepEqual(R.nuoveRegole(R.complete({}), { tariffe }, '2026-11-16', OGGI), { errore: 'Scegli un giorno fino a oggi.' });
+  assert.deepEqual(R.nuoveRegole(att, { tariffe }, '', OGGI), { errore: 'Scegli da quando valgono le regole.' });
+});
+test('periodiVersioni', () => {
+  assert.deepEqual(R.periodiVersioni(att).map((p) => [p.dal, p.al]), [['', '2026-10-31'], ['2026-11-01', '']]);
+});
+test('alias', () => {
+  assert.deepEqual(R.aliasDopoRinomina('Champions League', 'UEFA Champions League', []), ['Champions League']);
+  assert.deepEqual(R.aliasDopoRinomina('UEFA Champions League', 'Champions League', ['Champions League']), ['UEFA Champions League']);
+  assert.deepEqual(R.aliasDopoRinomina('', 'Coppa', []), []);
+  assert.equal(R.aliasInConflitto([{ nome: 'A', alias: ['B'] }, { nome: 'B', alias: [] }]), 'B è già il nome di un\'altra competizione.');
+  assert.equal(R.aliasInConflitto([{ nome: 'A', alias: ['X'] }, { nome: 'B', alias: ['X'] }]), 'X è già il nome di un\'altra competizione.');
+  assert.equal(R.aliasInConflitto([{ nome: 'A', alias: ['X'] }, { nome: 'B', alias: [] }]), null);
+});
+test('nuovoContratto', () => {
+  const op = { contratto: 'P.IVA' };
+  assert.deepEqual(R.nuovoContratto(op, 'P.IVA', '', OGGI), { campi: {} });
+  assert.deepEqual(R.nuovoContratto({ contratto: '' }, 'Coop', '', OGGI), { campi: { contratto: 'Coop' } });   // era da indicare: vale da sempre
+  assert.deepEqual(R.nuovoContratto(op, 'Coop', '', OGGI), { errore: 'Scegli da quando vale il nuovo contratto.' });
+  assert.deepEqual(R.nuovoContratto(op, 'Coop', '2026-11-10', OGGI), { campi: { contratto: 'Coop', contrattoDal: '2026-11-10', contrattiPrecedenti: [{ dal: '', contratto: 'P.IVA' }] } });
+  const dopo = { contratto: 'Coop', contrattoDal: '2026-11-10', contrattiPrecedenti: [{ dal: '', contratto: 'P.IVA' }] };
+  assert.deepEqual(R.nuovoContratto(dopo, 'P.IVA', '2026-11-10', OGGI), { campi: { contratto: 'P.IVA' } });    // correzione
+  assert.deepEqual(R.nuovoContratto(dopo, 'P.IVA', '2026-11-09', OGGI), { errore: 'Scegli un giorno dal 10/11/2026 a oggi.' });
+});
+test('cambiNelPeriodo e datePerContratto', () => {
+  const op = { nome: 'Mario Rossi', contratto: 'Coop', contrattoDal: '2026-11-10', contrattiPrecedenti: [{ dal: '', contratto: 'P.IVA' }] };
+  assert.deepEqual(R.cambiNelPeriodo(att, [op], '2026-11-01', '2026-11-30'), ['Mario Rossi: Coop dal 10/11']);
+  assert.deepEqual(R.cambiNelPeriodo(att, [op], '2026-10-01', '2026-11-30'), ['Regole dei compensi cambiate dal 01/11', 'Mario Rossi: Coop dal 10/11']);
+  assert.deepEqual(R.datePerContratto(['2026-11-09', '2026-11-10', '2026-11-11'], op),
+    [{ contratto: 'P.IVA', date: ['2026-11-09'] }, { contratto: 'Coop', date: ['2026-11-10', '2026-11-11'] }]);
+  assert.equal(R.testoNonEliminabile('Mario Rossi'), 'Mario Rossi ha eventi o deployment: eliminarlo azzererebbe i suoi compensi nel Riepilogo. Disattivalo da Modifica → Attivo.');
+});
+
+test('complete: regole senza date di validità valgono da sempre e senza precedenti', () => {
+  const c = R.complete({ tariffe: { 'P.IVA': { diurno: 150 } } });
+  assert.deepEqual([c.dal, c.precedenti], ['', []]);
+  assert.deepEqual(R.periodiVersioni({}).map((p) => [p.dal, p.al]), [['', '']]);
+});
+
+test('periodiVersioni: una versione precedente parziale esce con tutti i campi di compenso', () => {
+  const parziale = { dal: '', tariffe: { 'P.IVA': { diurno: 130 } }, competizioni: [{ nome: 'Serie A', compenso: 'maggiorato' }] };
+  const p = R.periodiVersioni({ dal: '2026-11-01', precedenti: [parziale] })[0].versione;
+  assert.equal(p.tariffe['P.IVA'].diurno, 130);
+  assert.equal(typeof p.tariffe['P.IVA'].notturno, 'number');
+  assert.equal(typeof p.tariffe.Coop.diurno, 'number');
+  assert.equal(typeof p.tariffe.Coop.maggiorato, 'number');
+  assert.deepEqual([p.notteDa, p.notteA, p.anticipoOre], ['22:00', '06:00', 4]);
+  const c = p.competizioni.find((x) => x.nome === 'Serie A');
+  assert.deepEqual([c.compenso, typeof c.prima, Array.isArray(c.alias)], ['maggiorato', 'number', true]);
+});
+
+test('storiaContrattiPulita: tiene «da sempre» (dal vuoto) e le date, scarta il resto', () => {
+  assert.deepEqual(R.storiaContrattiPulita([{ dal: '', contratto: 'P.IVA' }, { dal: '2026-09-01', contratto: 'Coop', extra: 1 }]),
+    [{ dal: '', contratto: 'P.IVA' }, { dal: '2026-09-01', contratto: 'Coop' }]);
+  assert.deepEqual(R.storiaContrattiPulita([null, { dal: '01/09/2026', contratto: 'Coop' }, { dal: '2026-09-01', contratto: 'Boh' }, { dal: 5, contratto: 'Coop' }, { contratto: 'Coop' }]), []);
+  assert.deepEqual(R.storiaContrattiPulita(undefined), []);
+  assert.deepEqual([R.giornoContratto('2026-09-01'), R.giornoContratto('x'), R.giornoContratto(undefined)], ['2026-09-01', '', '']);
+});

@@ -64,7 +64,8 @@
   window.addEventListener('storage', (e) => { if (e.key === CHIAVE) { carica(); ascoltatori.forEach((cb) => cb()); } });
 
   const pubblico = (o) => ({ id: o.id, nome: o.nome, mansione: o.mansione, email: o.email, telefono: o.telefono, attivo: o.attivo, ultimoInvio: o.ultimoInvio,
-    contratto: o.contratto || '', ruolo: o.ruolo || 'OP', onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '' });
+    contratto: o.contratto || '', ruolo: o.ruolo || 'OP', onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
+    contrattoDal: o.contrattoDal || '', contrattiPrecedenti: o.contrattiPrecedenti || [] });
   const norm = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const nuovoCodiceDemo = () => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 8; i++) c += a[Math.floor(Math.random() * 32)]; return c; };
   const formato = (c) => c.slice(0, 4) + '-' + c.slice(4);
@@ -196,7 +197,8 @@
   async function salvaOperatore(o) {
     await pausa(150);
     const campi = { nome: String(o.nome || '').trim(), mansione: (o.mansione || '').trim(), email: (o.email || '').trim(), telefono: (o.telefono || '').trim(), attivo: o.attivo !== false,
-      contratto: o.contratto || '', ruolo: ['TL', 'SUP'].includes(o.ruolo) ? o.ruolo : 'OP', onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '' };
+      contratto: o.contratto || '', ruolo: ['TL', 'SUP'].includes(o.ruolo) ? o.ruolo : 'OP', onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
+      contrattoDal: DO.regole.giornoContratto(o.contrattoDal), contrattiPrecedenti: DO.regole.storiaContrattiPulita(o.contrattiPrecedenti) };
     if (!campi.nome) throw new Error('Il nome è obbligatorio.');
     if (o.id) {
       const op = dati.operatori.find((x) => x.id === o.id);
@@ -217,7 +219,12 @@
     return { codice: formato(op.codice) };
   }
 
+  // chi compare in un evento o tra gli accettati di un deployment non si elimina: i suoi compensi sparirebbero dal Riepilogo
   async function eliminaOperatore(id) {
+    const op = dati.operatori.find((x) => x.id === id);
+    if (op && (dati.eventi.some((e) => e.operatoreId === id) || dati.onsite.some((d) => (d.accettatiTL || []).includes(id) || (d.accettatiOP || []).includes(id)))) {
+      throw new Error(DO.regole.testoNonEliminabile(op.nome));
+    }
     dati.operatori = dati.operatori.filter((x) => x.id !== id);
     delete dati.disponibilita[id];
     salva();
