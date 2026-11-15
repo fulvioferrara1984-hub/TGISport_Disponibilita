@@ -197,6 +197,19 @@ test('giro: partita con le squadre di un altro evento del giorno non è candidat
   assert.equal(a.crea[0].evento.id, 'p1');
 });
 
+test('giro: competizione rinominata, il nome vecchio crea la partita sotto il nome in vigore', () => {
+  const rinominate = R.complete({ competizioni: [{ nome: 'Serie A Enilive', alias: ['Serie A'], sport: 'Calcio', prima: 4, dopo: 2 }] });
+  const a = giro({ progetti: [ev()], regole: rinominate, competizioniPiattaforma: [{ nome: 'SERIE A', nomeDisponibilita: 'Serie A' }] });
+  assert.equal(a.sconosciute.length, 0);
+  assert.equal(a.crea.length, 1);
+  assert.equal(a.crea[0].campi.competizione, 'Serie A Enilive');
+  assert.equal(a.crea[0].campi.progettoId, 'p1');
+  assert.equal(P.nomeCompetizione(ev(), [], rinominate), 'Serie A Enilive');
+  // una partita libera ancora col nome vecchio, di altre squadre, resta candidata dubbia
+  const b = giro({ progetti: [ev()], regole: rinominate, partite: [lib({ competizione: 'Serie A', titolo: 'Roma-Lazio' })] });
+  assert.equal(b.dubbi.length, 1);
+});
+
 test('giro: competizione sconosciuta', () => {
   const a = giro({ progetti: [ev({ competizione: 'UEFA YOUTH LEAGUE' })] });
   assert.equal(a.sconosciute[0].evento.id, 'p1');
