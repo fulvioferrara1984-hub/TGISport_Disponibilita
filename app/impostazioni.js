@@ -368,8 +368,13 @@
     const tariffe = {};
     ['P.IVA', 'Coop'].forEach((c) => ['diurno', 'notturno', 'maggiorato'].forEach((t) => { tariffe[('netto ' + c + ' ' + t).toLowerCase()] = [c, t]; }));
     const COMPENSI = { diurno: 'diurno', notturno: 'notturno', maggiorato: 'maggiorato', dimezzato: 'dimezzato' };
+    // «sempre» e le date che non si leggono valgono come vuote
+    const dataCella = (v) => dataExcel(v);
+    const conAlias = testo((imp[0] || [])[14]) === 'Nomi precedenti';
+    const elencoAlias = (v) => [...new Set(testo(v).split(',').map((x) => x.trim()).filter(Boolean))];
     imp.slice(1).forEach((r) => {
       const voce = testo(r[0]).toLowerCase();
+      if (voce === 'regole in vigore dal') regole.dal = dataCella(r[1]);
       if (tariffe[voce] && typeof r[1] === 'number') regole.tariffe[tariffe[voce][0]][tariffe[voce][1]] = r[1];
       if (voce.startsWith('tariffa on-site') && typeof r[1] === 'number') regole.tariffaOnsite = r[1];
       if (voce === 'notturno dalle' && oraExcel(r[1])) regole.notteDa = oraExcel(r[1]);
@@ -382,21 +387,50 @@
       if (!nome) return;
       const compenso = COMPENSI[testo(r[9]).toLowerCase()] || 'diurno';
       const campi = Object.assign({ nome, compenso, prima: numero(r[10]), dopo: numero(r[11]), colore: testo(r[12]) },
-        testo(r[13]) ? { sport: testo(r[13]) } : {});
+        testo(r[13]) ? { sport: testo(r[13]) } : {}, conAlias ? { alias: elencoAlias(r[14]) } : {});
       const i = regole.competizioni.findIndex((c) => c.nome === nome);
       if (i >= 0) regole.competizioni[i] = Object.assign({}, regole.competizioni[i], campi);
       else regole.competizioni.push(Object.assign({ sport: '' }, campi));
     });
+    // regole precedenti (fogli dopo Impostazioni): senza il foglio restano quelle attuali
+    if (wb.Sheets['Regole precedenti']) {
+      const vers = foglio('Regole precedenti'), intest = (vers[0] || []).map((x) => testo(x).toLowerCase());
+      const col = (nome) => intest.indexOf(nome.toLowerCase());
+      const cella = (x, nome) => x[col(nome)];
+      const compPrec = {};
+      (wb.Sheets['Competizioni precedenti'] ? foglio('Competizioni precedenti') : []).slice(1).forEach((x) => {
+        const nome = testo(x[1]);
+        if (!nome) return;
+        (compPrec[dataCella(x[0])] = compPrec[dataCella(x[0])] || []).push({ nome, alias: elencoAlias(x[2]), compenso: COMPENSI[testo(x[3]).toLowerCase()] || 'diurno', prima: numero(x[4]) });
+      });
+      const num = (v, d) => (numero(v) === null ? d : numero(v));
+      regole.precedenti = vers.slice(1).filter((x) => x.some((v) => testo(v))).map((x) => {
+        const dal = dataCella(x[0]), t = (c, k) => num(cella(x, 'Netto ' + c + ' ' + k), regole.tariffe[c][k]);
+        const anticipo = num(cella(x, 'Anticipo (ore)'), regole.anticipoOre);
+        return { dal, tariffe: { 'P.IVA': { diurno: t('P.IVA', 'diurno'), notturno: t('P.IVA', 'notturno'), maggiorato: t('P.IVA', 'maggiorato') },
+          Coop: { diurno: t('Coop', 'diurno'), notturno: t('Coop', 'notturno'), maggiorato: t('Coop', 'maggiorato') } },
+        notteDa: oraExcel(cella(x, 'Notturno dalle')) || regole.notteDa, notteA: oraExcel(cella(x, 'Notturno alle')) || regole.notteA, anticipoOre: anticipo,
+        competizioni: (compPrec[dal] || []).map((c) => Object.assign(c, { prima: c.prima === null ? anticipo : c.prima })) };
+      });
+    }
     const r = R.complete(regole);
 
     // operatori: dati completi dal foglio Operatori, per ID (due omonimi restano distinti) o, nei backup vecchi, per nome
     const RUOLI = { 'Remote TL': 'TL', 'Remote Support': 'SUP' };
     const elencoOp = [];
-    (wb.Sheets.Operatori ? foglio('Operatori') : []).slice(1).forEach((x) => {
+    const fogliOp = wb.Sheets.Operatori ? foglio('Operatori') : [];
+    // contratto con data e storia: solo nei backup che hanno le due colonne
+    const conStoriaContratti = testo((fogliOp[0] || [])[9]) === 'Contratto dal' && testo((fogliOp[0] || [])[10]) === 'Contratti precedenti';
+    const contrattiDa = (v) => testo(v).split(';').map((voce) => {
+      const m = /^(P\.IVA|Coop|da indicare) dal (sempre|(\d{2})\/(\d{2})\/(\d{4}))$/.exec(voce.trim());
+      return m ? { dal: m[3] ? m[5] + '-' + m[4] + '-' + m[3] : '', contratto: m[1] === 'da indicare' ? '' : m[1] } : null;
+    }).filter(Boolean);
+    fogliOp.slice(1).forEach((x) => {
       const nome = testo(x[0]);
       if (!nome) return;
-      elencoOp.push({ mansione: testo(x[1]), ruolo: RUOLI[testo(x[2])] || 'OP', contratto: ['P.IVA', 'Coop'].includes(testo(x[3])) ? testo(x[3]) : '',
-        email: testo(x[4]), telefono: testo(x[5]), onsite: ['TL', 'OP'].includes(testo(x[6])) ? testo(x[6]) : '', attivo: testo(x[7]).toUpperCase() !== 'NO', nome, id: idValido(x[8]) });
+      elencoOp.push(Object.assign({ mansione: testo(x[1]), ruolo: RUOLI[testo(x[2])] || 'OP', contratto: ['P.IVA', 'Coop'].includes(testo(x[3])) ? testo(x[3]) : '',
+        email: testo(x[4]), telefono: testo(x[5]), onsite: ['TL', 'OP'].includes(testo(x[6])) ? testo(x[6]) : '', attivo: testo(x[7]).toUpperCase() !== 'NO', nome, id: idValido(x[8]) },
+        conStoriaContratti ? { contrattoDal: dataCella(x[9]), contrattiPrecedenti: contrattiDa(x[10]) } : {}));
     });
     const datiDi = (k, idOp) => (idOp && elencoOp.find((o) => o.id === idOp)) || elencoOp.find((o) => !o.id && chiave(o.nome) === k)
       || (!idOp && elencoOp.find((o) => chiave(o.nome) === k)) || {};
@@ -422,7 +456,14 @@
       if (e) {
         // degli operatori presenti cambia solo ciò che è diverso, e mai con un campo vuoto (il backup non cancella dati più recenti)
         const diversi = {};
+        // contratto, data e storia contano insieme: se uno cambia vanno tutti e tre (come per l'attivo, un contratto vuoto non cancella)
+        const storia = (o) => JSON.stringify(o.contrattiPrecedenti || []);
+        if (campi.contratto && 'contrattoDal' in campi
+          && (campi.contratto !== (e.contratto || '') || campi.contrattoDal !== (e.contrattoDal || '') || storia(campi) !== storia(e))) {
+          Object.assign(diversi, { contratto: campi.contratto, contrattoDal: campi.contrattoDal, contrattiPrecedenti: campi.contrattiPrecedenti });
+        }
         Object.keys(campi).forEach((c) => {
+          if ('contrattoDal' in campi && ['contratto', 'contrattoDal', 'contrattiPrecedenti'].includes(c)) return;
           if (c === 'attivo' ? campi.attivo !== (e.attivo !== false) : campi[c] !== '' && campi[c] !== (e[c] || '')) diversi[c] = campi[c];
         });
         if (Object.keys(diversi).length) esistenti[e.id] = diversi;

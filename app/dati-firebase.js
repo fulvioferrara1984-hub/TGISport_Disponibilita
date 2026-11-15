@@ -598,6 +598,9 @@
       p.operatori.forEach((o) => scritture.push(['set', F.doc(db, 'operatori', o.id), {
         nome: o.nome, mansione: o.mansione || '', email: o.email || '', telefono: o.telefono || '', attivo: o.attivo !== false, contratto: o.contratto, ruolo: o.ruolo,
         onsite: ['TL', 'OP'].includes(o.onsite) ? o.onsite : '',
+        contrattoDal: /^\d{4}-\d{2}-\d{2}$/.test(String(o.contrattoDal || '')) ? o.contrattoDal : '',
+        contrattiPrecedenti: (Array.isArray(o.contrattiPrecedenti) ? o.contrattiPrecedenti : [])
+          .filter((c) => c && /^\d{4}-\d{2}-\d{2}$/.test(String(c.dal || '')) && ['P.IVA', 'Coop'].includes(c.contratto)).map((c) => ({ dal: c.dal, contratto: c.contratto })),
         uid: '', ultimoInvio: '', creato: new Date().toISOString(),
       }]));
       p.eventi.forEach((e) => scritture.push(['set', F.doc(db, 'eventi', e.id), Object.assign(pulisciEvento(e), {
