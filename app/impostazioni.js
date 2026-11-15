@@ -17,12 +17,70 @@
     if (document.activeElement !== $('reg-tariffa-onsite')) $('reg-tariffa-onsite').value = r.tariffaOnsite;
   }
 
-  async function salva(modifiche, messaggio) {
-    const r = Object.assign({}, A.regole, modifiche);
+  const giornoIt = (iso) => iso.slice(8) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+
+  // Salvataggio: se cambia un compenso chiede da quando valgono le regole, altrimenti salva subito
+  let inAttesa = null;   // { modifiche, messaggio } in attesa della data nel dialog
+  async function scrivi(regole, messaggio) {
     try {
-      await DO.dati.salvaRegole(JSON.parse(JSON.stringify(r)));
+      await DO.dati.salvaRegole(JSON.parse(JSON.stringify(regole)));
       DO.avviso(messaggio, 'ok');
-    } catch (e) { DO.avviso(e.message, 'errore'); }
+      return true;
+    } catch (e) { DO.avviso(e.message, 'errore'); return false; }
+  }
+  function testoDal() {
+    const dal = A.regole.dal;
+    $('dal-testo').textContent = dal && $('dal-giorno').value === dal ? 'Correggi le regole in vigore dal ' + giornoIt(dal) + '.' : '';
+  }
+  async function salva(modifiche, messaggio, dopo) {
+    if (!R.cambiaCompenso(A.regole, Object.assign({}, A.regole, modifiche))) {
+      const { regole, errore } = R.nuoveRegole(A.regole, modifiche, '', DO.oggi());
+      if (errore) DO.avviso(errore, 'errore'); else if (await scrivi(regole, messaggio) && dopo) dopo();
+      return;
+    }
+    const oggi = DO.oggi(), { min, max } = R.limitiDal(A.regole, oggi);
+    inAttesa = { modifiche, messaggio, dopo };
+    $('dal-giorno').min = min; $('dal-giorno').max = max; $('dal-giorno').value = oggi;
+    $('dal-errore').hidden = true;
+    testoDal();
+    $('dlg-dal').showModal();
+  }
+  $('dal-giorno').addEventListener('input', testoDal);
+  $('dal-annulla').addEventListener('click', () => { inAttesa = null; $('dlg-dal').close(); });
+  $('form-dal').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!inAttesa) return;
+    const { regole, errore } = R.nuoveRegole(A.regole, inAttesa.modifiche, $('dal-giorno').value, DO.oggi());
+    if (errore) { $('dal-errore').textContent = errore; $('dal-errore').hidden = false; return; }
+    $('dal-salva').disabled = true;
+    const { messaggio, dopo } = inAttesa;
+    const ok = await scrivi(regole, messaggio);
+    $('dal-salva').disabled = false;
+    if (ok) { inAttesa = null; $('dlg-dal').close(); if (dopo) dopo(); }
+  });
+
+  // regole precedenti: una riga per versione, dalla più recente
+  function disegnaPrecedenti() {
+    const r = A.regole, periodi = R.periodiVersioni(r).reverse().slice(1);   // senza quella in vigore
+    $('reg-precedenti').hidden = !periodi.length;
+    if (!periodi.length) return;
+    const euro = (n) => String(n).replace('.', ',') + ' €';
+    const attuali = {}; r.competizioni.forEach((c) => { attuali[c.nome] = c; });
+    const comp = (v) => v.competizioni.filter((c) => {
+      const a = attuali[c.nome];
+      return !a || a.compenso !== c.compenso || a.prima !== c.prima;
+    });
+    $('reg-precedenti-elenco').innerHTML = periodi.map((p) => {
+      const v = p.versione, t = v.tariffe;
+      const diverse = comp(v);
+      return '<li><b>dal ' + (p.dal ? giornoIt(p.dal) : 'sempre') + ' al ' + giornoIt(p.al) + '</b>'
+        + '<span>P.IVA ' + euro(t['P.IVA'].diurno) + ' / ' + euro(t['P.IVA'].notturno) + ' / ' + euro(t['P.IVA'].maggiorato)
+        + ' · Coop ' + euro(t.Coop.diurno) + ' / ' + euro(t.Coop.notturno) + ' / ' + euro(t.Coop.maggiorato)
+        + ' (diurno / notturno / maggiorato)</span>'
+        + '<span>Notte dalle ' + DO.esc(v.notteDa) + ' alle ' + DO.esc(v.notteA) + ' · anticipo ' + v.anticipoOre + ' h</span>'
+        + (diverse.length ? '<small>' + diverse.map((c) => DO.esc(c.nome) + ': ' + DO.esc(R.TIPI[c.compenso || 'diurno'] || c.compenso) + (c.prima === null || c.prima === undefined ? '' : ', ' + c.prima + ' h prima')).join(' · ') + '</small>' : '')
+        + '</li>';
+    }).join('');
   }
 
   $('form-regole').addEventListener('submit', (e) => {
@@ -44,7 +102,7 @@
   // ---------- competizioni e sport ----------
   let bozzaComp = null;
   function disegnaCompetizioni(forza) {
-    if (!bozzaComp || forza) bozzaComp = A.regole.competizioni.map((c) => Object.assign({}, c));
+    if (!bozzaComp || forza) bozzaComp = A.regole.competizioni.map((c) => Object.assign({}, c, { origine: c.nome }));
     const sport = A.regole.sport;
     const valore = (v) => (v === null || v === undefined ? '' : v);
     $('reg-competizioni').innerHTML = bozzaComp.map((c, i) => '<li data-i="' + i + '"' + (c.mansione ? ' class="mansione"' : '') + '>'
@@ -88,7 +146,7 @@
     disegnaCompetizioni();
   });
   $('reg-aggiungi-comp').addEventListener('click', () => {
-    bozzaComp.push({ nome: '', sport: '', compenso: 'diurno', prima: 4, dopo: 2 });
+    bozzaComp.push({ origine: '', nome: '', sport: '', compenso: 'diurno', prima: 4, dopo: 2 });
     disegnaCompetizioni();
     $('reg-competizioni').lastElementChild.querySelector('input').focus();
   });
@@ -106,11 +164,12 @@
       return;
     }
     const competizioni = righe.map((c) => (c.mansione
-      ? { nome: c.nome, mansione: true, sport: '', compenso: c.compenso || 'diurno', prima: 0, dopo: ore(c.dopo, 0.5, 16), colore: c.colore || '' }
-      : { nome: c.nome.trim(), sport: c.sport || '', compenso: c.compenso || 'diurno', prima: ore(c.prima, 0, 12), dopo: ore(c.dopo, 0, 12), colore: c.colore || '' }));
+      ? { nome: c.nome, mansione: true, sport: '', compenso: c.compenso || 'diurno', prima: 0, dopo: ore(c.dopo, 0.5, 16), colore: c.colore || '', alias: R.aliasDopoRinomina(c.origine, c.nome, c.alias) }
+      : { nome: c.nome.trim(), sport: c.sport || '', compenso: c.compenso || 'diurno', prima: ore(c.prima, 0, 12), dopo: ore(c.dopo, 0, 12), colore: c.colore || '', alias: R.aliasDopoRinomina(c.origine, c.nome.trim(), c.alias) }));
+    const conflitto = R.aliasInConflitto(competizioni);
+    if (conflitto) { DO.avviso(conflitto, 'errore', 8000); return; }
     const sport = $('reg-sport').value.split(',').map((s) => s.trim()).filter(Boolean);
-    bozzaComp = null;
-    salva({ competizioni, sport }, 'Competizioni salvate.');
+    salva({ competizioni, sport }, 'Competizioni salvate.', () => { bozzaComp = null; });
   });
 
   // ---------- accessi in sola visualizzazione ----------
@@ -557,7 +616,7 @@
   });
 
   A.registra({
-    aggiorna: () => { if (A.vista === 'impostazioni') { disegnaRegole(); disegnaOperativo(); disegnaVisualizzatori(); if (!bozzaComp) disegnaCompetizioni(); } },
-    mostra: (nome) => { if (nome === 'impostazioni') { disegnaRegole(); disegnaOperativo(); disegnaVisualizzatori(); disegnaCompetizioni(true); } },
+    aggiorna: () => { if (A.vista === 'impostazioni') { disegnaRegole(); disegnaPrecedenti(); disegnaOperativo(); disegnaVisualizzatori(); if (!bozzaComp) disegnaCompetizioni(); } },
+    mostra: (nome) => { if (nome === 'impostazioni') { disegnaRegole(); disegnaPrecedenti(); disegnaOperativo(); disegnaVisualizzatori(); disegnaCompetizioni(true); } },
   });
 })(window.DO);

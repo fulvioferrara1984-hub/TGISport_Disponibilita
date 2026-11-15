@@ -269,6 +269,10 @@
               <p class="nota" style="margin: -4px 0 12px;">Compenso proposto per ogni deployment: giorni × tariffa (4 giorni a 150 € = 600 €), modificabile nella richiesta.</p>
               <button type="submit" class="primario">Salva regole</button>
             </form>
+            <details class="scheda-corpo" id="reg-precedenti" hidden>
+              <summary>Regole precedenti</summary>
+              <ul class="reg-precedenti" id="reg-precedenti-elenco"></ul>
+            </details>
           </section>
           <section class="scheda">
             <div class="scheda-testa"><h2>Accessi in sola visualizzazione</h2></div>
@@ -344,6 +348,20 @@
   </main>
     </div>
   </div>
+
+  <!-- Da quando valgono le regole dei compensi -->
+  <dialog id="dlg-dal">
+    <form method="dialog" id="form-dal">
+      <h2>Da quando valgono queste regole?</h2>
+      <label class="campo"><span>Primo giorno di validità</span><input type="date" id="dal-giorno" required></label>
+      <p class="nota" id="dal-testo"></p>
+      <div class="errore" id="dal-errore" hidden></div>
+      <div class="dialog-azioni">
+        <button type="button" class="bottone" id="dal-annulla">Annulla</button>
+        <button type="submit" class="primario" id="dal-salva">Salva</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- Nuovo operatore / modifica -->
   <dialog id="dlg-operatore">

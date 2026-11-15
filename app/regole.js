@@ -67,6 +67,9 @@
       Coop: Object.assign({}, PREDEFINITE.tariffe.Coop, (r && r.tariffe && r.tariffe.Coop) || {}),
     };
     if (!(Number.isFinite(x.tariffaOnsite) && x.tariffaOnsite >= 0)) x.tariffaOnsite = PREDEFINITE.tariffaOnsite;
+    // regole salvate prima delle date di validità: valgono da sempre e senza versioni precedenti
+    if (typeof x.dal !== 'string') x.dal = '';
+    if (!Array.isArray(x.precedenti)) x.precedenti = [];
     return x;
   }
 

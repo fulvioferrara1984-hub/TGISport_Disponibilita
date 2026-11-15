@@ -543,3 +543,9 @@ test('cambiNelPeriodo e datePerContratto', () => {
     [{ contratto: 'P.IVA', date: ['2026-11-09'] }, { contratto: 'Coop', date: ['2026-11-10', '2026-11-11'] }]);
   assert.equal(R.testoNonEliminabile('Mario Rossi'), 'Mario Rossi ha eventi o deployment: eliminarlo azzererebbe i suoi compensi nel Riepilogo. Disattivalo da Modifica → Attivo.');
 });
+
+test('complete: regole senza date di validità valgono da sempre e senza precedenti', () => {
+  const c = R.complete({ tariffe: { 'P.IVA': { diurno: 150 } } });
+  assert.deepEqual([c.dal, c.precedenti], ['', []]);
+  assert.deepEqual(R.periodiVersioni({}).map((p) => [p.dal, p.al]), [['', '']]);
+});
