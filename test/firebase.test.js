@@ -550,7 +550,8 @@ test('aggiornamento dalla piattaforma: scrive solo se la partita è come il giro
   const { FB: FC } = archivioNuovo(SUP, collegata.extra);
   DO.avviaPagina('admin', () => {});
   await FC.utente();
-  const { progettoId, ...senzaProgetto } = atteso;
+  const senzaProgetto = Object.assign({}, atteso);
+  delete senzaProgetto.progettoId;
   assert.equal(await FC.aggiornaDallaPiattaforma('e1', senzaProgetto, campi, 'nota'), false);
   assert.equal(collegata.scritte.length, 0);
   const assente = archivioTransazioni({});
@@ -607,7 +608,7 @@ test('competizioni della piattaforma: documento assente → [], errore → null'
   assert.deepEqual(await FP.leggiCompetizioniPiattaforma(), [{ nome: 'L1', nomeDisponibilita: 'Ligue 1' }, { nome: 'Cup', nomeDisponibilita: '' }]);
   const { FB: FE } = archivioNuovo(SUP, { getDoc: async () => { throw Object.assign(new Error('offline'), { code: 'unavailable' }); } });
   DO.avviaPagina('admin', () => {});
-  await FE.utente().catch(() => {});
+  await FE.utente();
   assert.equal(await FE.leggiCompetizioniPiattaforma(), null);
 });
 

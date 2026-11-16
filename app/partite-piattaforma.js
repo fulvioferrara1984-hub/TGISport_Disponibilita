@@ -7,7 +7,9 @@
   const GIORNI = 35;
   const testo = (v) => String(v == null ? '' : v).trim();
   const norm = (s) => DO.building.normalizza(s);
-  const gm = (iso) => String(iso || '').slice(8, 10) + '/' + String(iso || '').slice(5, 7);
+  const gm = (iso) => (iso ? String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) : '');
+  // «round 12 → 13», o «round 13» se prima non c'era nulla
+  const cambio = (etichetta, prima, dopo) => etichetta + ' ' + (prima ? prima + ' → ' : '') + dopo;
   const PREFISSO_ANNULLATA = 'Annullata dalla piattaforma';
 
   const NOTE = {
@@ -59,25 +61,27 @@
     if (km !== null && km !== R.minuti(partita.orario)) {
       const prima = R.minuti(partita.orario);
       campi.orario = R.hhmm(km);
-      parti.push('KO ' + (prima === null ? '' : R.hhmm(prima) + ' → ') + campi.orario);
+      parti.push(cambio('KO', prima === null ? '' : R.hhmm(prima), campi.orario));
     }
     if (evento.data && evento.data !== partita.data && evento.data >= oggi) {
       campi.data = evento.data;
-      parti.push('data ' + gm(partita.data) + ' → ' + gm(evento.data));
+      parti.push(cambio('data', gm(partita.data), gm(evento.data)));
     }
     if (testo(evento.squadraA) && testo(evento.squadraB) && norm(partita.titolo) !== norm(evento.squadraA) + norm(evento.squadraB)) {
       campi.titolo = titoloPiattaforma(evento);
-      parti.push('squadre ' + testo(partita.titolo) + ' → ' + campi.titolo);
+      parti.push(cambio('squadre', testo(partita.titolo), campi.titolo));
     }
     if (testo(evento.round) && testo(evento.round) !== testo(partita.round)) {
       campi.round = testo(evento.round);
-      parti.push('round ' + testo(partita.round) + ' → ' + campi.round);
+      parti.push(cambio('round', testo(partita.round), campi.round));
     }
     if (!parti.length) return null;
     // come la finestra dell'evento: ritrovo e fine calcolati, convocazione inviata da rimandare se cambia ciò che vede l'operatore
-    const { cambiato, calcolati } = R.ricalcoloInvio(partita, campi, regole);
+    // (su una partita annullata nulla da rimandare: non torna «da inviare»)
+    const { cambiato: cambiatoInvio, calcolati } = R.ricalcoloInvio(partita, campi, regole);
+    const cambiato = cambiatoInvio && partita.stato !== 'annullato';
     if (calcolati) Object.assign(campi, calcolati);
-    if (cambiato && partita.stato !== 'annullato') Object.assign(campi, { inviata: false, stato: 'assegnato', risposta: '' });
+    if (cambiato) Object.assign(campi, { inviata: false, stato: 'assegnato', risposta: '' });
     return { campi, rimanda: cambiato, nota: 'Dalla piattaforma: ' + parti.join(', ') + (cambiato ? ': convocazione da rimandare' : '') };
   }
 
@@ -181,8 +185,11 @@
       if (!annullata(p)) {
         const al = allineamento(p, e, regole, oggi);
         if (al) az.allinea.push(Object.assign({ partita: p, evento: e }, al));
-      } else if (e.stato === 'CONFIRMED' && annullataDalGiro(p)) {
-        az.ripristina.push({ partita: p, campi: { stato: p.operatoreId ? 'assegnato' : 'da-assegnare' }, nota: NOTE.ripristinata });
+      } else if (e.stato === 'CONFIRMED' && !vigilia(e) && annullataDalGiro(p)) {
+        // insieme allo stato, i campi cambiati mentre era annullata (il giro non allinea le annullate)
+        const al = allineamento(p, e, regole, oggi);
+        az.ripristina.push({ partita: p, campi: Object.assign({}, al ? al.campi : {}, { stato: p.operatoreId ? 'assegnato' : 'da-assegnare' }),
+          nota: NOTE.ripristinata + (al ? '; ' + al.nota : '') });
       }
     });
     return az;

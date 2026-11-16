@@ -322,3 +322,43 @@ test('conScritte: sovrappone i campi scritti dal giro alle partite in memoria, s
   assert.equal(P.conScritte(eventi, {})[1], eventi[1]);
   assert.deepEqual(P.conScritte(eventi, undefined), eventi);
 });
+
+// ---------- minori della revisione ----------
+test('allineamento: nota con tutte le parti, nell\'ordine KO, data, squadre, round', () => {
+  const a = P.allineamento(pa({ inviata: true, stato: 'confermato' }),
+    ev({ ko: '18:00', data: '2026-11-21', squadraA: 'STADE RENNAIS', squadraB: 'OLYMPIACOS', round: '13' }), REGOLE, OGGI);
+  assert.equal(a.nota, 'Dalla piattaforma: KO 20:45 → 18:00, data 20/11 → 21/11, squadre Venezia-Napoli → STADE RENNAIS – OLYMPIACOS, round 12 → 13: convocazione da rimandare');
+  assert.equal(a.rimanda, true);
+});
+
+test('allineamento: senza valore di prima la nota non ha la freccia né spazi doppi', () => {
+  assert.equal(P.allineamento(pa({ round: '' }), ev(), REGOLE, OGGI).nota, 'Dalla piattaforma: round 12');
+  assert.equal(P.allineamento(pa({ titolo: '' }), ev(), REGOLE, OGGI).nota, 'Dalla piattaforma: squadre VENEZIA – NAPOLI');
+  assert.equal(P.allineamento(pa({ orario: '' }), ev(), REGOLE, OGGI).nota, 'Dalla piattaforma: KO 20:45');
+  assert.equal(P.allineamento(pa({ data: '' }), ev(), REGOLE, OGGI).nota, 'Dalla piattaforma: data 20/11');
+});
+
+test('allineamento: inviata con ritrovo scritto a mano e KO cambiato resta da rimandare, il ritrovo non si tocca', () => {
+  const a = P.allineamento(pa({ inviata: true, stato: 'confermato', convocazione: '16:00' }), ev({ ko: '18:00' }), REGOLE, OGGI);
+  assert.equal(a.rimanda, true);
+  assert.ok(!('convocazione' in a.campi));
+  assert.equal(a.campi.inviata, false);
+});
+
+test('allineamento: su una partita annullata non rimanda nulla', () => {
+  const a = P.allineamento(pa({ inviata: true, stato: 'annullato' }), ev({ ko: '18:00' }), REGOLE, OGGI);
+  assert.equal(a.rimanda, false);
+  assert.ok(!('inviata' in a.campi));
+  assert.ok(!a.nota.includes('da rimandare'));
+});
+
+test('giro: il ripristino allinea anche i campi cambiati nel frattempo', () => {
+  const r = giro({ progetti: [ev({ ko: '18:00' })], partite: [annullataDal('Annullata dalla piattaforma: evento annullato')] });
+  assert.equal(r.ripristina[0].campi.stato, 'assegnato');
+  assert.equal(r.ripristina[0].campi.orario, '18:00');
+  assert.equal(r.ripristina[0].nota, 'Ripristinata dalla piattaforma: evento confermato di nuovo; Dalla piattaforma: KO 20:45 → 18:00');
+});
+
+test('giro: una vigilia confermata non ripristina una partita annullata dal giro', () => {
+  vuote(giro({ progetti: [ev({ attivita: 'MD-1' })], partite: [annullataDal('Annullata dalla piattaforma: evento annullato')] }));
+});
