@@ -100,6 +100,18 @@ test('conflitto a cavallo della mezzanotte', () => {
   assert.deepEqual(R.conflitto(notte, [giovedi], regole), { livello: '', con: [] });
 });
 
+test('chiedi disponibilità: impegnato se ha un turno lo stesso giorno o uno sovrapposto del giorno vicino', () => {
+  const e = { id: 's', data: '2026-11-21', orario: '18:00', competizione: 'Serie A' };
+  const venerdiSera = { id: 'v', operatoreId: 'op', data: '2026-11-20', orario: '20:45', competizione: 'Serie A', stato: 'confermato' };
+  assert.equal(R.impegnato(e, [venerdiSera], regole), false);   // giorno vicino che non si tocca: resta spuntato
+  const rifiutatoStessoGiorno = { id: 'm', data: '2026-11-21', orario: '12:30', competizione: 'Serie A', stato: 'rifiutato' };
+  assert.equal(R.impegnato(e, [rifiutatoStessoGiorno], regole), true);   // come prima: lo stesso giorno conta sempre
+  const notte = { id: 'n', tipo: 'partita', data: '2026-11-21', orario: '02:00', convocazione: '22:00', fine: '04:00' };
+  const venerdi = { id: 'v2', tipo: 'partita', data: '2026-11-20', orario: '23:00', convocazione: '21:00', fine: '23:30', stato: 'confermato' };
+  assert.equal(R.impegnato(notte, [venerdi], regole), true);
+  assert.equal(R.impegnato(e, [], regole), false);
+});
+
 test('altri impegni: lo stesso giorno della partita e quelli vicini', () => {
   const e = { id: 'n', operatoreId: 'op', data: '2026-11-21' };
   const ev = [e, { id: 'a', operatoreId: 'op', data: '2026-11-20' }, { id: 'b', operatoreId: 'op', data: '2026-11-21' },

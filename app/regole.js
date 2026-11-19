@@ -127,6 +127,12 @@
     return eventi.filter((x) => x.id !== e.id && x.operatoreId === idOp && giorni.includes(x.data) && x.stato !== 'annullato');
   }
 
+  // «Chiedi disponibilità»: impegnato se ha un altro turno lo stesso giorno della partita (anche rifiutato, come sempre)
+  // o un turno del giorno vicino che si sovrappone; un turno del giorno vicino che non si tocca non conta
+  function impegnato(e, altri, regole) {
+    return altri.some((x) => x.data === e.data) || conflitto(e, altri, regole).livello === 'sovrapposto';
+  }
+
   // Altri impegni: 'doppio' se dello stesso giorno e gli orari non si toccano, 'sovrapposto' se si toccano
   // (anche tra giorni vicini, a cavallo della mezzanotte).
   function conflitto(e, altri, regole) {
@@ -523,6 +529,6 @@
       + (u.drive === 'salvato' ? ' · copia su Drive' : u.drive ? ' · copia su Drive non riuscita: ' + String(u.drive).replace(/^errore: /, '') : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, altriImpegni,ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, stessaCompetizione, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, giornoContratto, storiaContrattiPulita, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
+  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, altriImpegni, impegnato, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, stessaCompetizione, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, giornoContratto, storiaContrattiPulita, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});

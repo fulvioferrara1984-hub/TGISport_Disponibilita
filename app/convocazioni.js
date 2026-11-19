@@ -478,7 +478,7 @@
       if (qui) segni.push(e.stato === 'rifiutato' ? 'ha rifiutato questo evento' : 'da sostituire su questo evento');
       if (chiesto) segni.push('già chiesto' + (risposta ? ': ha risposto ' + (risposta.r === 'si' ? 'sì' : 'no') : ''));
       if (!o.email) segni.push('senza email');
-      const spunta = Q.preselezione({ disponibilita: v.s, impegnato: altriImpegni(e, o.id).length > 0, onsite: !!v.onsite, giaChiesto: chiesto, assegnato: qui });
+      const spunta = Q.preselezione({ disponibilita: v.s, impegnato: R.impegnato(e, altriImpegni(e, o.id), A.regole), onsite: !!v.onsite, giaChiesto: chiesto, assegnato: qui });
       return '<li><label><input type="checkbox" value="' + o.id + '"' + (spunta ? ' checked' : '') + '><span class="chi"><b>' + DO.esc(o.nome) + '</b><small>'
         + DO.esc(segni.join(' · ')) + '</small></span></label></li>';
     }).join('') : '<li class="nota">' + (sup ? 'Nessun operatore attivo con il ruolo adatto a questo turno.' : 'Nessun operatore attivo.') + '</li>';

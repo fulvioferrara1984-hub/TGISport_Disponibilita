@@ -29,6 +29,12 @@ test('supervisori: l\'avviso di sovrapposizione dice il giorno degli impegni di 
   assert.equal((conv.match(/elencoTurni\(c\.con, e\)/g) || []).length, 4, 'due avvisi nella riga, due nella scelta dell\'operatore');
 });
 
+test('chiedi disponibilità: la spunta guarda il giorno della partita e i turni sovrapposti, non tutti i giorni vicini', () => {
+  const conv = leggi('app/convocazioni.js');
+  assert.match(conv, /impegnato: R\.impegnato\(e, altriImpegni\(e, o\.id\), A\.regole\)/);
+  assert.doesNotMatch(conv, /altriImpegni\(e, o\.id\)\.length/);
+});
+
 test('elenco sul telefono: il ritrovo con il giorno va a capo nella colonna stretta', () => {
   assert.match(leggi('app/convocazioni.js'), /class="ritrovo-giorno"/);
   const css = leggi('app/stile.css');
