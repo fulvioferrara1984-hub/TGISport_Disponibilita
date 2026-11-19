@@ -410,6 +410,13 @@ test('evento già iniziato (ritrovo passato)', () => {
   assert.equal(R.giaIniziato(Object.assign({}, ev, { data: '2026-10-12' }), reg, '2026-10-11', '23:59'), false);
 });
 
+test('evento già iniziato: orario senza zero, ritrovo la sera prima', () => {
+  const reg = R.complete({ competizioni: [{ nome: 'NBA', prima: 4, dopo: 2 }] });
+  const ev = { tipo: 'partita', competizione: 'NBA', data: '2026-11-21', orario: '2:00' };   // ritrovo 22:00 del 20
+  assert.equal(R.giaIniziato(ev, reg, '2026-11-20', '21:59'), false);
+  assert.equal(R.giaIniziato(ev, reg, '2026-11-20', '22:00'), true);
+});
+
 test('competizione predefinita scritta giusta', () => {
   const nomi = R.complete(null).competizioni.map((c) => c.nome);
   assert.ok(nomi.includes('European Qualifiers Women'));

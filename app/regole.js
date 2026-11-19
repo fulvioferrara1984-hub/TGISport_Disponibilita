@@ -179,9 +179,9 @@
   function giaIniziato(e, regole, oggi, ora) {
     const ritrovo = convocazione(e, regole) || e.orario || '';
     if (!ritrovo) return e.data < oggi;
-    let giorno = e.data;
-    if (e.orario && ritrovo > e.orario) { const [a, m, g] = e.data.split('-').map(Number); const d = new Date(a, m - 1, g - 1); giorno = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-    return giorno < oggi || (giorno === oggi && ritrovo <= ora);
+    const giorno = DO.giornoRitrovo(e.data, e.orario, ritrovo);
+    // confronto in minuti: «2:00» vale come «02:00»
+    return giorno < oggi || (giorno === oggi && minuti(ritrovo) <= minuti(ora));
   }
 
   // Tariffe dai campi di Impostazioni ({ 'P.IVA.diurno': '140', … }): un campo vuoto o non valido non diventa 0

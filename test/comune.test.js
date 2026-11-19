@@ -209,6 +209,45 @@ test('turni sovrapposti dello stesso giorno, anche oltre la mezzanotte', () => {
   assert.equal(DO.orariSovrapposti(t('2026-10-17', '13:00', ''), t('2026-10-17', '09:00', '12:00')), false);
 });
 
+test('ritrovo del giorno prima: partite notturne', () => {
+  assert.equal(DO.ritrovoDelGiornoPrima('02:00', '22:00'), true);
+  assert.equal(DO.ritrovoDelGiornoPrima('2:00', '22:00'), true);
+  assert.equal(DO.ritrovoDelGiornoPrima('20:45', '16:45'), false);
+  assert.equal(DO.ritrovoDelGiornoPrima('02:00', '02:00'), false);
+  assert.equal(DO.ritrovoDelGiornoPrima('', '22:00'), false);      // turno remoto: nessun orario della partita
+  assert.equal(DO.ritrovoDelGiornoPrima('02:00', ''), false);
+  assert.equal(DO.ritrovoDelGiornoPrima('20:45', '21:00'), false); // scritto per errore dopo il calcio d'inizio
+  assert.equal(DO.ritrovoDelGiornoPrima('06:00', '18:00'), true);  // 12 ore prima: ancora la sera prima
+  assert.equal(DO.ritrovoDelGiornoPrima('06:00', '17:59'), false);
+  assert.equal(DO.giornoRitrovo('2026-11-21', '02:00', '22:00'), '2026-11-20');
+  assert.equal(DO.giornoRitrovo('2026-11-21', '20:45', '16:45'), '2026-11-21');
+  assert.equal(DO.giornoRitrovo('2026-12-01', '01:00', '21:00'), '2026-11-30');
+  assert.equal(DO.giornoRitrovo('2027-01-01', '00:30', '20:30'), '2026-12-31');
+});
+
+test('ritrovo scritto con il suo giorno', () => {
+  assert.equal(DO.ritrovoConGiorno('2026-11-21', '02:00', '22:00'), 'ven 20 alle 22:00');
+  assert.equal(DO.ritrovoConGiorno('2026-11-21', '20:45', '16:45'), '16:45');
+  assert.equal(DO.ritrovoConGiorno('2026-11-21', '', '10:00'), '10:00');
+  assert.equal(DO.ritrovoConGiorno('2026-11-21', '02:00', ''), '');
+});
+
+test('momento del ritrovo, per ordinare', () => {
+  assert.equal(DO.momentoRitrovo('2026-11-21', '02:00', '22:00'), '2026-11-20T22:00');
+  assert.equal(DO.momentoRitrovo('2026-11-21', '20:45', '9:30'), '2026-11-21T09:30');
+  assert.equal(DO.momentoRitrovo('2026-11-21', '', ''), '2026-11-21');
+  assert.ok(DO.momentoRitrovo('2026-11-21', '02:00', '22:00') < DO.momentoRitrovo('2026-11-21', '18:00', '14:00'));
+});
+
+test('turni sovrapposti a cavallo della mezzanotte, tra giorni diversi', () => {
+  const t = (data, inizio, fine) => ({ data, inizio, fine });
+  const notte = t('2026-11-20', '22:00', '04:00');                 // partita di sabato alle 02:00
+  assert.equal(DO.orariSovrapposti(notte, t('2026-11-20', '21:00', '23:30')), true);
+  assert.equal(DO.orariSovrapposti(notte, t('2026-11-21', '22:00', '23:00')), false);
+  assert.equal(DO.orariSovrapposti(notte, t('2026-11-21', '03:00', '05:00')), true);
+  assert.equal(DO.orariSovrapposti(t('2026-11-21', '03:00', '05:00'), notte), true);
+});
+
 test('celle del mese per la vista mensile degli operatori', () => {
   const stati = { '2026-10-16': { s: 'P', n: 'dalle 18' }, '2026-10-20': { s: 'D', n: '' } };
   const celle = DO.celleMese('2026-10', {

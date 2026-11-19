@@ -23,14 +23,14 @@
     const righe = turno ? [r && (fine ? 'Turno ' + r + ' – ' + fine : 'Inizio turno ' + r)]
       : [c.orario && 'Evento alle ' + c.orario,
         [c.competizione, c.round && (/^\d+$/.test(c.round) ? 'giornata ' + c.round : c.round)].filter(Boolean).join(' · '),
-        r && 'Ritrovo ' + r + (fine ? ' – fine turno ' + fine : ''), luogo];
+        r && 'Ritrovo ' + DO.ritrovoConGiorno(c.data, c.orario, r) + (fine ? ' – fine turno ' + fine : ''), luogo];
     const ev = {
       uid: uid('convocazione', c.id), titolo: 'TGI Sport · ' + (turno ? DO.nomeTurno(c.tipo) : c.titolo),
       descrizione: righe.concat(chiusura(indirizzo)).filter(Boolean).join('\n'), url: indirizzo, luogo,
     };
     if (!inizio) return Object.assign(ev, { tuttoIlGiorno: true, da: c.data, a: DO.aggiungi(c.data, 1) });
-    // ritrovo dopo l'orario della partita: il turno parte il giorno prima (come R.giaIniziato)
-    const giorno = c.orario && inizio > c.orario ? DO.aggiungi(c.data, -1) : c.data;
+    // ritrovo dopo l'orario della partita: il turno parte il giorno prima (regola unica: DO.ritrovoDelGiornoPrima)
+    const giorno = DO.giornoRitrovo(c.data, c.orario, inizio);
     const da = minuti(inizio);
     // senza fine turno: 3 ore dal ritrovo, ma non prima di 2 ore dopo l'inizio della partita
     const partita = c.orario ? minuti(c.orario) + (giorno !== c.data ? 24 * 60 : 0) : 0;

@@ -86,20 +86,48 @@
   const GIORNI_BREVI = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   const nomeMese = (i) => MESI[i][0].toUpperCase() + MESI[i].slice(1);
-  // Due turni { data, inizio, fine } dello stesso giorno si sovrappongono? Una fine prima dell'inizio passa la mezzanotte;
-  // senza fine conta il solo inizio
+  // "2:00" o "02:00" → minuti dalla mezzanotte; null se non è un orario
+  const minutiOra = (t) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  const giorniTra = (da, a) => Math.round((daIso(a) - daIso(da)) / 86400000);
+
+  // Partite notturne: il ritrovo è della sera prima quando viene dopo l'orario della partita
+  // (02:00 → ritrovo 22:00 del giorno prima), al massimo 12 ore prima come il massimo di «ore prima».
+  // Senza orario della partita (turni remoti) il ritrovo resta sul suo giorno.
+  function ritrovoDelGiornoPrima(orario, ritrovo) {
+    const o = minutiOra(orario), r = minutiOra(ritrovo);
+    return o !== null && r !== null && r > o && o + 1440 - r <= 720;
+  }
+  const giornoRitrovo = (data, orario, ritrovo) => (ritrovoDelGiornoPrima(orario, ritrovo) ? aggiungi(data, -1) : data);
+  // "ven 20 alle 22:00" se il ritrovo è della sera prima, altrimenti la sola ora
+  function ritrovoConGiorno(data, orario, ritrovo) {
+    if (!ritrovo) return '';
+    if (!ritrovoDelGiornoPrima(orario, ritrovo)) return ritrovo;
+    const g = giorno(aggiungi(data, -1));
+    return g.breve.toLowerCase() + ' ' + g.num + ' alle ' + ritrovo;
+  }
+  // "aaaa-mm-ggThh:mm" del ritrovo vero, per ordinare; il giorno se il ritrovo manca
+  function momentoRitrovo(data, orario, ritrovo) {
+    const r = minutiOra(ritrovo);
+    if (r === null) return data;
+    return giornoRitrovo(data, orario, ritrovo) + 'T' + due(Math.floor(r / 60)) + ':' + due(r % 60);
+  }
+
+  // Due turni { data, inizio, fine } si sovrappongono? data è il giorno in cui il turno inizia, così si confrontano
+  // anche turni di giorni vicini. Una fine prima dell'inizio passa la mezzanotte; senza fine conta il solo inizio
   function orariSovrapposti(a, b) {
-    if (!a || !b || a.data !== b.data) return false;
-    const min = (t) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
-    const intervallo = (x) => {
-      const i = min(x.inizio);
+    if (!a || !b) return false;
+    if (a.data !== b.data && (!a.data || !b.data)) return false;
+    const scarto = a.data === b.data ? 0 : giorniTra(a.data, b.data) * 1440;
+    if (Number.isNaN(scarto)) return false;
+    const intervallo = (x, piu) => {
+      const i = minutiOra(x.inizio);
       if (i === null) return null;
-      let f = min(x.fine);
-      if (f === null) return [i, i];
+      let f = minutiOra(x.fine);
+      if (f === null) return [i + piu, i + piu];
       if (f <= i) f += 1440;
-      return [i, f];
+      return [i + piu, f + piu];
     };
-    const p = intervallo(a), q = intervallo(b);
+    const p = intervallo(a, 0), q = intervallo(b, scarto);
     if (!p || !q) return false;
     const dentro = (t, [x, y]) => t >= x && t < y;
     if (p[0] === p[1] || q[0] === q[1]) return p[0] === q[0] || dentro(p[0], q) || dentro(q[0], p);
@@ -360,5 +388,6 @@
     inviaEmail, avviso, copia, chiediAccesso, mostraDemo, CONFIG, inDemo: !CONFIG.FIREBASE,
     versioneDa, nuovaVersione, soloMetadati, RUOLI, mansione, turnoRemoto, nomeTurno, tipoEvento, normalizzaEmail, tipoAccesso, controllaVisualizzatore, invitoVisualizzatore,
     testoBlocco, telefonoValido, giorniDaCompilare, nomeMese, orariSovrapposti, chiedi, celleMese,
+    ritrovoDelGiornoPrima, giornoRitrovo, ritrovoConGiorno, momentoRitrovo,
   });
 })(window.DO = window.DO || {});

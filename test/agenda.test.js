@@ -87,6 +87,13 @@ test('calendario: partite di notte come nel resto del sito', () => {
   assert.equal(tardi.a, '2026-10-25T00:45');
 });
 
+test('partita notturna con l\'orario senza zero: il turno parte la sera prima', () => {
+  const ev = A.daConvocazione(partita({ data: '2026-11-21', orario: '2:00', convocazione: '22:00', fine: '04:00' }), SITO);
+  assert.equal(ev.da, '2026-11-20T22:00');
+  assert.equal(ev.a, '2026-11-21T04:00');
+  assert.match(ev.descrizione, /Ritrovo ven 20 alle 22:00 – fine turno 04:00/);
+});
+
 test('calendario: turni remoti, senza fine turno 3 ore', () => {
   const turno = { id: 't1', data: '2026-10-24', tipo: 'supervisione', titolo: 'Remote TL', competizione: '', round: '', orario: '', convocazione: '22:30', fine: '' };
   const ev = A.daConvocazione(turno, SITO);
