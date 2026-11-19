@@ -25,8 +25,8 @@
   // turni remoti prima delle partite
   const ordina = (a, b) => (turno(b) - turno(a))
     || (R.convocazione(a, A.regole) || '99').localeCompare(R.convocazione(b, A.regole) || '99') || titolo(a).localeCompare(titolo(b));
-  // altri impegni dello stesso operatore nello stesso giorno: doppio turno
-  const altriImpegni = (e, idOp) => A.eventi.filter((x) => x.id !== e.id && x.operatoreId === idOp && x.data === e.data && x.stato !== 'annullato');
+  // altri impegni dello stesso operatore lo stesso giorno (doppio turno) e nei giorni vicini (turni a cavallo della mezzanotte)
+  const altriImpegni = (e, idOp) => R.altriImpegni(e, A.eventi, idOp);
   // doppio turno (orari separati) o turni sovrapposti, per l'operatore idOp su questo evento
   const conflitto = (e, idOp) => R.conflitto(e, altriImpegni(e, idOp), A.regole);
   const orariTurno = (x) => { const a = R.convocazione(x, A.regole), b = R.fine(x, A.regole); return (a || '—') + (b ? '–' + b : ''); };

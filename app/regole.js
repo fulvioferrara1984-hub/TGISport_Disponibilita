@@ -101,25 +101,40 @@
     return hhmm(m + (comp && comp.dopo !== null ? comp.dopo : r.fineOre) * 60);
   }
 
-  // Intervallo del turno in minuti dalla mezzanotte; una fine mancante o oltre la mezzanotte vale fine giornata.
+  // Intervallo del turno in minuti dalla mezzanotte del giorno della partita: il ritrovo della sera prima
+  // (partite notturne) è negativo, una fine non dopo l'inizio passa al giorno dopo; senza fine vale fine giornata.
   function intervallo(e, regole) {
-    const inizio = minuti(convocazione(e, regole)), f = minuti(fine(e, regole));
+    const ritrovo = convocazione(e, regole), inizio = minuti(ritrovo), f = minuti(fine(e, regole));
     const da = inizio === null ? 0 : inizio;
-    return { inizio: da, fine: f === null || f <= da ? 1439 : f };
+    const a = f === null ? 1439 : (f <= da ? f + 1440 : f);
+    const prima = inizio !== null && DO.ritrovoDelGiornoPrima(e.orario, ritrovo) ? 1440 : 0;
+    return { inizio: da - prima, fine: a - prima };
   }
 
+  const giorniTra = (da, a) => { const d = (s) => { const [y, m, g] = String(s).split('-').map(Number); return Date.UTC(y, m - 1, g); }; return Math.round((d(a) - d(da)) / 86400000); };
+
+  // Anche tra giorni diversi: l'intervallo di b si sposta dei giorni di distanza tra le due partite
   function sovrapposti(a, b, regole) {
-    if (a.data !== b.data) return false;
+    const scarto = a.data === b.data ? 0 : giorniTra(a.data, b.data) * 1440;
+    if (Number.isNaN(scarto)) return false;
     const x = intervallo(a, regole), y = intervallo(b, regole);
-    return x.inizio < y.fine && y.inizio < x.fine;
+    return x.inizio < y.fine + scarto && y.inizio + scarto < x.fine;
   }
 
-  // Altri impegni dello stesso giorno: 'doppio' se gli orari non si toccano, 'sovrapposto' se sì.
+  // Impegni dell'operatore idOp il giorno della partita e quelli subito prima e dopo (turni a cavallo della mezzanotte)
+  function altriImpegni(e, eventi, idOp) {
+    const giorni = [DO.aggiungi(e.data, -1), e.data, DO.aggiungi(e.data, 1)];
+    return eventi.filter((x) => x.id !== e.id && x.operatoreId === idOp && giorni.includes(x.data) && x.stato !== 'annullato');
+  }
+
+  // Altri impegni: 'doppio' se dello stesso giorno e gli orari non si toccano, 'sovrapposto' se si toccano
+  // (anche tra giorni vicini, a cavallo della mezzanotte).
   function conflitto(e, altri, regole) {
     // un turno rifiutato o annullato non impegna l'operatore
-    const stessoGiorno = altri.filter((x) => x.data === e.data && x.stato !== 'rifiutato' && x.stato !== 'annullato');
-    if (!stessoGiorno.length) return { livello: '', con: [] };
-    return { livello: stessoGiorno.some((x) => sovrapposti(e, x, regole)) ? 'sovrapposto' : 'doppio', con: stessoGiorno };
+    const validi = altri.filter((x) => x.stato !== 'rifiutato' && x.stato !== 'annullato');
+    const con = validi.filter((x) => x.data === e.data || sovrapposti(e, x, regole));
+    if (!con.length) return { livello: '', con: [] };
+    return { livello: con.some((x) => sovrapposti(e, x, regole)) ? 'sovrapposto' : 'doppio', con };
   }
 
   function notturno(e, regole) {
@@ -508,6 +523,6 @@
       + (u.drive === 'salvato' ? ' · copia su Drive' : u.drive ? ' · copia su Drive non riuscita: ' + String(u.drive).replace(/^errore: /, '') : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, stessaCompetizione, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, giornoContratto, storiaContrattiPulita, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
+  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, altriImpegni,ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, stessaCompetizione, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, giornoContratto, storiaContrattiPulita, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});

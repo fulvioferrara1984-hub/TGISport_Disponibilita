@@ -47,10 +47,10 @@ test('supervisione importata: ritrovo dall\'anticipo generale, non dalla competi
   assert.deepEqual(turno({ tipo: 'supervisione', competizione: 'Champions League', orario: '18:00' }), ['14:00', '20:00']);
 });
 
-test('fine oltre la mezzanotte vale fine giornata nel confronto', () => {
+test('fine oltre la mezzanotte: nel confronto passa al giorno dopo', () => {
   const tardi = { competizione: 'Serie A', orario: '22:45' };
   assert.equal(R.fine(tardi, regole), '00:45');
-  assert.equal(R.intervallo(tardi, regole).fine, 1439);
+  assert.equal(R.intervallo(tardi, regole).fine, 1440 + 45);
 });
 
 test('sovrapposti', () => {
@@ -82,6 +82,30 @@ test('conflitto: doppio turno o turni sovrapposti nello stesso giorno', () => {
   const due = R.conflitto(partita, [supMattina, supPomeriggio], regole);
   assert.equal(due.livello, 'sovrapposto');
   assert.equal(due.con.length, 2);
+});
+
+test('conflitto a cavallo della mezzanotte', () => {
+  const notte = { id: 'n', tipo: 'partita', data: '2026-11-21', orario: '02:00', convocazione: '22:00', fine: '04:00' };
+  const venerdi = { id: 'v', tipo: 'partita', data: '2026-11-20', orario: '23:00', convocazione: '21:00', fine: '23:30' };
+  const sabatoSera = { id: 's', tipo: 'partita', data: '2026-11-21', orario: '23:00', convocazione: '22:00', fine: '23:30' };
+  const tlNotte = { id: 't', tipo: 'supervisione', data: '2026-11-20', orario: '', convocazione: '23:00', fine: '05:00' };
+  const giovedi = { id: 'g', tipo: 'partita', data: '2026-11-19', orario: '20:45', convocazione: '18:45', fine: '22:45' };
+  assert.equal(R.sovrapposti(notte, venerdi, regole), true);
+  assert.equal(R.sovrapposti(venerdi, notte, regole), true);
+  assert.equal(R.sovrapposti(notte, sabatoSera, regole), false);
+  assert.equal(R.sovrapposti(notte, tlNotte, regole), true);
+  assert.deepEqual(R.conflitto(notte, [venerdi], regole), { livello: 'sovrapposto', con: [venerdi] });
+  assert.deepEqual(R.conflitto(venerdi, [notte], regole), { livello: 'sovrapposto', con: [notte] });
+  assert.deepEqual(R.conflitto(notte, [sabatoSera], regole), { livello: 'doppio', con: [sabatoSera] });
+  assert.deepEqual(R.conflitto(notte, [giovedi], regole), { livello: '', con: [] });
+});
+
+test('altri impegni: lo stesso giorno della partita e quelli vicini', () => {
+  const e = { id: 'n', operatoreId: 'op', data: '2026-11-21' };
+  const ev = [e, { id: 'a', operatoreId: 'op', data: '2026-11-20' }, { id: 'b', operatoreId: 'op', data: '2026-11-21' },
+    { id: 'c', operatoreId: 'op', data: '2026-11-22' }, { id: 'd', operatoreId: 'op', data: '2026-11-23' },
+    { id: 'f', operatoreId: 'altro', data: '2026-11-21' }, { id: 'g', operatoreId: 'op', data: '2026-11-21', stato: 'annullato' }];
+  assert.deepEqual(R.altriImpegni(e, ev, 'op').map((x) => x.id), ['a', 'b', 'c']);
 });
 
 test('esportazione mensile: due fogli, solo presenze, annullati esclusi dalle presenze', () => {
