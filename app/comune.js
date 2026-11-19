@@ -86,8 +86,8 @@
   const GIORNI_BREVI = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   const nomeMese = (i) => MESI[i][0].toUpperCase() + MESI[i].slice(1);
-  // "2:00" o "02:00" → minuti dalla mezzanotte; null se non è un orario
-  const minutiOra = (t) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  // "2:00" o "02:00" → minuti dalla mezzanotte; null se non è un orario (come R.minuti: niente secondi)
+  const minutiOra = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
   const giorniTra = (da, a) => Math.round((daIso(a) - daIso(da)) / 86400000);
 
   // Partite notturne: il ritrovo è della sera prima quando viene dopo l'orario della partita

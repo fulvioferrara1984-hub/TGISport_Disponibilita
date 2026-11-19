@@ -100,6 +100,46 @@ test('conflitto a cavallo della mezzanotte', () => {
   assert.deepEqual(R.conflitto(notte, [giovedi], regole), { livello: '', con: [] });
 });
 
+test('fine turno uguale al ritrovo: nel confronto vale fine giornata, non 24 ore', () => {
+  const sup = { tipo: 'supervisione', data: '2026-11-20', convocazione: '10:00', fine: '10:00' };
+  assert.deepEqual(R.intervallo(sup, regole), { inizio: 600, fine: 1439 });
+  const sabato = { tipo: 'supervisione', data: '2026-11-21', convocazione: '08:00', fine: '12:00' };
+  assert.equal(R.sovrapposti(sup, sabato, regole), false);
+});
+
+const venerdi20 = { id: 'v', tipo: 'partita', titolo: 'Torino-Parma', data: '2026-11-20', orario: '23:00', convocazione: '21:00', fine: '23:30' };
+const notte21 = { id: 'n', tipo: 'partita', titolo: 'Hobart-Sydney', data: '2026-11-21', orario: '02:00', convocazione: '22:00', fine: '04:00' };
+const sabato21 = { id: 's', tipo: 'partita', titolo: 'Venezia-Napoli', data: '2026-11-21', orario: '15:00', convocazione: '11:00', fine: '17:00' };
+
+test('elenco degli altri turni: il giorno solo dove serve, e una volta sola', () => {
+  const tl = { id: 't', tipo: 'supervisione', data: '2026-11-20', convocazione: '23:00', fine: '05:00' };
+  assert.equal(R.orariTurno(notte21, regole), 'ven 20 alle 22:00–04:00');
+  assert.equal(R.orariTurno(sabato21, regole), '11:00–17:00');
+  assert.equal(R.elencoTurni([sabato21, venerdi20], notte21, regole), 'Venezia-Napoli 11:00–17:00, ven 20 Torino-Parma 21:00–23:30');
+  assert.equal(R.elencoTurni([notte21], venerdi20, regole), 'Hobart-Sydney ven 20 alle 22:00–04:00');
+  assert.equal(R.elencoTurni([tl], notte21, regole), 'ven 20 Remote TL 23:00–05:00');
+});
+
+test('avviso quando si assegna: «il sabato 21» solo se gli altri turni sono dello stesso giorno', () => {
+  const avviso = (e, altri) => R.avvisoConflitto('Marco', e, R.conflitto(e, altri, regole), regole);
+  assert.equal(avviso(notte21, [venerdi20]),
+    'TURNI SOVRAPPOSTI: Marco ha già un turno in orari che si sovrappongono (ven 20 Torino-Parma 21:00–23:30; questo turno ven 20 alle 22:00–04:00).');
+  const sabatoNotte = { id: 'x', tipo: 'partita', titolo: 'Perth-Adelaide', data: '2026-11-21', orario: '03:00', convocazione: '01:00', fine: '05:00' };
+  assert.equal(avviso(notte21, [sabatoNotte]),
+    'TURNI SOVRAPPOSTI: Marco il sabato 21 ha già un turno in orari che si sovrappongono (Perth-Adelaide 01:00–05:00; questo turno ven 20 alle 22:00–04:00).');
+  assert.equal(avviso(notte21, [sabato21]),
+    'DOPPIO TURNO: Marco ha già un turno il sabato 21 (Venezia-Napoli 11:00–17:00; questo turno ven 20 alle 22:00–04:00).');
+  assert.equal(avviso(notte21, []), '');
+});
+
+test('nota del ritrovo nella finestra dell\'evento, anche per quello scritto a mano', () => {
+  assert.equal(R.notaRitrovo('02:00', '22:00', ''), '(automatico 22:00 del giorno prima)');
+  assert.equal(R.notaRitrovo('20:45', '16:45', ''), '(automatico 16:45)');
+  assert.equal(R.notaRitrovo('02:00', '22:00', '21:30'), '(automatico 22:00 del giorno prima) · 21:30 del giorno prima');
+  assert.equal(R.notaRitrovo('20:45', '16:45', '17:00'), '(automatico 16:45)');
+  assert.equal(R.notaRitrovo('', '', ''), '');
+});
+
 test('chiedi disponibilità: impegnato se ha un turno lo stesso giorno o uno sovrapposto del giorno vicino', () => {
   const e = { id: 's', data: '2026-11-21', orario: '18:00', competizione: 'Serie A' };
   const venerdiSera = { id: 'v', operatoreId: 'op', data: '2026-11-20', orario: '20:45', competizione: 'Serie A', stato: 'confermato' };

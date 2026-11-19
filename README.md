@@ -16,7 +16,7 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 |---|---|
 | Ritrovo | orario dell'evento meno le ore della competizione (una competizione nuova parte da 4); modificabile sul singolo evento; se cade la sera prima (partite notturne, es. alle 02:00 con ritrovo alle 22:00) si scrive con il suo giorno: *ven 20 alle 22:00* |
 | Fine turno | orario dell'evento più le ore della competizione (una nuova parte da 2); turni Remote TL e Remote Support: ritrovo + la durata della loro riga (6 ore); modificabile sul singolo evento |
-| Doppio turno | stesso operatore due volte nello stesso giorno: avviso giallo se gli orari non si toccano, rosso "turni sovrapposti" se si sovrappongono |
+| Doppio turno | stesso operatore due volte nello stesso giorno: avviso giallo se gli orari non si toccano, rosso "turni sovrapposti" se si sovrappongono; il rosso vale anche tra giorni vicini, per i turni a cavallo della mezzanotte (es. venerdì 21:00–23:30 e partita di sabato alle 02:00 con ritrovo venerdì alle 22:00) |
 | Blocco | quando all'evento mancano N giorni o meno (generale: 3; evento lunedì → da venerdì) l'operatore non cambia più disponibilità né rinuncia: telefona al numero di reperibilità |
 | Notturno | ritrovo dalle 22:00 alle 6:00 |
 | Gettoni netti | P.IVA: diurno 140, notturno 210, maggiorato 210 · Coop: diurno 175, notturno 262,50, maggiorato 262,50 |

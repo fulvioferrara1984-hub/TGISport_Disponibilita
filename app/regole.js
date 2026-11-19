@@ -102,11 +102,12 @@
   }
 
   // Intervallo del turno in minuti dalla mezzanotte del giorno della partita: il ritrovo della sera prima
-  // (partite notturne) è negativo, una fine non dopo l'inizio passa al giorno dopo; senza fine vale fine giornata.
+  // (partite notturne) è negativo, una fine prima dell'inizio passa al giorno dopo; senza fine, o con la fine uguale
+  // al ritrovo (errore di inserimento, come nel calendario del telefono), vale fine giornata.
   function intervallo(e, regole) {
     const ritrovo = convocazione(e, regole), inizio = minuti(ritrovo), f = minuti(fine(e, regole));
     const da = inizio === null ? 0 : inizio;
-    const a = f === null ? 1439 : (f <= da ? f + 1440 : f);
+    const a = f === null || f === da ? 1439 : (f < da ? f + 1440 : f);
     const prima = inizio !== null && DO.ritrovoDelGiornoPrima(e.orario, ritrovo) ? 1440 : 0;
     return { inizio: da - prima, fine: a - prima };
   }
@@ -141,6 +142,40 @@
     const con = validi.filter((x) => x.data === e.data || sovrapposti(e, x, regole));
     if (!con.length) return { livello: '', con: [] };
     return { livello: con.some((x) => sovrapposti(e, x, regole)) ? 'sovrapposto' : 'doppio', con };
+  }
+
+  // ---------- testi per gli avvisi dei supervisori ----------
+  const titoloTurno = (x) => (DO.turnoRemoto(x.tipo) ? nomeTipo(x.tipo) : x.titolo || 'Partita');
+  // "11:00–17:00", "ven 20 alle 22:00–04:00" se il ritrovo è della sera prima
+  function orariTurno(x, regole) {
+    const a = DO.ritrovoConGiorno(x.data, x.orario, convocazione(x, regole)), b = fine(x, regole);
+    return (a || '—') + (b ? '–' + b : '');
+  }
+  // Altri turni dell'operatore rispetto all'evento e: quelli di un altro giorno dicono il loro giorno
+  // («ven 20 Torino-Parma 21:00–23:30»), una volta sola se è già nel ritrovo («Hobart-Sydney ven 20 alle 22:00–04:00»)
+  function elencoTurni(lista, e, regole) {
+    return lista.map((x) => {
+      const g = x.data !== e.data && !DO.ritrovoDelGiornoPrima(x.orario, convocazione(x, regole)) ? DO.giorno(x.data) : null;
+      return (g ? g.breve.toLowerCase() + ' ' + g.num + ' ' : '') + titoloTurno(x) + ' ' + orariTurno(x, regole);
+    }).join(', ');
+  }
+  // Avviso quando si assegna e a un operatore con altri impegni (c = conflitto): «il sabato 21» solo se gli altri
+  // turni sono tutti dello stesso giorno della partita
+  function avvisoConflitto(nome, e, c, regole) {
+    const g = DO.giorno(e.data), quando = g.nome.toLowerCase() + ' ' + g.num;
+    const elenco = ' (' + elencoTurni(c.con, e, regole) + '; questo turno ' + orariTurno(e, regole) + ').';
+    if (c.livello === 'sovrapposto') {
+      const stessoGiorno = c.con.every((x) => x.data === e.data);
+      return 'TURNI SOVRAPPOSTI: ' + nome + (stessoGiorno ? ' il ' + quando : '') + ' ha già un turno in orari che si sovrappongono' + elenco;
+    }
+    if (c.livello === 'doppio') return 'DOPPIO TURNO: ' + nome + ' ha già un turno il ' + quando + elenco;
+    return '';
+  }
+  // Nota accanto al campo Ritrovo: «(automatico 22:00 del giorno prima)», e lo dice anche del ritrovo scritto a mano
+  function notaRitrovo(orario, auto, manuale) {
+    if (!auto) return '';
+    const sera = (r) => (DO.ritrovoDelGiornoPrima(orario, r) ? ' del giorno prima' : '');
+    return '(automatico ' + auto + sera(auto) + ')' + (manuale && sera(manuale) ? ' · ' + manuale + sera(manuale) : '');
   }
 
   function notturno(e, regole) {
@@ -529,6 +564,6 @@
       + (u.drive === 'salvato' ? ' · copia su Drive' : u.drive ? ' · copia su Drive non riuscita: ' + String(u.drive).replace(/^errore: /, '') : '');
   }
 
-  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, altriImpegni, impegnato, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, stessaCompetizione, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, giornoContratto, storiaContrattiPulita, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
+  DO.regole = { PREDEFINITE, TIPI, complete, inAttesa, giaIniziato, tariffeDa, leggiPartite, convocazione, fine, intervallo, sovrapposti, conflitto, altriImpegni, impegnato, titoloTurno, orariTurno, elencoTurni, avvisoConflitto, notaRitrovo, ricalcoloInvio, numero, righeMese, notturno, competizione, compensoCompetizione, regoleDel, contrattoDel, cambiaCompenso, stessaCompetizione, limitiDal, nuoveRegole, periodiVersioni, aliasDopoRinomina, aliasInConflitto, nuovoContratto, giornoContratto, storiaContrattiPulita, cambiNelPeriodo, datePerContratto, testoNonEliminabile, nomeRuolo, puoFare, sceltaOperatore, assegnabili, competizioneDi, nomeTipo, conta, gettone, euro, stagione, minuti, hhmm, statoPromemoria, statoBackup,
     PALETTE, coloreCompetizione, statoCalendario };
 })(window.DO = window.DO || {});

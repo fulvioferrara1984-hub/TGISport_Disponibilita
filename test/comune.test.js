@@ -225,6 +225,12 @@ test('ritrovo del giorno prima: partite notturne', () => {
   assert.equal(DO.giornoRitrovo('2027-01-01', '00:30', '20:30'), '2026-12-31');
 });
 
+test('orari con i secondi: non validi, come nelle regole (R.minuti)', () => {
+  assert.equal(DO.ritrovoDelGiornoPrima('02:00', '22:00:00'), false);
+  assert.equal(DO.momentoRitrovo('2026-11-21', '02:00', '22:00:00'), '2026-11-21');
+  assert.equal(DO.orariSovrapposti({ data: '2026-11-20', inizio: '22:00:00', fine: '' }, { data: '2026-11-20', inizio: '21:00', fine: '23:00' }), false);
+});
+
 test('ritrovo scritto con il suo giorno', () => {
   assert.equal(DO.ritrovoConGiorno('2026-11-21', '02:00', '22:00'), 'ven 20 alle 22:00');
   assert.equal(DO.ritrovoConGiorno('2026-11-21', '20:45', '16:45'), '16:45');
