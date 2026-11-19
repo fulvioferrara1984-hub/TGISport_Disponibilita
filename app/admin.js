@@ -261,7 +261,7 @@
       + (v.n ? '<p class="popup-nota">' + DO.esc(v.n) + '</p>' : v.s ? '<p class="popup-vuota">Nessuna nota</p>' : '')
       + (v.t ? '<small>Aggiornato ' + DO.quando(v.t) + '</small>' : '')
       + impegni(o.id, d).map((e) => '<p class="popup-impegno">' + DO.esc(DO.mansione(e.tipo) || e.titolo)
-        + (DO.turnoRemoto(e.tipo) ? ' · dalle ' : ' · ritrovo ') + DO.esc(DO.regole.convocazione(e, regole)) + '</p>').join('')
+        + (DO.turnoRemoto(e.tipo) ? ' · dalle ' : ' · ritrovo ') + DO.esc(DO.ritrovoConGiorno(e.data, e.orario, DO.regole.convocazione(e, regole))) + '</p>').join('')
       + (o.telefono ? '<small>' + DO.esc(o.telefono) + '</small>' : '');
     popup.hidden = false;
     const r = td.getBoundingClientRect(), w = popup.offsetWidth, h = popup.offsetHeight;

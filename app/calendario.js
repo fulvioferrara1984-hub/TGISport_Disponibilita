@@ -81,12 +81,13 @@
         + '<span>' + (chi.length ? DO.esc(chi.join(', ')) : 'Nessuno ha ancora accettato') + '</span>';
     }
     const e = v.e, sup = DO.turnoRemoto(e.tipo);
-    const ritrovo = R.convocazione(e, A.regole), fine = R.fine(e, A.regole);
+    // il ritrovo con il suo giorno se è della sera prima (partite notturne)
+    const ritrovo = DO.ritrovoConGiorno(e.data, e.orario, R.convocazione(e, A.regole)), fine = R.fine(e, A.regole);
     const round = e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round);
     return '<b>' + DO.esc(sup ? DO.nomeTurno(e.tipo) : e.titolo || 'Partita') + '</b>'
       + '<span>' + giorno + (!sup && e.competizione ? ' · ' + DO.esc([e.competizione, round].filter(Boolean).join(' · ')) : '') + '</span>'
       + (!sup && e.orario ? '<span>Evento alle ' + DO.esc(e.orario) + '</span>' : '')
-      + '<span>' + (sup ? 'Turno ' : 'Ritrovo ') + (ritrovo || '—') + (fine ? ' – fine ' + fine : '') + '</span>'
+      + '<span>' + (sup ? 'Turno ' : 'Ritrovo ') + DO.esc(ritrovo || '—') + (fine ? ' – fine ' + fine : '') + '</span>'
       + '<span>' + (e.operatoreId ? DO.esc(nomeOp(e.operatoreId)) + ' · ' : 'Senza operatore · ') + DO.esc(NOMI_STATO[e.stato] || e.stato)
         + (e.daSostituire ? ' · da sostituire' : '') + '</span>'
       + (e.note ? '<span class="cal-note">' + DO.esc(e.note) + '</span>' : '');

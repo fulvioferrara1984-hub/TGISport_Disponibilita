@@ -14,7 +14,7 @@ Disponibilità e convocazioni dei freelance TGI Sport: prende il posto del file 
 
 | | |
 |---|---|
-| Ritrovo | orario dell'evento meno le ore della competizione (una competizione nuova parte da 4); modificabile sul singolo evento |
+| Ritrovo | orario dell'evento meno le ore della competizione (una competizione nuova parte da 4); modificabile sul singolo evento; se cade la sera prima (partite notturne, es. alle 02:00 con ritrovo alle 22:00) si scrive con il suo giorno: *ven 20 alle 22:00* |
 | Fine turno | orario dell'evento più le ore della competizione (una nuova parte da 2); turni Remote TL e Remote Support: ritrovo + la durata della loro riga (6 ore); modificabile sul singolo evento |
 | Doppio turno | stesso operatore due volte nello stesso giorno: avviso giallo se gli orari non si toccano, rosso "turni sovrapposti" se si sovrappongono |
 | Blocco | quando all'evento mancano N giorni o meno (generale: 3; evento lunedì → da venerdì) l'operatore non cambia più disponibilità né rinuncia: telefona al numero di reperibilità |

@@ -112,7 +112,7 @@
         + (giorniOn[d] ? '<span class="onsite-tag">On-site · ' + DO.esc(giorniOn[d].luogo) + '</span>'
           : bloccatoOra(d) ? '<span class="bloccato-tag">Bloccato: contatta il supervisore</span>' : '')
         + convocazioni.filter((c) => c.data === d && c.stato !== 'annullato' && c.stato !== 'rifiutato')
-          .map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + DO.esc(ritrovo(c) || '—') + '</span>').join('') + '</div>'
+          .map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + DO.esc(DO.ritrovoConGiorno(c.data, c.orario, ritrovo(c)) || '—') + '</span>').join('') + '</div>'
         + '<div class="giorno-scelte"><div class="stati" role="radiogroup" aria-label="Disponibilità di ' + g.nome + ' ' + g.num + '">' + stati + '</div>'
         + (nota || cancella ? '<div class="giorno-extra">' + nota + cancella + '</div>' : '') + '</div></li>';
     }).join('');
@@ -147,7 +147,7 @@
     const dlg = $('dlg-giorno'), g = DO.giorno(d), v = valore(d), attivo = modificabile(d);
     const segni = (d === oggi ? '<span class="oggi">Oggi</span>' : '') + (richiesto(d) ? '<span class="richiesto">Richiesto</span>' : '')
       + (giorniOn[d] ? '<span class="onsite-tag">On-site · ' + DO.esc(giorniOn[d].luogo) + '</span>' : bloccatoOra(d) ? '<span class="bloccato-tag">Bloccato: contatta il supervisore</span>' : '')
-      + convocatoIl(d).map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + DO.esc(ritrovo(c) || '—') + '</span>').join('');
+      + convocatoIl(d).map((c) => '<span class="giorno-convocato">Convocato · ritrovo ' + DO.esc(DO.ritrovoConGiorno(c.data, c.orario, ritrovo(c)) || '—') + '</span>').join('');
     const stati = Object.keys(DO.STATI).map((s) => '<button type="button" role="radio" class="st-' + s + '" data-stato="' + s + '" aria-checked="' + (v.s === s) + '">'
       + '<span class="pallino"></span><span>' + DO.STATI[s].nome + '</span></button>').join('');
     dlg.innerHTML = '<form method="dialog"><h2 id="dlg-giorno-titolo">' + g.nome + ' ' + g.num + ' ' + g.mese + '</h2>'
@@ -321,7 +321,9 @@
 
   function disegnaConvocazioni() {
     const box = $('mie-convocazioni');
-    const prossime = convocazioni.filter((c) => c.data >= oggi).sort((a, b) => (a.data + ritrovo(a)).localeCompare(b.data + ritrovo(b)));
+    // in ordine di ritrovo vero: una partita notturna di sabato (ritrovo venerdì sera) viene prima di quelle di sabato
+    const momento = (c) => DO.momentoRitrovo(c.data, c.orario, ritrovo(c));
+    const prossime = convocazioni.filter((c) => c.data >= oggi).sort((a, b) => momento(a).localeCompare(momento(b)));
     const deployment = onsiteMiei();
     box.hidden = false;
     if (!prossime.length && !deployment.length) {
@@ -333,13 +335,13 @@
     const voci = deployment.map((d) => ({ chiave: d.da, html: schedaOnsite(d) }));
     box.innerHTML = '<div class="scheda-testa"><h2>Le tue convocazioni</h2><span class="spazio"></span>'
       + (daRispondere ? '<span class="stato-chip st-blu">' + daRispondere + ' da confermare</span>' : '') + '</div>'
-      + prossime.map((c) => ({ chiave: c.data + ritrovo(c), html: rigaConvocazione(c) })).concat(voci)
+      + prossime.map((c) => ({ chiave: momento(c), html: rigaConvocazione(c) })).concat(voci)
         .sort((a, b) => a.chiave.localeCompare(b.chiave)).map((v) => v.html).join('');
   }
 
   function rigaConvocazione(c) {
     const g = DO.giorno(c.data), sup = DO.turnoRemoto(c.tipo);
-    const fine = DO.esc(fineTurno(c)), inizio = DO.esc(ritrovo(c) || '—');
+    const fine = DO.esc(fineTurno(c)), inizio = DO.esc(DO.ritrovoConGiorno(c.data, c.orario, ritrovo(c)) || '—');
     const orari = sup ? (fine ? 'Turno <span class="ritrovo">' + inizio + ' – ' + fine + '</span>' : 'Inizio turno <span class="ritrovo">' + inizio + '</span>')
       : (c.orario ? 'Evento alle ' + DO.esc(c.orario) + ' · ' : '') + '<span class="ritrovo">Ritrovo ' + inizio + (fine ? ' – fine turno ' + fine : '') + '</span>'
         + (c.building ? ' · <span class="building">Building ' + DO.esc(c.building) + '</span>' : '');
@@ -381,13 +383,15 @@
     }
     // prima di confermare: un altro turno suo (confermato o in attesa) negli stessi orari
     if (stato === 'confermato') {
-      const turno = (x) => ({ data: x.data, inizio: ritrovo(x), fine: fineTurno(x) });
+      // il turno parte il giorno del ritrovo: una partita notturna di sabato si sovrappone a un turno di venerdì sera
+      const turno = (x) => ({ data: DO.giornoRitrovo(x.data, x.orario, ritrovo(x)), inizio: ritrovo(x), fine: fineTurno(x) });
       const altro = convocazioni.find((x) => x.id !== c.id && ['confermato', 'convocato'].includes(x.stato) && DO.orariSovrapposti(turno(c), turno(x)));
       if (altro) {
         const nomeAltro = DO.turnoRemoto(altro.tipo) ? DO.nomeTurno(altro.tipo) : altro.titolo;
-        const orari = (x) => ritrovo(x) + (fineTurno(x) ? '–' + fineTurno(x) : '');
+        const ga = DO.giorno(altro.data), quandoAltro = ga.nome + ' ' + ga.num + ' ' + ga.mese;
+        const orari = (x) => DO.ritrovoConGiorno(x.data, x.orario, ritrovo(x)) + (fineTurno(x) ? '–' + fineTurno(x) : '');
         const si = await DO.chiedi({ titolo: 'Turni negli stessi orari', ok: 'Confermo anche questo', annulla: 'Annulla',
-          testo: 'Hai già ' + nomeAltro + ' ' + quando + ', ' + orari(altro) + (altro.stato === 'confermato' ? ' (confermato)' : ' (da confermare)') + '.\n'
+          testo: 'Hai già ' + nomeAltro + ' ' + quandoAltro + ', ' + orari(altro) + (altro.stato === 'confermato' ? ' (confermato)' : ' (da confermare)') + '.\n'
             + nome + ' è ' + orari(c) + ': confermi anche questo? Se non riesci a fare entrambi, avvisa il supervisore.' });
         if (!si) return;
       }
@@ -476,12 +480,12 @@
     const visibili = operatore ? richiesteEvento.filter((r) => stato(r) !== 'nascosta') : [];
     box.hidden = !visibili.length;
     if (!visibili.length) { box.innerHTML = ''; return; }
-    const chiave = (r) => r.evento.data + (r.evento.ritrovo || '');
+    const chiave = (r) => DO.momentoRitrovo(r.evento.data, r.evento.orario, r.evento.ritrovo);
     box.innerHTML = '<div class="scheda-testa"><h2>Ti chiediamo se sei disponibile</h2></div>' + visibili.sort((a, b) => chiave(a).localeCompare(chiave(b))).map((r) => {
       const e = r.evento, g = DO.giorno(e.data), st = stato(r), sup = DO.turnoRemoto(e.tipo);
       const rispondi = (v, testo, cls) => '<button type="button" class="' + cls + '" data-evento-risposta="' + v + '" data-id="' + DO.esc(r.id) + '">' + testo + '</button>';
       const orari = sup ? 'turno ' + (e.ritrovo || '—') + (e.fine ? ' – ' + e.fine : '')
-        : (e.orario ? 'evento ' + e.orario + ' · ' : '') + 'ritrovo ' + (e.ritrovo || '—') + (e.fine ? ' – fine ' + e.fine : '');
+        : (e.orario ? 'evento ' + e.orario + ' · ' : '') + 'ritrovo ' + (DO.ritrovoConGiorno(e.data, e.orario, e.ritrovo) || '—') + (e.fine ? ' – fine ' + e.fine : '');
       const azioni = {
         'da-rispondere': rispondi('no', 'No', 'bottone') + rispondi('si', 'Sì, sono disponibile', 'primario'),
         'risposto-si': '<span class="stato-chip st-D">Hai risposto: sì</span>' + rispondi('no', 'Non sono più disponibile', 'link'),

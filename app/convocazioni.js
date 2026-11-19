@@ -22,15 +22,20 @@
   const nomeOp = (id) => (operatore(id) || {}).nome || 'operatore rimosso';
   const turno = (e) => DO.turnoRemoto(e.tipo);
   const titolo = (e) => (turno(e) ? R.nomeTipo(e.tipo) : e.titolo || 'Partita');
-  // turni remoti prima delle partite
-  const ordina = (a, b) => (turno(b) - turno(a))
-    || (R.convocazione(a, A.regole) || '99').localeCompare(R.convocazione(b, A.regole) || '99') || titolo(a).localeCompare(titolo(b));
+  // turni remoti prima delle partite, poi in ordine di ritrovo vero (una partita notturna ha il ritrovo la sera prima);
+  // senza ritrovo in fondo
+  const momento = (e) => { const r = R.convocazione(e, A.regole); return r ? DO.momentoRitrovo(e.data, e.orario, r) : e.data + 'T99'; };
+  const ordina = (a, b) => (turno(b) - turno(a)) || momento(a).localeCompare(momento(b)) || titolo(a).localeCompare(titolo(b));
   // altri impegni dello stesso operatore lo stesso giorno (doppio turno) e nei giorni vicini (turni a cavallo della mezzanotte)
   const altriImpegni = (e, idOp) => R.altriImpegni(e, A.eventi, idOp);
   // doppio turno (orari separati) o turni sovrapposti, per l'operatore idOp su questo evento
   const conflitto = (e, idOp) => R.conflitto(e, altriImpegni(e, idOp), A.regole);
-  const orariTurno = (x) => { const a = R.convocazione(x, A.regole), b = R.fine(x, A.regole); return (a || '—') + (b ? '–' + b : ''); };
-  const elencoTurni = (lista) => lista.map((x) => titolo(x) + ' ' + orariTurno(x)).join(', ');
+  const orariTurno = (x) => { const a = DO.ritrovoConGiorno(x.data, x.orario, R.convocazione(x, A.regole)), b = R.fine(x, A.regole); return (a || '—') + (b ? '–' + b : ''); };
+  // gli impegni di un altro giorno (turni a cavallo della mezzanotte) dicono il loro giorno: «ven 20 Feyenoord-Como 21:00–23:30»
+  const elencoTurni = (lista, e) => lista.map((x) => {
+    const g = x.data !== e.data ? DO.giorno(x.data) : null;
+    return (g ? g.breve.toLowerCase() + ' ' + g.num + ' ' : '') + titolo(x) + ' ' + orariTurno(x);
+  }).join(', ');
   const Q = DO.richiesteEvento;
   const richiestaDi = (id) => A.richiesteEvento.find((r) => r.id === id) || null;
 
@@ -193,7 +198,7 @@
 
   function riga(e) {
     const st = STATI[e.stato] || STATI['da-assegnare'];
-    const conv = DO.esc(R.convocazione(e, A.regole)), fine = DO.esc(R.fine(e, A.regole)), notte = R.notturno(e, A.regole), annullato = e.stato === 'annullato';
+    const conv = DO.esc(DO.ritrovoConGiorno(e.data, e.orario, R.convocazione(e, A.regole))), fine = DO.esc(R.fine(e, A.regole)), notte = R.notturno(e, A.regole), annullato = e.stato === 'annullato';
     const buildingRiga = buildingDi(e);
     const tag = [];
     if (turno(e)) tag.push('<span class="tag tag-sup">' + R.nomeTipo(e.tipo) + '</span>');
@@ -209,7 +214,7 @@
     }
     return '<div class="ev-riga' + (annullato ? ' annullato' : '') + (turno(e) ? ' sup' : '') + '" data-id="' + e.id + '" style="--comp: ' + R.coloreCompetizione(R.competizioneDi(e), A.regole) + '">'
       + '<div class="ev-ora">' + (turno(e) ? '<b>' + (conv || '—') + '</b><small>' + (fine ? 'fine ' + fine : 'inizio turno') + '</small>'
-        : '<b>' + DO.esc(e.orario || '—') + '</b><small>ritrovo ' + (conv || '—') + '</small>' + (buildingRiga ? '<small class="ev-building">' + DO.esc(buildingRiga) + '</small>' : '') + (fine ? '<small>fine ' + fine + '</small>' : ''))
+        : '<b>' + DO.esc(e.orario || '—') + '</b><small' + (DO.ritrovoDelGiornoPrima(e.orario, R.convocazione(e, A.regole)) ? ' class="ritrovo-giorno"' : '') + '>ritrovo ' + (conv || '—') + '</small>' + (buildingRiga ? '<small class="ev-building">' + DO.esc(buildingRiga) + '</small>' : '') + (fine ? '<small>fine ' + fine + '</small>' : ''))
         + (notte ? '<small class="notte">notturno</small>' : '') + '</div>'
       + '<div class="ev-info"><b>' + DO.esc(titolo(e)) + '</b>'
         + (turno(e) ? '' : '<small>' + DO.esc([e.competizione, e.round && (/^\d+$/.test(e.round) ? 'giornata ' + e.round : e.round)].filter(Boolean).join(' · ')) + '</small>')
@@ -249,8 +254,8 @@
   function avvisiOperatore(e) {
     if (!e.operatoreId || e.stato === 'annullato') return '';
     const out = [], v = A.valore(e.operatoreId, e.data), c = conflitto(e, e.operatoreId);
-    if (c.livello === 'sovrapposto') out.push('<small class="avviso-op rosso">⛔ Turni sovrapposti con ' + DO.esc(elencoTurni(c.con)) + '</small>');
-    else if (c.livello === 'doppio') out.push('<small class="avviso-op giallo">⚠ Doppio turno: anche ' + DO.esc(elencoTurni(c.con)) + '</small>');
+    if (c.livello === 'sovrapposto') out.push('<small class="avviso-op rosso">⛔ Turni sovrapposti con ' + DO.esc(elencoTurni(c.con, e)) + '</small>');
+    else if (c.livello === 'doppio') out.push('<small class="avviso-op giallo">⚠ Doppio turno: anche ' + DO.esc(elencoTurni(c.con, e)) + '</small>');
     if (v.onsite) out.push('<small class="avviso-op rosso">⛔ in on-site a ' + DO.esc(v.onsite.luogo) + '</small>');
     else if (v.s === 'A') out.push('<small class="avviso-op rosso">✕ Ha indicato non disponibile' + (v.n ? ': ' + DO.esc(v.n) : '') + '</small>');
     else if (v.s === 'P') out.push('<small class="avviso-op giallo">½ Parziale' + (v.n ? ': ' + DO.esc(v.n) : '') + '</small>');
@@ -304,8 +309,8 @@
     if (nuovo) {
       const o = operatore(nuovo), v = A.valore(nuovo, e.data), c = conflitto(e, nuovo);
       const avvisi = [], quando = DO.giorno(e.data).nome.toLowerCase() + ' ' + DO.giorno(e.data).num;
-      if (c.livello === 'sovrapposto') avvisi.push('TURNI SOVRAPPOSTI: ' + o.nome + ' il ' + quando + ' ha già un turno in orari che si sovrappongono (' + elencoTurni(c.con) + '; questo turno ' + orariTurno(e) + ').');
-      else if (c.livello === 'doppio') avvisi.push('DOPPIO TURNO: ' + o.nome + ' ha già un turno il ' + quando + ' (' + elencoTurni(c.con) + '; questo turno ' + orariTurno(e) + ').');
+      if (c.livello === 'sovrapposto') avvisi.push('TURNI SOVRAPPOSTI: ' + o.nome + ' il ' + quando + ' ha già un turno in orari che si sovrappongono (' + elencoTurni(c.con, e) + '; questo turno ' + orariTurno(e) + ').');
+      else if (c.livello === 'doppio') avvisi.push('DOPPIO TURNO: ' + o.nome + ' ha già un turno il ' + quando + ' (' + elencoTurni(c.con, e) + '; questo turno ' + orariTurno(e) + ').');
       if (v.onsite) avvisi.push(o.nome + ' è in on-site a ' + v.onsite.luogo + '.');
       else if (v.s === 'A') avvisi.push(o.nome + ' ha indicato NON DISPONIBILE per questo giorno' + (v.n ? ' (' + v.n + ')' : '') + '.');
       if (avvisi.length && !confirm(avvisi.join('\n\n') + '\n\nAssegnare comunque?')) { sel.value = e.operatoreId || ''; return; }
@@ -525,7 +530,8 @@
     const sup = turno(inModifica);
     const bozza = { tipo: inModifica.tipo, competizione: sup ? DO.mansione(inModifica.tipo) : $('evd-competizione').value, orario: sup ? '' : $('evd-orario').value, convocazione: sup ? $('evd-convocazione').value : '' };
     const auto = R.convocazione(bozza, A.regole), fineAuto = R.fine(bozza, A.regole);
-    $('evd-ritrovo-auto').textContent = sup || A.solaLettura ? '' : auto ? '(automatico ' + auto + ')' : '';
+    const sera = auto && DO.ritrovoDelGiornoPrima(bozza.orario, auto) ? ' del giorno prima' : '';
+    $('evd-ritrovo-auto').textContent = sup || A.solaLettura ? '' : auto ? '(automatico ' + auto + sera + ')' : '';
     $('evd-convocazione').placeholder = auto;
     $('evd-fine-auto').textContent = fineAuto && !A.solaLettura ? '(automatica ' + fineAuto + ')' : '';
     $('evd-fine').placeholder = fineAuto;
@@ -721,7 +727,7 @@
   // se i building non sono stati letti le righe non ne dicono nulla
   const rigaInvio = (e) => {
     const g = DO.giorno(e.data), senza = turno(e) || buildingNonLetti, b = senza ? '' : buildingInvio(e);
-    return DO.esc(g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (!turno(e) && e.competizione ? ' · ' + e.competizione : '') + (turno(e) ? ' · dalle ' : ' · ritrovo ') + (R.convocazione(e, A.regole) || '—')
+    return DO.esc(g.breve.toLowerCase() + ' ' + g.num + ' ' + g.meseBreve + ' · ' + titolo(e) + (!turno(e) && e.competizione ? ' · ' + e.competizione : '') + (turno(e) ? ' · dalle ' : ' · ritrovo ') + (DO.ritrovoConGiorno(e.data, e.orario, R.convocazione(e, A.regole)) || '—')
       + (b ? ' · building ' + b : ''))
       + (!senza && !b ? ' <span class="testo-errore">· senza building</span>' : '');
   };
